@@ -21,13 +21,28 @@
 #include "miner.h"
 #include "util.h"
 
-#include "A1-common.h"
 #include "A1-board-selector.h"
 #include "A1-trimpot-mcp4x.h"
 
+#include "asic_inno.h"
+#include "asic_inno_clock.h"
+#include "asic_inno_cmd.h"
+#include "asic_inno_gpio.h"
+
+struct spi_config cfg[ASIC_CHAIN_NUM];
+struct spi_ctx *spi[ASIC_CHAIN_NUM];
+struct A1_chain *chain[ASIC_CHAIN_NUM];
+
+static uint8_t A1Pll1=A4_PLL_CLOCK_860MHz;
+static uint8_t A1Pll2=A4_PLL_CLOCK_860MHz;
+static uint8_t A1Pll3=A4_PLL_CLOCK_860MHz;
+static uint8_t A1Pll4=A4_PLL_CLOCK_860MHz;
+static uint8_t A1Pll5=A4_PLL_CLOCK_860MHz;
+static uint8_t A1Pll6=A4_PLL_CLOCK_860MHz;
+
 /* one global board_selector and spi context is enough */
-static struct board_selector *board_selector;
-static struct spi_ctx *spi;
+//static struct board_selector *board_selector;
+//static struct spi_ctx *spi;
 
 /********** work queue */
 static bool wq_enqueue(struct work_queue *wq, struct work *work)
@@ -70,18 +85,6 @@ static struct work *wq_dequeue(struct work_queue *wq)
 /* if after this number of retries a chip is still inaccessible, disable it */
 #define DISABLE_CHIP_FAIL_THRESHOLD	3
 
-
-enum A1_command {
-	A1_BIST_START		= 0x01,
-	A1_BIST_FIX		= 0x03,
-	A1_RESET		= 0x04,
-	A1_WRITE_JOB		= 0x07,
-	A1_READ_RESULT		= 0x08,
-	A1_WRITE_REG		= 0x09,
-	A1_READ_REG		= 0x0a,
-	A1_READ_REG_RESP	= 0x1a,
-};
-
 /*
  * for now, we have one global config, defaulting values:
  * - ref_clk 16MHz / sys_clk 800MHz
@@ -93,564 +96,6 @@ struct A1_config_options A1_config_options = {
 
 /* override values with --bitmine-a1-options ref:sys:spi: - use 0 for default */
 static struct A1_config_options *parsed_config_options;
-
-/********** temporary helper for hexdumping SPI traffic */
-static void applog_hexdump(char *prefix, uint8_t *buff, int len, int level)
-{
-	static char line[256];
-	char *pos = line;
-	int i;
-	if (len < 1)
-		return;
-
-	pos += sprintf(pos, "%s: %d bytes:", prefix, len);
-	for (i = 0; i < len; i++) {
-		if (i > 0 && (i % 32) == 0) {
-			applog(LOG_DEBUG, "%s", line);
-			pos = line;
-			pos += sprintf(pos, "\t");
-		}
-		pos += sprintf(pos, "%.2X ", buff[i]);
-	}
-	applog(level, "%s", line);
-}
-
-static void hexdump(char *prefix, uint8_t *buff, int len)
-{
-	applog_hexdump(prefix, buff, len, LOG_DEBUG);
-}
-
-static void hexdump_error(char *prefix, uint8_t *buff, int len)
-{
-	applog_hexdump(prefix, buff, len, LOG_ERR);
-}
-
-static void flush_spi(struct A1_chain *a1)
-{
-	memset(a1->spi_tx, 0, 64);
-	spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, 64);
-}
-
-
-/********** upper layer SPI functions */
-static uint8_t *exec_cmd(struct A1_chain *a1,
-			  uint8_t cmd, uint8_t chip_id,
-			  uint8_t *data, uint8_t len,
-			  uint8_t resp_len)
-{
-	int tx_len = 4 + len;
-	memset(a1->spi_tx, 0, tx_len);
-	a1->spi_tx[0] = cmd;
-	a1->spi_tx[1] = chip_id;
-
-	if (data != NULL)
-		memcpy(a1->spi_tx + 2, data, len);
-
-	assert(spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len));
-	hexdump("send: TX", a1->spi_tx, tx_len);
-	hexdump("send: RX", a1->spi_rx, tx_len);
-
-	int poll_len = resp_len;
-	if (chip_id == 0) {
-		if (a1->num_chips == 0) {
-			applog(LOG_INFO, "%d: unknown chips in chain, "
-			       "assuming 8", a1->chain_id);
-			poll_len += 32;
-		}
-		poll_len += 4 * a1->num_chips;
-	}
-	else {
-		poll_len += 4 * chip_id - 2;
-	}
-
-	assert(spi_transfer(a1->spi_ctx, NULL, a1->spi_rx + tx_len, poll_len));
-	hexdump("poll: RX", a1->spi_rx + tx_len, poll_len);
-	int ack_len = tx_len + resp_len;
-	int ack_pos = tx_len + poll_len - ack_len;
-	hexdump("poll: ACK", a1->spi_rx + ack_pos, ack_len - 2);
-
-	return (a1->spi_rx + ack_pos);
-}
-
-
-/********** A1 SPI commands */
-static uint8_t *cmd_BIST_FIX_BCAST(struct A1_chain *a1)
-{
-	uint8_t *ret = exec_cmd(a1, A1_BIST_FIX, 0x00, NULL, 0, 0);
-	if (ret == NULL || ret[0] != A1_BIST_FIX) {
-		applog(LOG_ERR, "%d: cmd_BIST_FIX_BCAST failed", a1->chain_id);
-		return NULL;
-	}
-	return ret;
-}
-
-static uint8_t *cmd_RESET_BCAST(struct A1_chain *a1, uint8_t strategy)
-{
-	static uint8_t s[2];
-	s[0] = strategy;
-	s[1] = strategy;
-	uint8_t *ret = exec_cmd(a1, A1_RESET, 0x00, s, 2, 0);
-	if (ret == NULL || (ret[0] != A1_RESET && a1->num_chips != 0)) {
-		applog(LOG_ERR, "%d: cmd_RESET_BCAST failed", a1->chain_id);
-		return NULL;
-	}
-	return ret;
-}
-
-static uint8_t *cmd_READ_RESULT_BCAST(struct A1_chain *a1)
-{
-	int tx_len = 8;
-	memset(a1->spi_tx, 0, tx_len);
-	a1->spi_tx[0] = A1_READ_RESULT;
-
-	assert(spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len));
-	hexdump("send: TX", a1->spi_tx, tx_len);
-	hexdump("send: RX", a1->spi_rx, tx_len);
-
-	int poll_len = tx_len + 4 * a1->num_chips;
-	assert(spi_transfer(a1->spi_ctx, NULL, a1->spi_rx + tx_len, poll_len));
-	hexdump("poll: RX", a1->spi_rx + tx_len, poll_len);
-
-	uint8_t *scan = a1->spi_rx;
-	int i;
-	for (i = 0; i < poll_len; i += 2) {
-		if ((scan[i] & 0x0f) == A1_READ_RESULT)
-			return scan + i;
-	}
-	applog(LOG_ERR, "%d: cmd_READ_RESULT_BCAST failed", a1->chain_id);
-	return NULL;
-}
-
-static uint8_t *cmd_WRITE_REG(struct A1_chain *a1, uint8_t chip, uint8_t *reg)
-{
-	uint8_t *ret = exec_cmd(a1, A1_WRITE_REG, chip, reg, 6, 0);
-	if (ret == NULL || ret[0] != A1_WRITE_REG) {
-		applog(LOG_ERR, "%d: cmd_WRITE_REG failed", a1->chain_id);
-		return NULL;
-	}
-	return ret;
-}
-
-static uint8_t *cmd_READ_REG(struct A1_chain *a1, uint8_t chip)
-{
-	uint8_t *ret = exec_cmd(a1, A1_READ_REG, chip, NULL, 0, 6);
-	if (ret == NULL || ret[0] != A1_READ_REG_RESP || ret[1] != chip) {
-		applog(LOG_ERR, "%d: cmd_READ_REG chip %d failed",
-		       a1->chain_id, chip);
-		return NULL;
-	}
-	memcpy(a1->spi_rx, ret, 8);
-	return ret;
-}
-
-static uint8_t *cmd_WRITE_JOB(struct A1_chain *a1, uint8_t chip_id,
-			      uint8_t *job)
-{
-	/* ensure we push the SPI command to the last chip in chain */
-	int tx_len = WRITE_JOB_LENGTH + 2;
-	memcpy(a1->spi_tx, job, WRITE_JOB_LENGTH);
-	memset(a1->spi_tx + WRITE_JOB_LENGTH, 0, tx_len - WRITE_JOB_LENGTH);
-
-	assert(spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len));
-	hexdump("send: TX", a1->spi_tx, tx_len);
-	hexdump("send: RX", a1->spi_rx, tx_len);
-
-	int poll_len = 4 * chip_id - 2;
-
-	assert(spi_transfer(a1->spi_ctx, NULL, a1->spi_rx + tx_len, poll_len));
-	hexdump("poll: RX", a1->spi_rx + tx_len, poll_len);
-
-	int ack_len = tx_len;
-	int ack_pos = tx_len + poll_len - ack_len;
-	hexdump("poll: ACK", a1->spi_rx + ack_pos, tx_len);
-
-	uint8_t *ret = a1->spi_rx + ack_pos;
-	if (ret[0] != a1->spi_tx[0] || ret[1] != a1->spi_tx[1]){
-		applog(LOG_ERR, "%d: cmd_WRITE_JOB failed: "
-			"0x%02x%02x/0x%02x%02x", a1->chain_id,
-			ret[0], ret[1], a1->spi_tx[0], a1->spi_tx[1]);
-		return NULL;
-	}
-	return ret;
-}
-
-/********** A1 low level functions */
-#define MAX_PLL_WAIT_CYCLES 25
-#define PLL_CYCLE_WAIT_TIME 40
-static bool check_chip_pll_lock(struct A1_chain *a1, int chip_id, uint8_t *wr)
-{
-	int n;
-	for (n = 0; n < MAX_PLL_WAIT_CYCLES; n++) {
-		/* check for PLL lock status */
-		if (cmd_READ_REG(a1, chip_id) && (a1->spi_rx[4] & 1) == 1)
-			/* double check that we read back what we set before */
-			return wr[0] == a1->spi_rx[2] && wr[1] == a1->spi_rx[3];
-
-		cgsleep_ms(PLL_CYCLE_WAIT_TIME);
-	}
-	applog(LOG_ERR, "%d: chip %d failed PLL lock", a1->chain_id, chip_id);
-	return false;
-}
-
-static uint8_t *get_pll_reg(struct A1_chain *a1, int ref_clock_khz,
-			    int sys_clock_khz)
-{
-	/*
-	 * PLL parameters after:
-	 * sys_clk = (ref_clk * pll_fbdiv) / (pll_prediv * 2^(pll_postdiv - 1))
-	 *
-	 * with a higher pll_postdiv being desired over a higher pll_prediv
-	 */
-
-	static uint8_t writereg[6] = { 0x00, 0x00, 0x21, 0x84, };
-	uint8_t pre_div = 1;
-	uint8_t post_div = 1;
-	uint32_t fb_div;
-
-	int cid = a1->chain_id;
-
-	applog(LOG_WARNING, "%d: Setting PLL: CLK_REF=%dMHz, SYS_CLK=%dMHz",
-	       cid, ref_clock_khz / 1000, sys_clock_khz / 1000);
-
-	/* Euclidean search for GCD */
-	int a = ref_clock_khz;
-	int b = sys_clock_khz;
-	while (b != 0) {
-		int h = a % b;
-		a = b;
-		b = h;
-	}
-	fb_div = sys_clock_khz / a;
-	int n = ref_clock_khz / a;
-	/* approximate multiplier if not exactly matchable */
-	if (fb_div > 511) {
-		int f = fb_div / n;
-		int m = (f < 32) ? 16 : (f < 64) ? 8 :
-			(f < 128) ? 4 : (256 < 2) ? 2 : 1;
-		fb_div = m * fb_div / n;
-		n =  m;
-	}
-	/* try to maximize post divider */
-	if ((n & 3) == 0)
-		post_div = 3;
-	else if ((n & 1) == 0)
-		post_div = 2;
-	else
-		post_div = 1;
-	/* remainder goes to pre_div */
-	pre_div = n / (1 << (post_div - 1));
-	/* correct pre_div overflow */
-	if (pre_div > 31) {
-		fb_div = 31 * fb_div / pre_div;
-		pre_div = 31;
-	}
-	writereg[0] = (post_div << 6) | (pre_div << 1) | (fb_div >> 8);
-	writereg[1] = fb_div & 0xff;
-	applog(LOG_WARNING, "%d: setting PLL: pre_div=%d, post_div=%d, "
-	       "fb_div=%d: 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x", cid,
-	       pre_div, post_div, fb_div,
-	       writereg[0], writereg[1], writereg[2],
-	       writereg[3], writereg[4], writereg[5]);
-	return writereg;
-}
-
-static bool set_pll_config(struct A1_chain *a1, int chip_id,
-			   int ref_clock_khz, int sys_clock_khz)
-{
-	uint8_t *writereg = get_pll_reg(a1, ref_clock_khz, sys_clock_khz);
-	if (writereg == NULL)
-		return false;
-	if (!cmd_WRITE_REG(a1, chip_id, writereg))
-		return false;
-
-	int from = (chip_id == 0) ? 0 : chip_id - 1;
-	int to = (chip_id == 0) ? a1->num_active_chips : chip_id - 1;
-
-	int i;
-	for (i = from; i < to; i++) {
-		int cid = i + 1;
-		if (!check_chip_pll_lock(a1, chip_id, writereg)) {
-			applog(LOG_ERR, "%d: chip %d failed PLL lock",
-			       a1->chain_id, cid);
-			return false;
-		}
-	}
-	return true;
-}
-
-#define WEAK_CHIP_THRESHOLD	30
-#define BROKEN_CHIP_THRESHOLD	26
-#define WEAK_CHIP_SYS_CLK	(600 * 1000)
-#define BROKEN_CHIP_SYS_CLK	(400 * 1000)
-static bool check_chip(struct A1_chain *a1, int i)
-{
-	int chip_id = i + 1;
-	int cid = a1->chain_id;
-	if (!cmd_READ_REG(a1, chip_id)) {
-		applog(LOG_WARNING, "%d: Failed to read register for "
-		       "chip %d -> disabling", cid, chip_id);
-		a1->chips[i].num_cores = 0;
-		a1->chips[i].disabled = 1;
-		return false;;
-	}
-	a1->chips[i].num_cores = a1->spi_rx[7];
-	a1->num_cores += a1->chips[i].num_cores;
-	applog(LOG_WARNING, "%d: Found chip %d with %d active cores",
-	       cid, chip_id, a1->chips[i].num_cores);
-	if (a1->chips[i].num_cores < BROKEN_CHIP_THRESHOLD) {
-		applog(LOG_WARNING, "%d: broken chip %d with %d active "
-		       "cores (threshold = %d)", cid, chip_id,
-		       a1->chips[i].num_cores, BROKEN_CHIP_THRESHOLD);
-		set_pll_config(a1, chip_id, A1_config_options.ref_clk_khz,
-				BROKEN_CHIP_SYS_CLK);
-		cmd_READ_REG(a1, chip_id);
-		hexdump_error("new.PLL", a1->spi_rx, 8);
-		a1->chips[i].disabled = true;
-		a1->num_cores -= a1->chips[i].num_cores;
-		return false;
-	}
-
-	if (a1->chips[i].num_cores < WEAK_CHIP_THRESHOLD) {
-		applog(LOG_WARNING, "%d: weak chip %d with %d active "
-		       "cores (threshold = %d)", cid,
-		       chip_id, a1->chips[i].num_cores, WEAK_CHIP_THRESHOLD);
-		set_pll_config(a1, chip_id, A1_config_options.ref_clk_khz,
-			       WEAK_CHIP_SYS_CLK);
-		cmd_READ_REG(a1, chip_id);
-		hexdump_error("new.PLL", a1->spi_rx, 8);
-		return false;
-	}
-	return true;
-}
-
-/*
- * BIST_START works only once after HW reset, on subsequent calls it
- * returns 0 as number of chips.
- */
-static int chain_detect(struct A1_chain *a1)
-{
-	int tx_len = 6;
-
-	memset(a1->spi_tx, 0, tx_len);
-	a1->spi_tx[0] = A1_BIST_START;
-	a1->spi_tx[1] = 0;
-
-	if (!spi_transfer(a1->spi_ctx, a1->spi_tx, a1->spi_rx, tx_len))
-		return 0;
-	hexdump("TX", a1->spi_tx, 6);
-	hexdump("RX", a1->spi_rx, 6);
-
-	int i;
-	int cid = a1->chain_id;
-	int max_poll_words = MAX_CHAIN_LENGTH * 2;
-	for(i = 1; i < max_poll_words; i++) {
-		if (a1->spi_rx[0] == A1_BIST_START && a1->spi_rx[1] == 0) {
-			spi_transfer(a1->spi_ctx, NULL, a1->spi_rx, 2);
-			hexdump("RX", a1->spi_rx, 2);
-			uint8_t n = a1->spi_rx[1];
-			a1->num_chips = (i / 2) + 1;
-			if (a1->num_chips != n) {
-				applog(LOG_ERR, "%d: enumeration: %d <-> %d",
-				       cid, a1->num_chips, n);
-				if (n != 0)
-					a1->num_chips = n;
-			}
-			applog(LOG_WARNING, "%d: detected %d chips",
-			       cid, a1->num_chips);
-			return a1->num_chips;
-		}
-		bool s = spi_transfer(a1->spi_ctx, NULL, a1->spi_rx, 2);
-		hexdump("RX", a1->spi_rx, 2);
-		if (!s)
-			return 0;
-	}
-	applog(LOG_WARNING, "%d: no A1 chip-chain detected", cid);
-	return 0;
-}
-
-/********** disable / re-enable related section (temporary for testing) */
-static int get_current_ms(void)
-{
-	cgtimer_t ct;
-	cgtimer_time(&ct);
-	return cgtimer_to_ms(&ct);
-}
-
-static bool is_chip_disabled(struct A1_chain *a1, uint8_t chip_id)
-{
-	struct A1_chip *chip = &a1->chips[chip_id - 1];
-	return chip->disabled || chip->cooldown_begin != 0;
-}
-
-/* check and disable chip, remember time */
-static void disable_chip(struct A1_chain *a1, uint8_t chip_id)
-{
-	flush_spi(a1);
-	struct A1_chip *chip = &a1->chips[chip_id - 1];
-	int cid = a1->chain_id;
-	if (is_chip_disabled(a1, chip_id)) {
-		applog(LOG_WARNING, "%d: chip %d already disabled",
-		       cid, chip_id);
-		return;
-	}
-	applog(LOG_WARNING, "%d: temporary disabling chip %d", cid, chip_id);
-	chip->cooldown_begin = get_current_ms();
-}
-
-/* check if disabled chips can be re-enabled */
-void check_disabled_chips(struct A1_chain *a1)
-{
-	int i;
-	int cid = a1->chain_id;
-	for (i = 0; i < a1->num_active_chips; i++) {
-		int chip_id = i + 1;
-		struct A1_chip *chip = &a1->chips[i];
-		if (!is_chip_disabled(a1, chip_id))
-			continue;
-		/* do not re-enable fully disabled chips */
-		if (chip->disabled)
-			continue;
-		if (chip->cooldown_begin + COOLDOWN_MS > get_current_ms())
-			continue;
-		if (!cmd_READ_REG(a1, chip_id)) {
-			chip->fail_count++;
-			applog(LOG_WARNING, "%d: chip %d not yet working - %d",
-			       cid, chip_id, chip->fail_count);
-			if (chip->fail_count > DISABLE_CHIP_FAIL_THRESHOLD) {
-				applog(LOG_WARNING,
-				       "%d: completely disabling chip %d at %d",
-				       cid, chip_id, chip->fail_count);
-				chip->disabled = true;
-				a1->num_cores -= chip->num_cores;
-				continue;
-			}
-			/* restart cooldown period */
-			chip->cooldown_begin = get_current_ms();
-			continue;
-		}
-		applog(LOG_WARNING, "%d: chip %d is working again",
-		       cid, chip_id);
-		chip->cooldown_begin = 0;
-		chip->fail_count = 0;
-	}
-}
-
-/********** job creation and result evaluation */
-uint32_t get_diff(double diff)
-{
-	uint32_t n_bits;
-	int shift = 29;
-	double f = (double) 0x0000ffff / diff;
-	while (f < (double) 0x00008000) {
-		shift--;
-		f *= 256.0;
-	}
-	while (f >= (double) 0x00800000) {
-		shift++;
-		f /= 256.0;
-	}
-	n_bits = (int) f + (shift << 24);
-	return n_bits;
-}
-
-static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
-{
-	static uint8_t job[WRITE_JOB_LENGTH] = {
-		/* command */
-		0x00, 0x00,
-		/* midstate */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		/* wdata */
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00,
-		/* start nonce */
-		0x00, 0x00, 0x00, 0x00,
-		/* difficulty 1 */
-		0xff, 0xff, 0x00, 0x1d,
-		/* end nonce */
-		0xff, 0xff, 0xff, 0xff,
-	};
-	uint8_t *midstate = work->midstate;
-	uint8_t *wdata = work->data + 64;
-
-	uint32_t *p1 = (uint32_t *) &job[34];
-	uint32_t *p2 = (uint32_t *) wdata;
-
-	job[0] = (job_id << 4) | A1_WRITE_JOB;
-	job[1] = chip_id;
-
-	swab256(job + 2, midstate);
-	p1[0] = bswap_32(p2[0]);
-	p1[1] = bswap_32(p2[1]);
-	p1[2] = bswap_32(p2[2]);
-#ifdef USE_REAL_DIFF
-	p1[4] = get_diff(work->sdiff);
-#endif
-	return job;
-}
-
-/* set work for given chip, returns true if a nonce range was finished */
-static bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work,
-		     uint8_t queue_states)
-{
-	int cid = a1->chain_id;
-	struct A1_chip *chip = &a1->chips[chip_id - 1];
-	bool retval = false;
-
-	int job_id = chip->last_queued_id + 1;
-
-	applog(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x",
-	       cid, chip_id, job_id, queue_states);
-	if (job_id == (queue_states & 0x0f) || job_id == (queue_states >> 4))
-		applog(LOG_WARNING, "%d: job overlap: %d, 0x%02x",
-		       cid, job_id, queue_states);
-
-	if (chip->work[chip->last_queued_id] != NULL) {
-		work_completed(a1->cgpu, chip->work[chip->last_queued_id]);
-		chip->work[chip->last_queued_id] = NULL;
-		retval = true;
-	}
-	uint8_t *jobdata = create_job(chip_id, job_id, work);
-	if (!cmd_WRITE_JOB(a1, chip_id, jobdata)) {
-		/* give back work */
-		work_completed(a1->cgpu, work);
-
-		applog(LOG_ERR, "%d: failed to set work for chip %d.%d",
-		       cid, chip_id, job_id);
-		disable_chip(a1, chip_id);
-	} else {
-		chip->work[chip->last_queued_id] = work;
-		chip->last_queued_id++;
-		chip->last_queued_id &= 3;
-	}
-	return retval;
-}
-
-static bool get_nonce(struct A1_chain *a1, uint8_t *nonce,
-		      uint8_t *chip, uint8_t *job_id)
-{
-	uint8_t *ret = cmd_READ_RESULT_BCAST(a1);
-	if (ret == NULL)
-		return false;
-	if (ret[1] == 0) {
-		applog(LOG_DEBUG, "%d: output queue empty", a1->chain_id);
-		return false;
-	}
-	*job_id = ret[0] >> 4;
-	*chip = ret[1];
-	memcpy(nonce, ret + 2, 4);
-	return true;
-}
-
-/* reset input work queues in chip chain */
-static bool abort_work(struct A1_chain *a1)
-{
-	/* drop jobs already queued: reset strategy 0xed */
-	return cmd_RESET_BCAST(a1, 0xed);
-}
 
 /********** driver interface */
 void exit_A1_chain(struct A1_chain *a1)
@@ -681,15 +126,16 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	applog(LOG_WARNING, "spidev%d.%d: %d: Found %d A1 chips",
 	       a1->spi_ctx->config.bus, a1->spi_ctx->config.cs_line,
 	       a1->chain_id, a1->num_chips);
-
+/*
 	if (!set_pll_config(a1, 0, A1_config_options.ref_clk_khz,
 			    A1_config_options.sys_clk_khz))
 		goto failure;
-
+*/
 	/* override max number of active chips if requested */
 	a1->num_active_chips = a1->num_chips;
 	if (A1_config_options.override_chip_num > 0 &&
-	    a1->num_chips > A1_config_options.override_chip_num) {
+	    a1->num_chips > A1_config_options.override_chip_num) 
+	{
 		a1->num_active_chips = A1_config_options.override_chip_num;
 		applog(LOG_WARNING, "%d: limiting chain to %d chips",
 		       a1->chain_id, a1->num_active_chips);
@@ -698,8 +144,10 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	a1->chips = calloc(a1->num_active_chips, sizeof(struct A1_chip));
 	assert (a1->chips != NULL);
 
-	if (!cmd_BIST_FIX_BCAST(a1))
+	if (!inno_cmd_bist_fix(a1, ADDR_BROADCAST))
 		goto failure;
+
+	usleep(200000);
 
 	for (i = 0; i < a1->num_active_chips; i++)
 		check_chip(a1, i);
@@ -717,31 +165,97 @@ failure:
 	return NULL;
 }
 
-static bool detect_single_chain(void)
+static bool detect_A1_chain(void)
 {
-	board_selector = (struct board_selector*)&dummy_board_selector;
-	applog(LOG_WARNING, "A1: checking single chain");
-	struct A1_chain *a1 = init_A1_chain(spi, 0);
-	if (a1 == NULL)
-		return false;
+	int i;
+	//board_selector = (struct board_selector*)&dummy_board_selector;
+	applog(LOG_WARNING, "A1: checking A1 chain");
 
-	struct cgpu_info *cgpu = malloc(sizeof(*cgpu));
-	assert(cgpu != NULL);
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		cfg[i].bus     = i;
+		cfg[i].cs_line = 0;
+		cfg[i].mode    = SPI_MODE_1;
+		cfg[i].speed   = DEFAULT_SPI_SPEED;
+		cfg[i].bits    = DEFAULT_SPI_BITS_PER_WORD;
+		cfg[i].delay   = DEFAULT_SPI_DELAY_USECS;
 
-	memset(cgpu, 0, sizeof(*cgpu));
-	cgpu->drv = &bitmineA1_drv;
-	cgpu->name = "BitmineA1.SingleChain";
-	cgpu->threads = 1;
+		spi[i] = spi_init(&cfg[i]);
+		if(spi[i] == NULL)
+		{
+			applog(LOG_ERR, "spi init fail");
+			return false;
+		}
 
-	cgpu->device_data = a1;
+		//spi[i]->power_en = SPI_PIN_POWER_EN[i];		
+		spi[i]->start_en = SPI_PIN_START_EN[i];		
+		spi[i]->reset = SPI_PIN_RESET[i];
+		//spi[i]->plug  = SPI_PIN_PLUG[i];
+		//spi[i]->led   = SPI_PIN_LED[i];
+		
 
-	a1->cgpu = cgpu;
-	add_cgpu(cgpu);
-	applog(LOG_WARNING, "Detected single A1 chain with %d chips / %d cores",
-	       a1->num_active_chips, a1->num_cores);
+		//asic_gpio_init(spi[i]->power_en, 0);
+		asic_gpio_init(spi[i]->start_en, 0);
+		asic_gpio_init(spi[i]->reset, 0);
+		//asic_gpio_init(spi[i]->plug, 0);
+		//asic_gpio_init(spi[i]->led, 0);
+	}
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		asic_gpio_write(spi[i]->start_en, 1);
+		asic_gpio_write(spi[i]->reset, 1);
+		sleep(1);
+		asic_gpio_write(spi[i]->reset, 0);
+		sleep(1);
+		asic_gpio_write(spi[i]->reset, 1);	
+		sleep(1);
+	}
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		chain[i] = init_A1_chain(spi[i], 0);
+		if (chain[i] == NULL)
+		{
+			applog(LOG_ERR, "init a1 chain fail");
+			return false;
+		}
+
+		struct cgpu_info *cgpu = malloc(sizeof(*cgpu));
+		assert(cgpu != NULL);
+	
+		memset(cgpu, 0, sizeof(*cgpu));
+		cgpu->drv = &bitmineA1_drv;
+		cgpu->name = "BitmineA1.SingleChain";
+		cgpu->threads = 1;
+
+		cgpu->device_data = chain[i];
+
+		chain[i]->cgpu = cgpu;
+		add_cgpu(cgpu);
+
+		switch(cgpu->device_id){
+			case 0:A1_SetA1PLLClock(chain[i], A1Pll1);break;
+			case 1:A1_SetA1PLLClock(chain[i], A1Pll2);break;
+			case 2:A1_SetA1PLLClock(chain[i], A1Pll3);break;
+			case 3:A1_SetA1PLLClock(chain[i], A1Pll4);break;
+			case 4:A1_SetA1PLLClock(chain[i], A1Pll5);break;
+			case 5:A1_SetA1PLLClock(chain[i], A1Pll6);break;
+			default:;
+		}
+		chain[i]->work_start_delay = 1;
+
+		//chain[i]->work_start_delay = 0;
+
+		applog(LOG_WARNING, "Detected the %d A1 chain with %d chips / %d cores",
+		       i, chain[i]->num_active_chips, chain[i]->num_cores);
+	}
+
+
 	return true;
 }
 
+#if 0
 bool detect_coincraft_desk(void)
 {
 	static const uint8_t mcp4x_mapping[] = { 0x2c, 0x2b, 0x2a, 0x29, 0x28 };
@@ -848,6 +362,7 @@ bool detect_coincraft_rig_v3(void)
 	       chains_detected);
 	return true;
 }
+#endif
 
 /* Probe SPI channel and register chip chain */
 void A1_detect(bool hotplug)
@@ -886,29 +401,41 @@ void A1_detect(bool hotplug)
 	}
 	applog(LOG_DEBUG, "A1 detect");
 
-	/* register global SPI context */
-	struct spi_config cfg = default_spi_config;
-	cfg.mode = SPI_MODE_1;
-	cfg.speed = A1_config_options.spi_clk_khz * 1000;
-	spi = spi_init(&cfg);
-	if (spi == NULL)
-		return;
+	A1Pll1 = A1_ConfigA1PLLClock(opt_A1Pll1);
+	A1Pll2 = A1_ConfigA1PLLClock(opt_A1Pll2);
+	A1Pll3 = A1_ConfigA1PLLClock(opt_A1Pll3);
+	A1Pll4 = A1_ConfigA1PLLClock(opt_A1Pll4);
+	A1Pll5 = A1_ConfigA1PLLClock(opt_A1Pll5);
+	A1Pll6 = A1_ConfigA1PLLClock(opt_A1Pll6);
 
+#if 0
 	/* detect and register supported products */
 	if (detect_coincraft_desk())
 		return;
 	if (detect_coincraft_rig_v3())
 		return;
-	if (detect_single_chain())
+#endif
+
+	if(detect_A1_chain())
+	{
 		return;
+	}
+
+	applog(LOG_WARNING, "A1 dectect finish");
+
+    int i = 0;
 	/* release SPI context if no A1 products found */
-	spi_exit(spi);
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		spi_exit(spi[i]);
+	}	
 }
 
 #define TEMP_UPDATE_INT_MS	2000
 static int64_t A1_scanwork(struct thr_info *thr)
 {
 	int i;
+	int32_t A1Pll = 1000;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct A1_chain *a1 = cgpu->device_data;
 	int32_t nonce_ranges_processed = 0;
@@ -917,9 +444,10 @@ static int64_t A1_scanwork(struct thr_info *thr)
 		cgpu->deven = DEV_DISABLED;
 		return 0;
 	}
-	board_selector->select(a1->chain_id);
+	
+	//board_selector->select(a1->chain_id);
 
-	applog(LOG_DEBUG, "A1 running scanwork");
+	//applog(LOG_DEBUG, "A1 running scanwork");
 
 	uint32_t nonce;
 	uint8_t chip_id;
@@ -928,110 +456,149 @@ static int64_t A1_scanwork(struct thr_info *thr)
 
 	mutex_lock(&a1->lock);
 
-	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms()) {
-		a1->temp = board_selector->get_temp(0);
+	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms()) 
+	{
+		//a1->temp = board_selector->get_temp(0);
 		a1->last_temp_time = get_current_ms();
 	}
 	int cid = a1->chain_id;
+	
 	/* poll queued results */
-	while (true) {
+	while (true) 
+	{
 		if (!get_nonce(a1, (uint8_t*)&nonce, &chip_id, &job_id))
 			break;
-		nonce = bswap_32(nonce);
+		//nonce = bswap_32(nonce);   //modify for A4
 		work_updated = true;
-		if (chip_id < 1 || chip_id > a1->num_active_chips) {
-			applog(LOG_WARNING, "%d: wrong chip_id %d",
-			       cid, chip_id);
+		if (chip_id < 1 || chip_id > a1->num_active_chips) 
+		{
+			applog(LOG_WARNING, "%d: wrong chip_id %d", cid, chip_id);
 			continue;
 		}
-		if (job_id < 1 && job_id > 4) {
-			applog(LOG_WARNING, "%d: chip %d: result has wrong "
-			       "job_id %d", cid, chip_id, job_id);
+		if (job_id < 1 && job_id > 4) 
+		{
+			applog(LOG_WARNING, "%d: chip %d: result has wrong ""job_id %d", cid, chip_id, job_id);
 			flush_spi(a1);
 			continue;
 		}
 
 		struct A1_chip *chip = &a1->chips[chip_id - 1];
 		struct work *work = chip->work[job_id - 1];
-		if (work == NULL) {
+		if (work == NULL) 
+		{
 			/* already been flushed => stale */
-			applog(LOG_WARNING, "%d: chip %d: stale nonce 0x%08x",
-			       cid, chip_id, nonce);
+			applog(LOG_WARNING, "%d: chip %d: stale nonce 0x%08x", cid, chip_id, nonce);
 			chip->stales++;
 			continue;
 		}
-		if (!submit_nonce(thr, work, nonce)) {
-			applog(LOG_WARNING, "%d: chip %d: invalid nonce 0x%08x",
-			       cid, chip_id, nonce);
+		if (!submit_nonce(thr, work, nonce)) 
+		{
+			applog(LOG_WARNING, "%d: chip %d: invalid nonce 0x%08x", cid, chip_id, nonce);
 			chip->hw_errors++;
 			/* add a penalty of a full nonce range on HW errors */
 			nonce_ranges_processed--;
 			continue;
 		}
-		applog(LOG_DEBUG, "YEAH: %d: chip %d / job_id %d: nonce 0x%08x",
-		       cid, chip_id, job_id, nonce);
+		applog(LOG_INFO, "YEAH: %d: chip %d / job_id %d: nonce 0x%08x", cid, chip_id, job_id, nonce);
 		chip->nonces_found++;
 	}
 
+	uint8_t reg[REG_LENGTH];
 	/* check for completed works */
-	for (i = a1->num_active_chips; i > 0; i--) {
-		uint8_t c = i;
-		if (is_chip_disabled(a1, c))
-			continue;
-		if (!cmd_READ_REG(a1, c)) {
-			disable_chip(a1, c);
-			continue;
-		}
-		uint8_t qstate = a1->spi_rx[5] & 3;
-		uint8_t qbuff = a1->spi_rx[6];
-		struct work *work;
-		struct A1_chip *chip = &a1->chips[i - 1];
-		switch(qstate) {
-		case 3:
-			continue;
-		case 2:
-			applog(LOG_ERR, "%d: chip %d: invalid state = 2",
-			       cid, c);
-			continue;
-		case 1:
-			/* fall through */
-		case 0:
-			work_updated = true;
+	if(a1->work_start_delay > 0)
+	{
+		applog(LOG_INFO, "wait for pll stable");
+		a1->work_start_delay--;
+	}
+	else
+	{
+		for (i = a1->num_active_chips; i > 0; i--) 
+		{
+			uint8_t c = i;
+			if (is_chip_disabled(a1, c))
+				continue;
+			if (!inno_cmd_read_reg(a1, c, reg)) 
+			{
+				disable_chip(a1, c);
+				continue;
+			}
+			uint8_t qstate = reg[9] & 0x01;
+			uint8_t qbuff = 0;
+			//uint8_t qbuff = a1->spi_rx[6];
+			struct work *work;
+			struct A1_chip *chip = &a1->chips[i - 1];
+			switch(qstate) 
+			{
+	//		case 3:
+	//			continue;
+	//		case 2:
+	//			applog(LOG_ERR, "%d: chip %d: invalid state = 2", cid, c);
+	//			continue;
+			case 1:
+				//applog(LOG_INFO, "chip %d busy now", i);
+				break;
+				/* fall through */
+			case 0:
+				work_updated = true;
 
-			work = wq_dequeue(&a1->active_wq);
-			if (work == NULL) {
-				applog(LOG_INFO, "%d: chip %d: work underflow",
-				       cid, c);
+				work = wq_dequeue(&a1->active_wq);
+				if (work == NULL) 
+				{
+					applog(LOG_INFO, "%d: chip %d: work underflow", cid, c);
+					break;
+				}
+				if (set_work(a1, c, work, qbuff)) 
+				{
+					chip->nonce_ranges_done++;
+					nonce_ranges_processed++;
+					applog(LOG_INFO, "set work success %d, nonces processed %d", cid, nonce_ranges_processed);
+				}
+				
+				applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d",
+				       cid, c,
+				       chip->nonce_ranges_done, chip->nonces_found,
+				       chip->hw_errors, chip->stales);
 				break;
 			}
-			if (set_work(a1, c, work, qbuff)) {
-				chip->nonce_ranges_done++;
-				nonce_ranges_processed++;
-			}
-			applog(LOG_DEBUG, "%d: chip %d: job done: %d/%d/%d/%d",
-			       cid, c,
-			       chip->nonce_ranges_done, chip->nonces_found,
-			       chip->hw_errors, chip->stales);
-			break;
 		}
 	}
+
 	check_disabled_chips(a1);
 	mutex_unlock(&a1->lock);
 
-	board_selector->release();
+	//board_selector->release();
 
 	if (nonce_ranges_processed < 0)
+	{
+		applog(LOG_INFO, "nonce_ranges_processed less than 0");
 		nonce_ranges_processed = 0;
+	}
 
-	if (nonce_ranges_processed != 0) {
-		applog(LOG_DEBUG, "%d, nonces processed %d",
-		       cid, nonce_ranges_processed);
+	if (nonce_ranges_processed != 0) 
+	{
+		applog(LOG_INFO, "%d, nonces processed %d", cid, nonce_ranges_processed);
 	}
 	/* in case of no progress, prevent busy looping */
-	if (!work_updated)
-		cgsleep_ms(40);
+	//if (!work_updated)
+	//	cgsleep_ms(40);
 
-	return (int64_t)nonce_ranges_processed << 32;
+	cgtime(&a1->tvScryptCurr);
+	timersub(&a1->tvScryptCurr, &a1->tvScryptLast, &a1->tvScryptDiff);
+	cgtime(&a1->tvScryptLast);
+
+	switch(cgpu->device_id){
+		case 0:A1Pll = PLL_Clk_12Mhz[A1Pll1].speedMHz;break;
+		case 1:A1Pll = PLL_Clk_12Mhz[A1Pll2].speedMHz;break;
+		case 2:A1Pll = PLL_Clk_12Mhz[A1Pll3].speedMHz;break;
+		case 3:A1Pll = PLL_Clk_12Mhz[A1Pll4].speedMHz;break;
+		case 4:A1Pll = PLL_Clk_12Mhz[A1Pll5].speedMHz;break;
+		case 5:A1Pll = PLL_Clk_12Mhz[A1Pll6].speedMHz;break;
+		default:;
+	}
+
+	return (int64_t)(1550832.85 * A1Pll/1000 * (a1->num_cores/54.0) * (a1->tvScryptDiff.tv_usec / 1000000.0));
+
+	//return (int64_t)nonce_ranges_processed << 28;
 }
 
 
@@ -1042,8 +609,8 @@ static bool A1_queue_full(struct cgpu_info *cgpu)
 	int queue_full = false;
 
 	mutex_lock(&a1->lock);
-	applog(LOG_DEBUG, "%d, A1 running queue_full: %d/%d",
-	       a1->chain_id, a1->active_wq.num_elems, a1->num_active_chips);
+	//applog(LOG_DEBUG, "%d, A1 running queue_full: %d/%d",
+	//       a1->chain_id, a1->active_wq.num_elems, a1->num_active_chips);
 
 	if (a1->active_wq.num_elems >= a1->num_active_chips * 2)
 		queue_full = true;
@@ -1059,22 +626,22 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 {
 	struct A1_chain *a1 = cgpu->device_data;
 	int cid = a1->chain_id;
-	board_selector->select(cid);
-
-	applog(LOG_DEBUG, "%d: A1 running flushwork", cid);
-
+	//board_selector->select(cid);
 	int i;
 
 	mutex_lock(&a1->lock);
 	/* stop chips hashing current work */
-	if (!abort_work(a1)) {
+	if (!abort_work(a1)) 
+	{
 		applog(LOG_ERR, "%d: failed to abort work in chip chain!", cid);
 	}
 	/* flush the work chips were currently hashing */
-	for (i = 0; i < a1->num_active_chips; i++) {
+	for (i = 0; i < a1->num_active_chips; i++) 
+	{
 		int j;
 		struct A1_chip *chip = &a1->chips[i];
-		for (j = 0; j < 4; j++) {
+		for (j = 0; j < 4; j++) 
+		{
 			struct work *work = chip->work[j];
 			if (work == NULL)
 				continue;
@@ -1083,22 +650,31 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 			work_completed(cgpu, work);
 			chip->work[j] = NULL;
 		}
+		
 		chip->last_queued_id = 0;
+
+		if(!inno_cmd_resetjob(a1, i+1))
+		{
+			applog(LOG_WARNING, "chip %d clear work false", i);\
+			continue;
+		}
+		
+		applog(LOG_INFO, "chip :%d flushing queued work success", i);
 	}
 	/* flush queued work */
 	applog(LOG_DEBUG, "%d: flushing queued work...", cid);
-	while (a1->active_wq.num_elems > 0) {
+	while (a1->active_wq.num_elems > 0) 
+	{
 		struct work *work = wq_dequeue(&a1->active_wq);
 		assert(work != NULL);
 		work_completed(cgpu, work);
 	}
 	mutex_unlock(&a1->lock);
 
-	board_selector->release();
+	//board_selector->release();
 }
 
-static void A1_get_statline_before(char *buf, size_t len,
-				   struct cgpu_info *cgpu)
+static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu)
 {
 	struct A1_chain *a1 = cgpu->device_data;
 	char temp[10];

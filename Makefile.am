@@ -120,6 +120,12 @@ cgminer_SOURCES += A1-board-selector.h
 cgminer_SOURCES += A1-board-selector-CCD.c A1-board-selector-CCR.c
 cgminer_SOURCES += A1-trimpot-mcp4x.h A1-trimpot-mcp4x.c
 cgminer_SOURCES += i2c-context.c i2c-context.h
+# add by pengpeng of inno
+cgminer_SOURCES += asic_inno.c
+cgminer_SOURCES += asic_inno_cmd.c
+cgminer_SOURCES += asic_inno_clock.c
+cgminer_SOURCES += asic_inno_gpio.c
+cgminer_SOURCES += scrypt.c
 endif
 
 if HAS_DRILLBIT

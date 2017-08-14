@@ -29,6 +29,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <limits.h>
+#include "scrypt.h"
 
 #ifdef USE_USBUTILS
 #include <semaphore.h>
@@ -60,6 +61,7 @@ char *curly = ":D";
 #include "compat.h"
 #include "miner.h"
 #include "bench_block.h"
+#include "asic_inno_cmd.h"
 #ifdef USE_USBUTILS
 #include "usbutils.h"
 #endif
@@ -336,6 +338,15 @@ static bool usb_polling;
 static bool polling_usb;
 static bool usb_reinit;
 #endif
+
+//for A4
+int opt_A1Pll1=1200; // -1 Default
+int opt_A1Pll2=1200; // -1 Default
+int opt_A1Pll3=1200; // -1 Default
+int opt_A1Pll4=1200; // -1 Default
+int opt_A1Pll5=1200; // -1 Default
+int opt_A1Pll6=1200; // -1 Default
+
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1243,6 +1254,15 @@ static char *set_null(const char __maybe_unused *arg)
 	return NULL;
 }
 
+unsigned int asic_vol_set = 0;
+static char *setvol(const char *arg)
+{
+	asic_vol_set = (arg[0]-48)*100+(arg[1]-48)*10+(arg[2]-48);
+	printf("%d\n",asic_vol_set);
+	return NULL;
+}
+
+
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef USE_ICARUS
@@ -1595,6 +1615,30 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitmine-a1-options",
 		     opt_set_charp, NULL, &opt_bitmine_a1_options,
 		     "Bitmine A1 options ref_clk_khz:sys_clk_khz:spi_clk_khz:override_chip_num"),
+
+	OPT_WITH_ARG("--A1Pll1",
+			 set_int_0_to_9999, opt_show_intval, &opt_A1Pll1,
+			 "Set PLL Clock in bitmine A1 broad 1 chip (-1: 1000MHz, >0:Look PLL table)"),
+	OPT_WITH_ARG("--A1Pll2",
+             set_int_0_to_9999, opt_show_intval, &opt_A1Pll2,
+             "Set PLL Clock in bitmine A1 broad 2 chip (-1: 1000MHz, >0:Look PLL table)"),
+	OPT_WITH_ARG("--A1Pll3",
+             set_int_0_to_9999, opt_show_intval, &opt_A1Pll3,
+             "Set PLL Clock in bitmine A1 broad 3 chip (-1: 1000MHz, >0:Look PLL table)"),
+	OPT_WITH_ARG("--A1Pll4",
+             set_int_0_to_9999, opt_show_intval, &opt_A1Pll4,
+             "Set PLL Clock in bitmine A1 broad 4 chip (-1: 1000MHz, >0:Look PLL table)"),
+	OPT_WITH_ARG("--A1Pll5",
+             set_int_0_to_9999, opt_show_intval, &opt_A1Pll5,
+             "Set PLL Clock in bitmine A1 broad 5 chip (-1: 1000MHz, >0:Look PLL table)"),
+	OPT_WITH_ARG("--A1Pll6",
+             set_int_0_to_9999, opt_show_intval, &opt_A1Pll6,
+             "Set PLL Clock in bitmine A1 broad 6 chip (-1: 1000MHz, >0:Look PLL table)"),
+		     
+	OPT_WITH_ARG("--A1Vol",
+		     setvol, NULL, NULL,
+		     "user set v"),
+
 #endif
 #ifdef USE_BITFURY
 	OPT_WITH_ARG("--bxf-bits",
@@ -7658,16 +7702,23 @@ static void rebuild_nonce(struct work *work, uint32_t nonce)
 
 	*work_nonce = htole32(nonce);
 
-	regen_hash(work);
+	//regen_hash(work);
+	scrypt_regenhash(work);
 }
 
 /* For testing a nonce against diff 1 */
 bool test_nonce(struct work *work, uint32_t nonce)
 {
-	uint32_t *hash_32 = (uint32_t *)(work->hash + 28);
+	//uint32_t *hash_32 = (uint32_t *)(work->hash + 28);
+	uint16_t *hash_16 = (uint16_t *)(work->hash + 30);
 
 	rebuild_nonce(work, nonce);
-	return (*hash_32 == 0);
+
+	hexdump("data:", work->data, 128);
+	hexdump("hash:", work->hash, 32);
+
+	//return (*hash_32 == 0);
+	return (*hash_16 == 0);
 }
 
 /* For testing a nonce against an arbitrary diff */
@@ -7711,11 +7762,14 @@ bool submit_tested_work(struct thr_info *thr, struct work *work)
 	struct work *work_out;
 	update_work_stats(thr, work);
 
+/*
 	if (!fulltest(work->hash, work->target)) {
 		applog(LOG_INFO, "%s %d: Share above target", thr->cgpu->drv->name,
 		       thr->cgpu->device_id);
 		return false;
 	}
+*/
+
 	work_out = copy_work(work);
 	submit_work_async(work_out);
 	return true;

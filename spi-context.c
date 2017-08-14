@@ -40,7 +40,8 @@ struct spi_ctx *spi_init(struct spi_config *config)
 	    (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &config->bits) < 0) ||
 	    (ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &config->bits) < 0) ||
 	    (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &config->speed) < 0) ||
-	    (ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &config->speed) < 0)) {
+	    (ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &config->speed) < 0)) 
+	{
 		applog(LOG_ERR, "SPI: ioctl error on SPI device %s", dev_fname);
 		close(fd);
 		return NULL;
@@ -57,38 +58,68 @@ struct spi_ctx *spi_init(struct spi_config *config)
 	return ctx;
 }
 
+
 extern void spi_exit(struct spi_ctx *ctx)
 {
+	char dev_fname[PATH_MAX];
+
 	if (NULL == ctx)
+	{
 		return;
+	}
 
 	close(ctx->fd);
 	free(ctx);
 }
 
-extern bool spi_transfer(struct spi_ctx *ctx, uint8_t *txbuf,
-			 uint8_t *rxbuf, int len)
+
+extern bool spi_write_data(struct spi_ctx *ctx, uint8_t *txbuf, int len)
 {
-	struct spi_ioc_transfer xfr;
-	int ret;
+	if((len <= 0) || (txbuf == NULL))
+	{
+		applog(LOG_ERR, "SPI: write para error");
+		return false;
+	}
 
-	if (rxbuf != NULL)
-		memset(rxbuf, 0xff, len);
+	if(write(ctx->fd, txbuf, len) <= 0)
+	{
+		applog(LOG_ERR, "SPI: write data error");
+		return false;
+	}
 
-	ret = len;
-
-	xfr.tx_buf = (unsigned long)txbuf;
-	xfr.rx_buf = (unsigned long)rxbuf;
-	xfr.len = len;
-	xfr.speed_hz = ctx->config.speed;
-	xfr.delay_usecs = ctx->config.delay;
-	xfr.bits_per_word = ctx->config.bits;
-	xfr.cs_change = 0;
-	xfr.pad = 0;
-
-	ret = ioctl(ctx->fd, SPI_IOC_MESSAGE(1), &xfr);
-	if (ret < 1)
-		applog(LOG_ERR, "SPI: ioctl error on SPI device: %d", ret);
-
-	return ret > 0;
+	return true;
 }
+
+
+extern bool spi_read_data(struct spi_ctx *ctx, uint8_t *rxbuf, int len)
+{
+	if((len <= 0) || (rxbuf == NULL))
+	{
+		applog(LOG_ERR, "SPI: read para error");
+		return false;
+	}
+
+	if(read(ctx->fd, rxbuf, len) <= 0)
+	{
+		applog(LOG_ERR, "SPI: read data error");
+		return false;
+	}
+
+	return true;
+}
+
+
+extern bool spi_transfer(struct spi_ctx *ctx, uint8_t *txbuf, uint8_t *rxbuf, int len)
+{
+	if(!spi_write_data(ctx, txbuf, len))
+		return false;
+	
+	//usleep(100);
+
+	if(!spi_read_data(ctx, rxbuf, len))
+		return false;
+
+	return true;	
+	//return (spi_write_data(ctx, txbuf, len) && spi_read_data(ctx, rxbuf, len));
+}
+

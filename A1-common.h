@@ -28,6 +28,7 @@ struct work_queue {
  */
 #define MAX_CMD_LENGTH		(WRITE_JOB_LENGTH + MAX_CHAIN_LENGTH * 2 * 2)
 
+#if 0
 struct A1_chip {
 	int num_cores;
 	int last_queued_id;
@@ -87,5 +88,7 @@ struct A1_config_options {
 
 /* global configuration instance */
 extern struct A1_config_options A1_config_options;
+
+#endif
 
 #endif /* A1_COMMON_H */

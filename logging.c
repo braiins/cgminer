@@ -16,10 +16,10 @@
 #include "miner.h"
 
 bool opt_debug = false;
-bool opt_log_output = false;
+bool opt_log_output = true;
 
 /* per default priorities higher than LOG_NOTICE are logged */
-int opt_log_level = LOG_NOTICE;
+int opt_log_level = LOG_WARNING;
 
 static void my_log_curses(int prio, const char *datetime, const char *str, bool force)
 {

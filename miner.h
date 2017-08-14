@@ -1075,6 +1075,14 @@ extern int opt_usbdump;
 extern bool opt_usb_list_all;
 extern cgsem_t usb_resource_sem;
 #endif
+
+extern int opt_A1Pll1;
+extern int opt_A1Pll2;
+extern int opt_A1Pll3;
+extern int opt_A1Pll4;
+extern int opt_A1Pll5;
+extern int opt_A1Pll6;
+
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
