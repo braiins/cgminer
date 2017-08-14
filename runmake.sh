@@ -6,6 +6,7 @@
 ROOTFS_DIR=$1
 MAKE_JOBS=$2
 
+
 LDFLAGS=-L${ROOTFS_DIR}/lib \
 CFLAGS=-I${ROOTFS_DIR}/include \
 ./configure --prefix=${ROOTFS_DIR} \
