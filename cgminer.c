@@ -340,12 +340,12 @@ static bool usb_reinit;
 #endif
 
 //for A4
-int opt_A1Pll1=1200; // -1 Default
-int opt_A1Pll2=1200; // -1 Default
-int opt_A1Pll3=1200; // -1 Default
-int opt_A1Pll4=1200; // -1 Default
-int opt_A1Pll5=1200; // -1 Default
-int opt_A1Pll6=1200; // -1 Default
+int opt_A1Pll1=400; // -1 Default
+int opt_A1Pll2=400; // -1 Default
+int opt_A1Pll3=400; // -1 Default
+int opt_A1Pll4=400; // -1 Default
+int opt_A1Pll5=400; // -1 Default
+int opt_A1Pll6=400; // -1 Default
 
 
 char *opt_kernel_path;
@@ -3566,10 +3566,10 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: true (yay!!!)");
 		if (!QUIET) {
 			if (total_pools > 1)
-				applog(LOG_NOTICE, "Accepted %s %s %d pool %d %s%s",
+				applog(LOG_INFO, "Accepted %s %s %d pool %d %s%s",
 				       hashshow, cgpu->drv->name, cgpu->device_id, work->pool->pool_no, resubmit ? "(resubmit)" : "", worktime);
 			else
-				applog(LOG_NOTICE, "Accepted %s %s %d %s%s",
+				applog(LOG_INFO, "Accepted %s %s %d %s%s",
 				       hashshow, cgpu->drv->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
 		}
 		sharelog("accept", work);
@@ -7642,7 +7642,7 @@ static void submit_work_async(struct work *work)
 		pool->diff_accepted += work->work_difficulty;
 		mutex_unlock(&stats_lock);
 
-		applog(LOG_NOTICE, "Accepted %s %d benchmark share nonce %08x",
+		applog(LOG_INFO, "Accepted %s %d benchmark share nonce %08x",
 		       cgpu->drv->name, cgpu->device_id, *(uint32_t *)(work->data + 64 + 12));
 		return;
 	}
@@ -7702,8 +7702,12 @@ static void rebuild_nonce(struct work *work, uint32_t nonce)
 
 	*work_nonce = htole32(nonce);
 
-	//regen_hash(work);
+#ifdef CHIP_A6
 	scrypt_regenhash(work);
+#else
+	regen_hash(work);
+#endif
+
 }
 
 /* For testing a nonce against diff 1 */

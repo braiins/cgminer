@@ -1,19 +1,19 @@
 #ifndef _ASIC_INNO_
 #define _ASIC_INNO_
 
-#define ASIC_CHAIN_NUM		2
-#define ASIC_CHIP_NUM		10
+#define ASIC_CHAIN_NUM		1
+#define ASIC_CHIP_NUM		4
 
-#define WEAK_CHIP_THRESHOLD	30
-#define BROKEN_CHIP_THRESHOLD 26
+#define WEAK_CHIP_THRESHOLD	5
+#define BROKEN_CHIP_THRESHOLD 5
 #define WEAK_CHIP_SYS_CLK	(600 * 1000)
 #define BROKEN_CHIP_SYS_CLK	(400 * 1000)
-//#define CHIP_A6 1
+//#define CHIP_A6 
 
 #include "asic_inno_cmd.h"
 
 bool check_chip(struct A1_chain *a1, int i);
-int chain_detect(struct A1_chain *a1);
+int chain_detect(struct A1_chain *a1, int idxpll);
 bool abort_work(struct A1_chain *a1);
 
 int get_current_ms(void);

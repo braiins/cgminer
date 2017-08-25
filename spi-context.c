@@ -72,39 +72,50 @@ extern void spi_exit(struct spi_ctx *ctx)
 	free(ctx);
 }
 
+static pthread_mutex_t spi_lock;
 
 extern bool spi_write_data(struct spi_ctx *ctx, uint8_t *txbuf, int len)
 {
+	mutex_lock(&spi_lock);
+	
 	if((len <= 0) || (txbuf == NULL))
 	{
+		mutex_unlock(&spi_lock);
 		applog(LOG_ERR, "SPI: write para error");
 		return false;
 	}
 
 	if(write(ctx->fd, txbuf, len) <= 0)
 	{
+		mutex_unlock(&spi_lock);
 		applog(LOG_ERR, "SPI: write data error");
 		return false;
 	}
 
+	mutex_unlock(&spi_lock);
 	return true;
 }
 
 
 extern bool spi_read_data(struct spi_ctx *ctx, uint8_t *rxbuf, int len)
 {
+	mutex_lock(&spi_lock);
+	
 	if((len <= 0) || (rxbuf == NULL))
 	{
+		mutex_unlock(&spi_lock);
 		applog(LOG_ERR, "SPI: read para error");
 		return false;
 	}
 
 	if(read(ctx->fd, rxbuf, len) <= 0)
 	{
-		applog(LOG_ERR, "SPI: read data error");
+		mutex_unlock(&spi_lock);
+		applog(LOG_ERR, "SPI: read data error");		
 		return false;
 	}
 
+	mutex_unlock(&spi_lock);
 	return true;
 }
 

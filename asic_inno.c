@@ -12,10 +12,12 @@
 #include "asic_inno.h"
 #include "asic_inno_cmd.h"
 #include "asic_inno_clock.h"
+#include "asic_inno_gpio.h"
 
 
 int opt_diff=15;
 
+#ifdef CHIP_A6
 static const uint8_t difficult_Tbl[24][4] = {
 	{0x1e, 0xff, 0xff, 0xff},	// 1
 	{0x1e, 0x7f, 0xff, 0xff},	// 2
@@ -36,14 +38,13 @@ static const uint8_t difficult_Tbl[24][4] = {
 	{0x1e, 0x00, 0x00, 0xff}	// 65536
 };
 
-static const uint8_t default_reg[14][12] = 
+static const uint8_t default_reg[13][12] = 
 {
 	{0x07, 0x45, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //1.3GHz  0xE482 
 	{0x07, 0x2C, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //1.2GHz  0x781E 
 	{0x07, 0x13, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //1.1GHz  0x2C4A  
 	{0x06, 0xFA, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //1.0GHz  0x32D0  
 	{0x06, 0xE1, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //900MHz 0x16F4
-	{0x06, 0xD7, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //860MHz 0x5EBC  
 	{0x06, 0xC8, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //800MHz 0xB569 
 	{0x06, 0xAF, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //700MHz 0xFE1C 
 	{0x07, 0x2C, 0x40, 0x40, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //600MHz 0xAC1C  
@@ -53,6 +54,46 @@ static const uint8_t default_reg[14][12] =
 	{0x06, 0xC8, 0x40, 0x80, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //200MHz 0x5D6E  
 	{0x02, 0x50, 0x40, 0xC0, 0x00, 0x00, 0x00, 0xA8, 0x00, 0x24, 0xFF, 0xFF},  //120MHz 0xE75B 
 };
+#else
+static const uint32_t difficult_Tbl[16] = {
+	0x1d00ffff,// 1
+	0x1d007fff,// 2
+	0x1d005fff,// 3
+	0x1d003fff,// 4
+	0x1d001fff,// 8
+
+	0x1d000fff,// 16
+	0x1d0007ff,// 32
+	0x1d0006ff,// 37
+	0x1d0005ff,// 43
+	0x1d0004ff,// 52
+
+	0x1d0003ff,// 65
+	0x1d0002ff,// 86
+	0x1d00027f,// 103
+	0x1d0001ff,// 129
+	0x1c00ffff,// 256
+
+	0x1b3fffff,// 1024
+};
+
+static const uint8_t default_reg[13][12] = 
+{
+	{0x07, 0x45, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //1.3GHz  0xE482 
+	{0x07, 0x2C, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //1.2GHz  0x781E 
+	{0x07, 0x13, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //1.1GHz  0x2C4A  
+	{0x06, 0xFA, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //1.0GHz  0x32D0  
+	{0x06, 0xE1, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //900MHz 0x16F4
+	{0x06, 0xC8, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //800MHz 0xB569 
+	{0x06, 0xAF, 0x40, 0x00, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //700MHz 0xFE1C 
+	{0x07, 0x2C, 0x40, 0x40, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //600MHz 0xAC1C  
+	{0x06, 0xFA, 0x40, 0x40, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //500MHz 0xE6D2  
+	{0x06, 0xC8, 0x40, 0x40, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //400MHz 0x616B 
+	{0x07, 0x2C, 0x40, 0x80, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //300MHz 0x9019 
+	{0x06, 0xC8, 0x40, 0x80, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //200MHz 0x5D6E  
+	{0x02, 0x50, 0x40, 0xC0, 0x00, 0x00, 0x00, 0xA8, 0x00, 0xE4, 0xFF, 0xFF},  //120MHz 0xE75B 
+};
+#endif
 
 
 
@@ -68,6 +109,7 @@ static void rev(unsigned char *s, size_t l)
 	}
 }
 
+#ifdef CHIP_A6	
 static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 {
 	unsigned char *wdata = work->data;
@@ -98,7 +140,7 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 		/* end nonce */
 		0x00, 0x00, 0x00, 0x00,
 //		/* crc data */
-//		0x00, 0x00
+		0x00, 0x00
 	};
 	
 	uint8_t diffIdx;
@@ -146,7 +188,7 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 	startnonce[2]=0x00;
 	startnonce[3]=0x00;
 	
-	endnonce[0]=0x0f;
+	endnonce[0]=0xff;
 	endnonce[1]=0xff;
 	endnonce[2]=0xff;
 	endnonce[3]=0xff;
@@ -166,7 +208,6 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 	memcpy(job+2+64+4+12+4, 	endnonce, 4);
 
     /* crc */
-#ifdef CHIP_A6
     memset(tmp_buf, 0, sizeof(tmp_buf));
     for(i = 0; i < 45; i++)
     {
@@ -176,10 +217,88 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
     crc = CRC16_2(tmp_buf, 90);
     job[90] = (uint8_t)((crc >> 8) & 0xff);
     job[91] = (uint8_t)((crc >> 0) & 0xff);
-#endif
+
 
 	return job;
 }
+#else
+static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
+{
+	double sdiff = work->sdiff;
+	uint8_t tmp_buf[JOB_LENGTH];
+	uint16_t crc;
+	uint8_t i;
+			
+	static uint8_t job[JOB_LENGTH] = {
+		/* command */
+		0x00, 0x00,
+		/* midstate */
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		/* wdata */
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		/* start nonce */
+		0x00, 0x00, 0x00, 0x00,
+		/* difficulty 1 */
+		0xff, 0xff, 0x00, 0x1d,
+		/* end nonce */
+		0xff, 0xff, 0xff, 0xff,
+		/* crc data */
+		0x00, 0x00, 0x00, 0x00
+	};
+
+	uint32_t *p1 = (uint32_t *) &job[34];
+	uint32_t *p2 = (uint32_t *) (work->data + 64);
+	unsigned char mid[32], data[12];
+	uint32_t diffIdx;
+	//uint32_t diffIdx,*diff=(uint32_t*)&job[50]; //difficulty pointer
+
+	job[0] = (job_id << 4) | CMD_WRITE_JOB;
+	job[1] = chip_id;
+
+	swab256(job + 2, work->midstate);
+	p1 = (uint32_t *) &job[34];
+	p2 = (uint32_t *) (work->data + 64);
+	p1[0] = bswap_32(p2[0]);
+	p1[1] = bswap_32(p2[1]);
+	p1[2] = bswap_32(p2[2]);
+
+	uint8_t diff[4] = {0x1e, 0x03, 0xff, 0xff};
+
+	if(sdiff>1023)
+		memcpy(diff, &(difficult_Tbl[15]), 4);
+		//*diff=difficult_Tbl[15];
+	else {
+		if(opt_diff>=1&&opt_diff<=16)
+		{
+			diffIdx=opt_diff-1;
+			memcpy(diff, &(difficult_Tbl[diffIdx]), 4);
+			//*diff=difficult_Tbl[diffIdx];
+		}
+		else
+			memcpy(diff, &(difficult_Tbl[14]), 4);
+			//*diff=difficult_Tbl[14];
+	}
+	
+	memcpy(job+50, diff, 4);
+
+    memset(tmp_buf, 0, sizeof(tmp_buf));
+    for(i = 0; i < 29; i++)
+    {
+        tmp_buf[(2 * i) + 1] = job[(2 * i) + 0];
+        tmp_buf[(2 * i) + 0] = job[(2 * i) + 1];
+    }
+    crc = CRC16_2(tmp_buf, 58);
+    job[58] = (uint8_t)((crc >> 8) & 0xff);
+    job[59] = (uint8_t)((crc >> 0) & 0xff);
+
+	return job;
+}
+#endif
+
 
 
 #define COOLDOWN_MS			(30 * 1000)
@@ -264,7 +383,7 @@ bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t q
 
 	int job_id = chip->last_queued_id + 1;
 
-	applog(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x", cid, chip_id, job_id, queue_states);
+	//applog(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x", cid, chip_id, job_id, queue_states);
 	if (job_id == (queue_states & 0x0f) || job_id == (queue_states >> 4))
 	{
 		applog(LOG_WARNING, "%d: job overlap: %d, 0x%02x", cid, job_id, queue_states);
@@ -340,6 +459,10 @@ bool check_chip(struct A1_chain *a1, int i)
 		a1->chips[i].disabled = 1;
 		return false;;
 	}
+	else
+	{
+		hexdump("check chip:", buffer, REG_LENGTH);
+	}
 
 	a1->chips[i].num_cores = buffer[11];
 	a1->num_cores += a1->chips[i].num_cores;
@@ -386,15 +509,33 @@ bool check_chip(struct A1_chain *a1, int i)
  * BIST_START works only once after HW reset, on subsequent calls it
  * returns 0 as number of chips.
  */
-int chain_detect(struct A1_chain *a1)
+int chain_detect(struct A1_chain *a1, int idxpll)
 {
 	uint8_t buffer[64];
 	int cid = a1->chain_id;
 	uint8_t temp_reg[REG_LENGTH];
 
+
+	//add for A6
+	asic_spi_init();
+
+	set_spi_speed(1500000);
+
 	inno_cmd_reset(a1, ADDR_BROADCAST);
 
-	sleep(1);
+	usleep(1000);
+
+	//add for A6
+	memcpy(temp_reg, default_reg[idxpll], REG_LENGTH-2);
+	if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
+	{
+		applog(LOG_WARNING, "set default PLL fail");
+		return -1;
+	}
+	applog(LOG_WARNING, "set default PLL success");
+
+	usleep(1000);
+
 
 	memset(buffer, 0, sizeof(buffer));
 	if(!inno_cmd_bist_start(a1, 0, buffer))
@@ -405,24 +546,16 @@ int chain_detect(struct A1_chain *a1)
 	a1->num_chips = buffer[3]; 
 	applog(LOG_WARNING, "%d: detected %d chips", cid, a1->num_chips);
 
-	sleep(1);
+	usleep(10000);
 
-	//add for A6
-	memcpy(temp_reg, default_reg[A5_PLL_CLOCK_300MHz], REG_LENGTH);
-	if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
-	{
-		applog(LOG_WARNING, "set default PLL fail");
-		return -1;
-	}
-	applog(LOG_WARNING, "set default PLL success");
-
-	sleep(1);
-	
+#ifdef CHIP_A6
 	if(!inno_cmd_bist_collect(a1, ADDR_BROADCAST))
 	{
 		applog(LOG_WARNING, "bist collect fail");
 		return -1;
 	}
+	set_spi_speed(1000);
+#endif
 
 	applog(LOG_WARNING, "collect core success");
 	applog(LOG_WARNING, "%d: no A1 chip-chain detected", cid);

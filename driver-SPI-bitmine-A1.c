@@ -33,12 +33,12 @@ struct spi_config cfg[ASIC_CHAIN_NUM];
 struct spi_ctx *spi[ASIC_CHAIN_NUM];
 struct A1_chain *chain[ASIC_CHAIN_NUM];
 
-static uint8_t A1Pll1=A4_PLL_CLOCK_860MHz;
-static uint8_t A1Pll2=A4_PLL_CLOCK_860MHz;
-static uint8_t A1Pll3=A4_PLL_CLOCK_860MHz;
-static uint8_t A1Pll4=A4_PLL_CLOCK_860MHz;
-static uint8_t A1Pll5=A4_PLL_CLOCK_860MHz;
-static uint8_t A1Pll6=A4_PLL_CLOCK_860MHz;
+static uint8_t A1Pll1=A5_PLL_CLOCK_800MHz;
+static uint8_t A1Pll2=A5_PLL_CLOCK_800MHz;
+static uint8_t A1Pll3=A5_PLL_CLOCK_800MHz;
+static uint8_t A1Pll4=A5_PLL_CLOCK_800MHz;
+static uint8_t A1Pll5=A5_PLL_CLOCK_800MHz;
+static uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 
 /* one global board_selector and spi context is enough */
 //static struct board_selector *board_selector;
@@ -115,11 +115,34 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	assert(a1 != NULL);
 
 	applog(LOG_DEBUG, "%d: A1 init chain", chain_id);
+	
 	memset(a1, 0, sizeof(*a1));
 	a1->spi_ctx = ctx;
 	a1->chain_id = chain_id;
 
-	a1->num_chips = chain_detect(a1);
+/*
+	//add for A6
+	asic_spi_init();
+
+	set_spi_speed(1500000);
+
+	inno_cmd_reset(a1, ADDR_BROADCAST);
+
+	usleep(1000);
+
+*/
+	applog(LOG_INFO,"chain_id:%d", chain_id);
+	switch(chain_id){
+		case 0:a1->num_chips = chain_detect(a1, A1Pll1);break;
+		case 1:a1->num_chips = chain_detect(a1, A1Pll2);break;
+		case 2:a1->num_chips = chain_detect(a1, A1Pll3);break;
+		case 3:a1->num_chips = chain_detect(a1, A1Pll4);break;
+		case 4:a1->num_chips = chain_detect(a1, A1Pll5);break;
+		case 5:a1->num_chips = chain_detect(a1, A1Pll6);break;
+		default:;
+	}
+	usleep(10000);
+	
 	if (a1->num_chips == 0)
 		goto failure;
 
@@ -147,7 +170,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	if (!inno_cmd_bist_fix(a1, ADDR_BROADCAST))
 		goto failure;
 
-	usleep(200000);
+	usleep(200);
 
 	for (i = 0; i < a1->num_active_chips; i++)
 		check_chip(a1, i);
@@ -214,7 +237,7 @@ static bool detect_A1_chain(void)
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
-		chain[i] = init_A1_chain(spi[i], 0);
+		chain[i] = init_A1_chain(spi[i], i);
 		if (chain[i] == NULL)
 		{
 			applog(LOG_ERR, "init a1 chain fail");
@@ -233,7 +256,7 @@ static bool detect_A1_chain(void)
 
 		chain[i]->cgpu = cgpu;
 		add_cgpu(cgpu);
-
+/*
 		switch(cgpu->device_id){
 			case 0:A1_SetA1PLLClock(chain[i], A1Pll1);break;
 			case 1:A1_SetA1PLLClock(chain[i], A1Pll2);break;
@@ -244,8 +267,9 @@ static bool detect_A1_chain(void)
 			default:;
 		}
 		chain[i]->work_start_delay = 1;
+*/
 
-		//chain[i]->work_start_delay = 0;
+		chain[i]->work_start_delay = 0;
 
 		applog(LOG_WARNING, "Detected the %d A1 chain with %d chips / %d cores",
 		       i, chain[i]->num_active_chips, chain[i]->num_cores);
@@ -446,7 +470,6 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	}
 	
 	//board_selector->select(a1->chain_id);
-
 	//applog(LOG_DEBUG, "A1 running scanwork");
 
 	uint32_t nonce;
@@ -468,7 +491,9 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	{
 		if (!get_nonce(a1, (uint8_t*)&nonce, &chip_id, &job_id))
 			break;
-		//nonce = bswap_32(nonce);   //modify for A4
+#ifndef CHIP_A6
+		nonce = bswap_32(nonce);   //modify for A4
+#endif
 		work_updated = true;
 		if (chip_id < 1 || chip_id > a1->num_active_chips) 
 		{
@@ -522,43 +547,31 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				disable_chip(a1, c);
 				continue;
 			}
-			uint8_t qstate = reg[9] & 0x01;
+			//for backup quene
+			uint8_t qstate = reg[9] & 0x02;
 			uint8_t qbuff = 0;
 			//uint8_t qbuff = a1->spi_rx[6];
-			struct work *work;
 			struct A1_chip *chip = &a1->chips[i - 1];
-			switch(qstate) 
-			{
-	//		case 3:
-	//			continue;
-	//		case 2:
-	//			applog(LOG_ERR, "%d: chip %d: invalid state = 2", cid, c);
-	//			continue;
-			case 1:
-				//applog(LOG_INFO, "chip %d busy now", i);
-				break;
-				/* fall through */
-			case 0:
+		
+			if (qstate != 0x02) {
 				work_updated = true;
+				struct work *work = wq_dequeue(&a1->active_wq);
+				assert(work != NULL);
 
-				work = wq_dequeue(&a1->active_wq);
-				if (work == NULL) 
-				{
-					applog(LOG_INFO, "%d: chip %d: work underflow", cid, c);
-					break;
-				}
-				if (set_work(a1, c, work, qbuff)) 
-				{
-					chip->nonce_ranges_done++;
-					nonce_ranges_processed++;
-					applog(LOG_INFO, "set work success %d, nonces processed %d", cid, nonce_ranges_processed);
-				}
+				if (!set_work(a1, c, work, qbuff))
+					continue;
+
+				nonce_ranges_processed++;
+				chip->nonce_ranges_done++;
 				
+				//applog(LOG_INFO, "set work success %d, nonces processed %d", cid, nonce_ranges_processed);
+				
+				/*
 				applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d",
 				       cid, c,
 				       chip->nonce_ranges_done, chip->nonces_found,
 				       chip->hw_errors, chip->stales);
-				break;
+				*/
 			}
 		}
 	}
@@ -576,7 +589,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
 
 	if (nonce_ranges_processed != 0) 
 	{
-		applog(LOG_INFO, "%d, nonces processed %d", cid, nonce_ranges_processed);
+		//applog(LOG_INFO, "%d, nonces processed %d", cid, nonce_ranges_processed);
 	}
 	/* in case of no progress, prevent busy looping */
 	//if (!work_updated)
@@ -596,9 +609,11 @@ static int64_t A1_scanwork(struct thr_info *thr)
 		default:;
 	}
 
-	return (int64_t)(1550832.85 * A1Pll/1000 * (a1->num_cores/54.0) * (a1->tvScryptDiff.tv_usec / 1000000.0));
-
-	//return (int64_t)nonce_ranges_processed << 28;
+#ifdef CHIP_A6
+	return (int64_t)(2011173.18 * A1Pll / 1000 * (a1->num_cores/9.0) * (a1->tvScryptDiff.tv_usec / 1000000.0));
+#else
+	return (int64_t)nonce_ranges_processed << 32;
+#endif
 }
 
 

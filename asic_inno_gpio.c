@@ -19,7 +19,7 @@ int SPI_PIN_POWER_EN[] = {
 	
 int SPI_PIN_START_EN[ASIC_CHAIN_NUM] = {
 883,
-885,
+//885,
 //887,
 //889,
 //891,
@@ -27,11 +27,77 @@ int SPI_PIN_START_EN[ASIC_CHAIN_NUM] = {
 
 int SPI_PIN_RESET[ASIC_CHAIN_NUM] = {
 884,
-886,
+//886,
 //888,
 //890,
 //892,
 };
+
+void asic_spi_init(void)
+{
+	int fd;
+	char fvalue[64];
+	char fpath[64];
+
+	fd = open(SYSFS_SPI_EXPORT, O_WRONLY);
+	if(fd == -1)
+	{
+		return;
+	}
+	memset(fvalue, 0, sizeof(fvalue));
+	sprintf(fvalue, "%s", "fclk1");
+	write(fd, fvalue, strlen(fvalue));
+	close(fd);
+}
+
+uint32_t set_spi_speed(uint32_t speed)
+{
+	int fd; 							  
+	char fvalue[64];				  
+	char fpath[64]; 				  
+	uint32_t rdspeed;					  
+									  
+	fd = open(SYSFS_SPI_VAL_STR, O_WRONLY);
+	if(fd == -1)						   
+	{									   
+			return -1;	
+	}					
+	memset(fvalue, 0, sizeof(fvalue));
+	sprintf(fvalue, "%d", speed*16);	  
+	write(fd, fvalue, strlen(fvalue));
+	close(fd);						  
+										   
+	fd = open(SYSFS_SPI_VAL_STR, O_RDONLY);
+	if(fd == -1)						   
+	{									   
+			return -1;					   
+	}								  
+	memset(fvalue, 0, sizeof(fvalue));
+	read(fd, fvalue, 12);			  
+	rdspeed = atoi(fvalue); 		  
+									  
+	return rdspeed;
+
+}
+
+uint32_t get_spi_speed(void)
+{
+	int fd; 																	  
+	char fvalue[64];															  
+	uint32_t speed;																	  
+																				  
+	fd = open(SYSFS_SPI_VAL_STR, O_RDONLY); 									  
+	if(fd == -1)					  
+	{								  
+			return -1;				  
+	}									  
+	memset(fvalue, 0, sizeof(fvalue));	  
+	read(fd, fvalue, 12);				  
+	speed = atoi(fvalue);				  
+										  
+	return speed;
+}
+
 
 
 void asic_gpio_init(int gpio, int direction)

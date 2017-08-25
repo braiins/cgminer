@@ -23,14 +23,14 @@
 
 #define ADDR_BROADCAST		0x00
 
-#define LEN_BIST_START		4
+#define LEN_BIST_START		6
 #define LEN_BIST_COLLECT	4
 #define LEN_BIST_FIX		4
 #define LEN_RESET			6
-#define LEN_WRITE_JOB		92
-#define LEN_READ_RESULT		8
-#define LEN_WRITE_REG		16
-#define LEN_READ_REG		12
+#define LEN_WRITE_JOB		94
+#define LEN_READ_RESULT		4
+#define LEN_WRITE_REG		18
+#define LEN_READ_REG		4
 
 
 #define SPI_REC_DATA_LOOP	10
@@ -40,12 +40,12 @@
 #define ASIC_RESULT_LEN		6
 #define READ_RESULT_LEN		(ASIC_RESULT_LEN + 2)
 
-#define REG_LENGTH		12
+#define REG_LENGTH		14
 
 #ifdef CHIP_A6
 #define JOB_LENGTH		92
 #else
-#define JOB_LENGTH		90
+#define JOB_LENGTH		62
 #endif
 
 #define MAX_CHAIN_LENGTH	64
