@@ -1,14 +1,13 @@
 #ifndef _ASIC_INNO_
 #define _ASIC_INNO_
 
-#define ASIC_CHAIN_NUM		1
-#define ASIC_CHIP_NUM		4
+#define ASIC_CHAIN_NUM		4
+#define ASIC_CHIP_NUM		72
 
 #define WEAK_CHIP_THRESHOLD	5
 #define BROKEN_CHIP_THRESHOLD 5
 #define WEAK_CHIP_SYS_CLK	(600 * 1000)
 #define BROKEN_CHIP_SYS_CLK	(400 * 1000)
-//#define CHIP_A6 
 
 #include "asic_inno_cmd.h"
 

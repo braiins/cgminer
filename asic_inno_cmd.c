@@ -187,7 +187,7 @@ bool spi_poll_result(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uint
 	memset(spi_tx, 0, sizeof(spi_tx));
 	memset(spi_rx, 0, sizeof(spi_rx));
 	
-	tx_len = 50;
+	tx_len = ASIC_CHIP_NUM*4;
 
 	for(tmp_len = 0; tmp_len < tx_len; tmp_len += 2)
 	{
@@ -197,7 +197,7 @@ bool spi_poll_result(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uint
 			applog(LOG_WARNING, "poll result: transfer fail !");
 			return false;
 		}
-		hexdump("poll: RX", spi_rx, 2);
+		//hexdump("poll: RX", spi_rx, 2);
 		if(spi_rx[0] == cmd)
 		{
 			index = 0;	
@@ -210,13 +210,13 @@ bool spi_poll_result(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uint
 				index = index + 2;
 			}while(index < len);
 
-			hexdump("poll: RX", spi_rx + 2, len);
+			//hexdump("poll: RX", spi_rx + 2, len);
 			memcpy(buff, spi_rx, len);
 			return true;
 		}
 	}
 	
-	return true;
+	return false;
 }
 
 
@@ -262,56 +262,26 @@ bool inno_cmd_resetjob(struct A1_chain *pChain, uint8_t chip_id)
 	//tx_len = (2 + len + 1) & ~1;
 	//hexdump("send: TX", spi_tx, tx_len);
 
-	if(!spi_write_data(pChain->spi_ctx, spi_tx, 4))
+	if(!spi_write_data(pChain->spi_ctx, spi_tx, 6))
 	{
 		applog(LOG_WARNING, "send command fail !");
 		return false;
 	}
 
 	memset(spi_rx, 0, sizeof(spi_rx));
+/*
 	if(!spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4))
 	{
 		applog(LOG_WARNING, "cmd reset: poll fail !");
 		return false;
 	}
+*/
+	spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4);
 
 	if(inno_cmd_isBusy(pChain, chip_id) != WORK_FREE)
 	{	
 		return false;
 	}
-
-#if 0
-	if(!inno_cmd_reset(pChain, chip_id))
-	{
-		applog(LOG_WARNING, "reset error");
-		return false;
-	}
-
-	usleep(2000);
-
-	if(!inno_cmd_bist_start(pChain, chip_id, buffer))
-	{
-		applog(LOG_WARNING, "bist start error");
-		return false;
-	}
-	pChain->num_chips = buffer[3]; 
-	applog(LOG_WARNING, "%d: detected %d chips", pChain->chain_id, pChain->num_chips);
-
-	usleep(2000);
-
-	if(!inno_cmd_bist_collect(pChain, chip_id))
-	{
-		applog(LOG_WARNING, "bist start collect");
-		return false;		
-	}
-
-	usleep(2000);
-
-	if(inno_cmd_isBusy(pChain, chip_id) != WORK_FREE)
-	{	
-		return false;
-	}
-#endif
 
 	return true;
 }
@@ -456,8 +426,8 @@ bool inno_cmd_read_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 		return false;
 	}
 
+	tx_len = ASIC_CHIP_NUM*4;
 	memset(spi_rx, 0, sizeof(spi_rx));
-	tx_len = 50;
 	for(i = 0; i < tx_len; i = i + 2)
 	{
 		if(!spi_read_data(ctx, spi_rx, 2))
@@ -523,7 +493,7 @@ bool inno_cmd_read_result(struct A1_chain *pChain, uint8_t chip_id, uint8_t *res
 
 		if(((spi_rx[0] & 0x0f) == CMD_READ_RESULT) && (spi_rx[1] != 0))
 		{
-			applog(LOG_INFO, "GET GOOD RESULT");
+			//applog(LOG_INFO, "GET GOOD RESULT");
 			index = 0;	
 			do{
 				ret = spi_read_data(ctx, spi_rx + 2 + index, 2);
@@ -543,7 +513,7 @@ bool inno_cmd_read_result(struct A1_chain *pChain, uint8_t chip_id, uint8_t *res
 			clc_crc = CRC16_2(tmp_buf, ASIC_RESULT_LEN);
 			res_crc = (spi_rx[ASIC_RESULT_LEN] << 8) + (spi_rx[ASIC_RESULT_LEN+1] << 0);
 
-			hexdump("result: RX", spi_rx, READ_RESULT_LEN);
+			//hexdump("result: RX", spi_rx, READ_RESULT_LEN);
 			if(clc_crc == res_crc)
 			{
 				memcpy(res, spi_rx, READ_RESULT_LEN);

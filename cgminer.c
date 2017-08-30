@@ -340,12 +340,12 @@ static bool usb_reinit;
 #endif
 
 //for A4
-int opt_A1Pll1=400; // -1 Default
-int opt_A1Pll2=400; // -1 Default
-int opt_A1Pll3=400; // -1 Default
-int opt_A1Pll4=400; // -1 Default
-int opt_A1Pll5=400; // -1 Default
-int opt_A1Pll6=400; // -1 Default
+int opt_A1Pll1=120; // -1 Default
+int opt_A1Pll2=120; // -1 Default
+int opt_A1Pll3=120; // -1 Default
+int opt_A1Pll4=120; // -1 Default
+int opt_A1Pll5=120; // -1 Default
+int opt_A1Pll6=120; // -1 Default
 
 
 char *opt_kernel_path;
@@ -5501,9 +5501,8 @@ void write_config(FILE *fcfg)
 			}
 
 			if (opt->type & OPT_HASARG &&
-			    ((void *)opt->cb_arg == (void *)set_float_125_to_500 ||
-			     (void *)opt->cb_arg == (void *)set_float_100_to_250 ||
-			     (void *)opt->cb_arg == (void *)set_float_100_to_500)) {
+			    (((void *)opt->cb_arg == (void *)set_float_125_to_500) ||
+			     (void *)opt->cb_arg == (void *)set_float_100_to_250)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%.1f\"", p+2, *(float *)opt->u.arg);
 				continue;
 			}
@@ -7702,12 +7701,7 @@ static void rebuild_nonce(struct work *work, uint32_t nonce)
 
 	*work_nonce = htole32(nonce);
 
-#ifdef CHIP_A6
 	scrypt_regenhash(work);
-#else
-	regen_hash(work);
-#endif
-
 }
 
 /* For testing a nonce against diff 1 */
@@ -7718,8 +7712,8 @@ bool test_nonce(struct work *work, uint32_t nonce)
 
 	rebuild_nonce(work, nonce);
 
-	hexdump("data:", work->data, 128);
-	hexdump("hash:", work->hash, 32);
+	//hexdump("data:", work->data, 128);
+	//hexdump("hash:", work->hash, 32);
 
 	//return (*hash_32 == 0);
 	return (*hash_16 == 0);

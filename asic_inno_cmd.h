@@ -42,11 +42,7 @@
 
 #define REG_LENGTH		14
 
-#ifdef CHIP_A6
 #define JOB_LENGTH		92
-#else
-#define JOB_LENGTH		62
-#endif
 
 #define MAX_CHAIN_LENGTH	64
 #define MAX_CMD_LENGTH		(JOB_LENGTH + MAX_CHAIN_LENGTH * 2 * 2)

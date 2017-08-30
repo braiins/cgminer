@@ -87,8 +87,8 @@ typedef enum
 
 
 struct PLL_Clock {
+	uint32_t num;  	// divider 1000
 	uint32_t speedMHz;  	// unit MHz
-	uint32_t hastRate;  	// divider 1000
 	uint32_t pll_reg;
 };
 
@@ -105,7 +105,7 @@ struct A1_config_options {
 void A1_SetA1PLLClock(struct A1_chain *a1,int pllClkIdx);
 int A1_ConfigA1PLLClock(int optPll);
 
-extern const struct PLL_Clock PLL_Clk_12Mhz[A4_PLL_CLOCK_MAX];
+extern const struct PLL_Clock PLL_Clk_12Mhz[118];
 
 
 
