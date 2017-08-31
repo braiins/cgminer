@@ -3,8 +3,8 @@
 #make distclean
 ./autogen.sh
 
-ROOTFS_DIR=$1
-MAKE_JOBS=$2
+ROOTFS_DIR=/home/Users/pengp/workspace/miner/images/rootfs
+MAKE_JOBS=16
 
 LDFLAGS=-L${ROOTFS_DIR}/lib \
 CFLAGS=-I${ROOTFS_DIR}/include \
@@ -12,4 +12,7 @@ CFLAGS=-I${ROOTFS_DIR}/include \
 --enable-bitmine_A1 --without-curses --host=arm-xilinx-linux-gnueabi --build=x86_64-pc-linux-gnu # --target=arm
 
 make -j${MAKE_JOBS}
+
+cp -rvf cgminer /home/public/update/cgminer.pp
+chmod -R 777 /home/public/update/cgminer.pp
 

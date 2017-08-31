@@ -29,6 +29,8 @@
 #include "asic_inno_cmd.h"
 #include "asic_inno_gpio.h"
 
+#include "inno_fan.h"
+
 struct spi_config cfg[ASIC_CHAIN_NUM];
 struct spi_ctx *spi[ASIC_CHAIN_NUM];
 struct A1_chain *chain[ASIC_CHAIN_NUM];
@@ -39,6 +41,9 @@ static uint8_t A1Pll3=A5_PLL_CLOCK_800MHz;
 static uint8_t A1Pll4=A5_PLL_CLOCK_800MHz;
 static uint8_t A1Pll5=A5_PLL_CLOCK_800MHz;
 static uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
+
+/* FAN CTRL */
+static INNO_FAN_CTRL_T s_fan_ctrl;
 
 /* one global board_selector and spi context is enough */
 //static struct board_selector *board_selector;
@@ -162,7 +167,14 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	usleep(200);
 
 	for (i = 0; i < a1->num_active_chips; i++)
+    {
 		check_chip(a1, i);
+
+        /* 温度值 */
+        inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp);
+    }
+    /* 设置初始值 */ 
+    inno_fan_temp_init(&s_fan_ctrl, chain_id);
 
 	applog(LOG_WARNING, "%d: found %d chips with total %d active cores",
 	       a1->chain_id, a1->num_active_chips, a1->num_cores);
@@ -402,12 +414,8 @@ void A1_detect(bool hotplug)
 	}
 	applog(LOG_DEBUG, "A1 detect");
 
-	int j;
-	for(j=0; j<5;j++)
-	{
-		asic_set_pwm(5000, (2000 - 400*j));
-		sleep(1);
-	}
+    /* 初始化风扇控制 */
+    inno_fan_init(&s_fan_ctrl);
 	
 	A1Pll1 = A1_ConfigA1PLLClock(opt_A1Pll1);
 	A1Pll2 = A1_ConfigA1PLLClock(opt_A1Pll2);
@@ -452,7 +460,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
 		cgpu->deven = DEV_DISABLED;
 		return 0;
 	}
-	
+
 	//board_selector->select(a1->chain_id);
 	//applog(LOG_DEBUG, "A1 running scanwork");
 
@@ -463,19 +471,19 @@ static int64_t A1_scanwork(struct thr_info *thr)
 
 	mutex_lock(&a1->lock);
 
-	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms()) 
+	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
 	{
 		//a1->temp = board_selector->get_temp(0);
 		a1->last_temp_time = get_current_ms();
 	}
-	int cid = a1->chain_id;
-	
+	int cid = a1->chain_id; 
+
 	/* poll queued results */
-	while (true) 
+	while (true)
 	{
 		if (!get_nonce(a1, (uint8_t*)&nonce, &chip_id, &job_id))
 			break;
-		
+
 		//nonce = bswap_32(nonce);   //modify for A4
 
 		work_updated = true;
@@ -531,6 +539,16 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				disable_chip(a1, c);
 				continue;
 			}
+            else
+            {
+                /* update temp database */
+                uint32_t temp = 0;
+                float    temp_f = 0.0f;
+
+                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+                inno_fan_temp_add(&s_fan_ctrl, cid, temp);
+            }
+
 			uint8_t qstate = reg[9] & 0x01;
 			uint8_t qbuff = 0;
 			struct work *work;
@@ -568,7 +586,8 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				//       chip->hw_errors, chip->stales);
 				break;
 			}
-		}
+		} 
+        inno_fan_speed_update(&s_fan_ctrl, cid);
 	}
 
 	check_disabled_chips(a1);

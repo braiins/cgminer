@@ -125,6 +125,7 @@ cgminer_SOURCES += asic_inno.c
 cgminer_SOURCES += asic_inno_cmd.c
 cgminer_SOURCES += asic_inno_clock.c
 cgminer_SOURCES += asic_inno_gpio.c
+cgminer_SOURCES += inno_fan.c
 cgminer_SOURCES += scrypt.c
 endif
 

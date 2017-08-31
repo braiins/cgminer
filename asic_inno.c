@@ -455,7 +455,7 @@ bool check_chip(struct A1_chain *a1, int i)
 
 	//keep ASIC register value
 	memcpy(a1->chips[i].reg, buffer, 12);
-	a1->chips[i].temp= (buffer[8]<<8)|buffer[9];
+	a1->chips[i].temp= 0x000003ff & ((buffer[7] << 8) | buffer[8]);
 
 	if (a1->chips[i].num_cores < BROKEN_CHIP_THRESHOLD) 
 	{

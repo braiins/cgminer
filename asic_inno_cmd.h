@@ -79,6 +79,7 @@ struct A1_chip {
 	/* mark chip disabled, do not try to re-enable it */
 	bool disabled;
 
+    /* temp */
 	int temp;
 };
 
