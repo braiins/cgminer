@@ -208,33 +208,3 @@ int asic_gpio_read(int gpio)
 	}	
 }  
 
-bool asic_set_pwm(int freq, int duty)
-{
-	int fd;
-	int ret = true;
-	fd = open(PWM_DEVNAME, O_WRONLY);
-	if(fd < 0)
-    {
-        printf("open %s fail \n", PWM_DEVNAME);
-        ret = false;
-    }
-	
-	if(ioctl(fd, IOCTL_SET_FREQ_0, freq) < 0)
-    {
-        printf("set frequency fail \n");
-        ret = false;
-    }
-	
-    if(ioctl(fd, IOCTL_SET_DUTY_0, duty) < 0)
-    {
-        printf("set duty fail \n");
-        ret = false;
-    }
-    close(fd);
-
-	return ret;
-}
-
-
-
-

@@ -21,14 +21,6 @@
 #define SYSFS_SPI_EXPORT "/sys/devices/soc0/amba/f8007000.devcfg/fclk_export"
 #define SYSFS_SPI_VAL_STR "/sys/devices/soc0/amba/f8007000.devcfg/fclk/fclk1/set_rate"
 
-#define PWM_DEVNAME "/dev/pwmgen0.0"
-#define MAGIC_NUM  100 
-#define IOCTL_SET_FREQ_0 _IOR(MAGIC_NUM, 0, char *)
-#define IOCTL_SET_DUTY_0 _IOR(MAGIC_NUM, 1, char *)
-#define IOCTL_SET_FREQ_1 _IOR(MAGIC_NUM, 2, char *)
-#define IOCTL_SET_DUTY_1 _IOR(MAGIC_NUM, 3, char *)
-
-
 #define SYSFS_GPIO_DIR_OUT	"out"
 #define SYSFS_GPIO_DIR_IN	"in"
 
@@ -52,7 +44,5 @@ void asic_spi_init(void);
 uint32_t set_spi_speed(uint32_t speed);
 
 uint32_t get_spi_speed(void);
-
-bool asic_set_pwm(int freq, int duty);
 
 #endif
