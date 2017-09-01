@@ -426,6 +426,7 @@ void scrypt_regenhash(struct work *work)
 
 	flip32(ohash, ohash);
 
+    free(scratchbuf);
 }
 
 static const uint32_t diff1targ = 0x0000ffff;
