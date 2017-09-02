@@ -15,8 +15,8 @@
 #define ASIC_INNO_FAN_PWM_FREQ          (50000000 / ASIC_INNO_FAN_PWM_FREQ_TARGET)
 /* 460为90°,算力板达到此温度后,风扇开到最大 */
 #define ASIC_INNO_FAN_TEMP_THRESHOLD    (460)
-/* 去掉的最高分和最低分的个数 */
-#define ASIC_INNO_FAN_TEMP_MARGIN_NUM   (10)
+/* 去掉的最高分和最低分比例 */
+#define ASIC_INNO_FAN_TEMP_MARGIN_RATE  (5.0f / 72)
 /* 数值越小,控制得约频繁 */
 #define ASIC_INNO_FAN_CTLR_FREQ_DIV     (20)
 

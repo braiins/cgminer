@@ -1,6 +1,8 @@
 #!/bin/sh
 
-#make distclean
+make clean
+make distclean
+
 ./autogen.sh
 
 ROOTFS_DIR=/home/Users/pengp/workspace/rootfs

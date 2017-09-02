@@ -13,8 +13,17 @@ typedef struct INNO_FAN_CTRL_tag{
     int duty;                                   /* 0 - 100 */
 
     float temp_init[ASIC_CHAIN_NUM];            /* 初始温度 */
-    float temp_now[ASIC_CHAIN_NUM];             /* 当前温度 */
+    float temp_now[ASIC_CHAIN_NUM];             /* 当前温度(均值) */
     float temp_delta[ASIC_CHAIN_NUM];           /* 当前变化率 */
+    float temp_now_highest[ASIC_CHAIN_NUM];     /* 当前温度(最高) */
+    float temp_now_lowest[ASIC_CHAIN_NUM];      /* 当前温度(最低) */
+
+    int temp_nums;                              /* temp寄存器与温度对应表 的点数 */
+    int temp_v_max;                             /* temp最大值 对应最低温度 */
+    int temp_v_min;                             /* temp最小值 对应最高温度 */
+    float temp_f_min;                           /* 温度最小值 */
+    float temp_f_max;                           /* 温度最大值 */
+    float temp_f_step;                          /* 温度步长 */
 }INNO_FAN_CTRL_T;
 
 /* 模块初始化 */
