@@ -161,7 +161,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 		check_chip(a1, i);
 
         /* 温度值 */
-        inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp);
+        inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp, true);
     }
     /* 设置初始值 */ 
     inno_fan_temp_init(&s_fan_ctrl, chain_id);
@@ -218,14 +218,12 @@ static bool detect_A1_chain(void)
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
 		asic_gpio_write(spi[i]->power_en, 1);
-		sleep(1);
 		asic_gpio_write(spi[i]->start_en, 1);
 		asic_gpio_write(spi[i]->reset, 1);
-		sleep(1);
+		usleep(500000);
 		asic_gpio_write(spi[i]->reset, 0);
-		sleep(1);
+		usleep(500000);
 		asic_gpio_write(spi[i]->reset, 1);	
-		sleep(1);
 	}
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
@@ -529,15 +527,15 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				disable_chip(a1, c);
 				continue;
 			}
-//            else
-//            {
-//                /* update temp database */
-//                uint32_t temp = 0;
-//                float    temp_f = 0.0f;
+            else
+            {
+                /* update temp database */
+                uint32_t temp = 0;
+                float    temp_f = 0.0f;
 
-//                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-//                inno_fan_temp_add(&s_fan_ctrl, cid, temp);
-//            }
+                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+                inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+            }
 
 			uint8_t qstate = reg[9] & 0x01;
 			uint8_t qbuff = 0;
@@ -573,7 +571,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				break;
 			}
 		} 
-        //inno_fan_speed_update(&s_fan_ctrl, cid);
+        inno_fan_speed_update(&s_fan_ctrl, cid);
 	}
 
 	switch(cid){
