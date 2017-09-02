@@ -8,16 +8,19 @@
 #include "asic_inno.h"
 
 typedef struct INNO_FAN_CTRL_tag{
+    /* 温度原始值 */
 	int temp[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
     int index[ASIC_CHAIN_NUM];                  /* chip index in chain */
+
     int duty;                                   /* 0 - 100 */
 
-    float temp_init[ASIC_CHAIN_NUM];            /* 初始温度 */
-    float temp_now[ASIC_CHAIN_NUM];             /* 当前温度(均值) */
-    float temp_delta[ASIC_CHAIN_NUM];           /* 当前变化率 */
-    float temp_now_highest[ASIC_CHAIN_NUM];     /* 当前温度(最高) */
-    float temp_now_lowest[ASIC_CHAIN_NUM];      /* 当前温度(最低) */
+    /* 以寄存器原始值为格式 */
+    int temp_arvarge[ASIC_CHAIN_NUM];           /* 当前温度(均值) */
+    int temp_init[ASIC_CHAIN_NUM];              /* 初始温度(均值) */
+    int temp_highest[ASIC_CHAIN_NUM];           /* 当前温度(最高) */
+    int temp_lowest[ASIC_CHAIN_NUM];            /* 当前温度(最低) */
 
+    /* 用于转化寄存器原始值到实际温度 */
     int temp_nums;                              /* temp寄存器与温度对应表 的点数 */
     int temp_v_max;                             /* temp最大值 对应最低温度 */
     int temp_v_min;                             /* temp最小值 对应最高温度 */

@@ -7,14 +7,20 @@
 #define ASIC_CHIP_A_BUCKET              (ASIC_CHAIN_NUM * ASIC_CHIP_NUM)
 #define ASIC_INNO_FAN_PWM0_DEVICE_NAME  ("/dev/pwmgen0.0")
 //#define ASIC_INNO_FAN_PWM1_DEVICE_NAME  ("/dev/pwmgen0.1")
-#define ASIC_INNO_FAN_PWM_STEP          (1)
+#define ASIC_INNO_FAN_PWM_STEP          (10)
 #define ASIC_INNO_FAN_PWM_DUTY_MAX      (100)
 /* 此宏表示PWM载波频率:7KHz,经验值 */
 #define ASIC_INNO_FAN_PWM_FREQ_TARGET   (7000)
 /* 此宏表示分频比 分频比=50M/PWM载波频率 */
 #define ASIC_INNO_FAN_PWM_FREQ          (50000000 / ASIC_INNO_FAN_PWM_FREQ_TARGET)
-/* 460为90°,算力板达到此温度后,风扇开到最大 */
-#define ASIC_INNO_FAN_TEMP_THRESHOLD    (460)
+/* 芯片上电高于70°(<490),告警 */
+#define ASIC_INNO_FAN_TEMP_VAL_THRESHOLD (460)
+/* chip高于45°后,风扇增大 */
+#define ASIC_INNO_FAN_TEMP_UP_THRESHOLD (45.0f)
+/* chip板低于35°后,风扇减小 */
+#define ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD (35.0f)
+/* 算力板高于50°后,风扇最强 */
+#define ASIC_INNO_FAN_TEMP_MAX_THRESHOLD (50.0f)
 /* 去掉的最高分和最低分比例 */
 #define ASIC_INNO_FAN_TEMP_MARGIN_RATE  (5.0f / 72)
 /* 数值越小,控制得约频繁 */
