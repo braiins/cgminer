@@ -1,7 +1,7 @@
 #ifndef _ASIC_INNO_
 #define _ASIC_INNO_
 
-#define ASIC_CHAIN_NUM                  1
+#define ASIC_CHAIN_NUM                  4
 #define ASIC_CHIP_NUM                   72
 
 #define ASIC_CHIP_A_BUCKET              (ASIC_CHAIN_NUM * ASIC_CHIP_NUM)
@@ -34,7 +34,7 @@ void disable_chip(struct A1_chain *a1, uint8_t chip_id);
 
 bool get_nonce(struct A1_chain *a1, uint8_t *nonce, uint8_t *chip_id, uint8_t *job_id);
 bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t queue_states);
-void check_disabled_chips(struct A1_chain *a1);
+void check_disabled_chips(struct A1_chain *a1, int pllnum);
 
 #endif
 

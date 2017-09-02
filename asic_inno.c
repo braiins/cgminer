@@ -9,6 +9,7 @@
 #include "miner.h"
 #include "util.h"
 
+#include "spi-context.h"
 #include "asic_inno.h"
 #include "asic_inno_cmd.h"
 #include "asic_inno_clock.h"
@@ -285,8 +286,20 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 }
 
 
-#define COOLDOWN_MS			(30 * 1000)
+/*
+ * if not cooled sufficiently, communication fails and chip is temporary
+ * disabled. we let it inactive for 30 seconds to cool down
+ *
+ * TODO: to be removed after bring up / test phase
+ */
+#define COOLDOWN_MS (30 * 1000)
+/* if after this number of retries a chip is still inaccessible, disable it */
 #define DISABLE_CHIP_FAIL_THRESHOLD	3
+#define LEAST_CORE_ONE_CHAIN	603
+#define RESET_CHAIN_CNT	2
+
+
+
 /********** disable / re-enable related section (temporary for testing) */
 int get_current_ms(void)
 {
@@ -317,11 +330,12 @@ void disable_chip(struct A1_chain *a1, uint8_t chip_id)
 }
 
 /* check if disabled chips can be re-enabled */
-void check_disabled_chips(struct A1_chain *a1)
+void check_disabled_chips(struct A1_chain *a1, int pllnum)
 {
 	int i;
 	int cid = a1->chain_id;
 	uint8_t reg[REG_LENGTH];
+	struct spi_ctx *ctx = a1->spi_ctx;
 
 	for (i = 0; i < a1->num_active_chips; i++) 
 	{
@@ -334,6 +348,25 @@ void check_disabled_chips(struct A1_chain *a1)
 			continue;
 		if (chip->cooldown_begin + COOLDOWN_MS > get_current_ms())
 			continue;
+
+		//if the core in chain least than 630, reinit this chain 
+		if(a1->num_cores <= LEAST_CORE_ONE_CHAIN && chip->fail_reset < RESET_CHAIN_CNT)
+		{
+			chip->fail_reset++;
+			asic_gpio_write(ctx->reset, 0);
+			usleep(500000);
+			asic_gpio_write(ctx->reset, 1);	
+		
+			a1->num_chips = chain_detect(a1, pllnum);
+			
+			inno_cmd_bist_fix(a1, ADDR_BROADCAST);
+		
+			for (i = 0; i < a1->num_active_chips; i++)
+			{
+				check_chip(a1, i);
+			}
+		}
+		
 		if (!inno_cmd_read_reg(a1, chip_id, reg)) 
 		{
 			chip->fail_count++;
@@ -344,7 +377,8 @@ void check_disabled_chips(struct A1_chain *a1)
 				applog(LOG_WARNING, "%d: completely disabling chip %d at %d",
 				       cid, chip_id, chip->fail_count);
 				chip->disabled = true;
-				a1->num_cores -= chip->num_cores;
+				a1->num_cores -= chip->num_cores;	
+				
 				continue;
 			}
 			/* restart cooldown period */
@@ -354,6 +388,7 @@ void check_disabled_chips(struct A1_chain *a1)
 		applog(LOG_WARNING, "%d: chip %d is working again", cid, chip_id);
 		chip->cooldown_begin = 0;
 		chip->fail_count = 0;
+		chip->fail_reset = 0;
 	}
 }
 
@@ -463,9 +498,6 @@ bool check_chip(struct A1_chain *a1, int i)
 		       "cores (threshold = %d)", cid, chip_id,
 		       a1->chips[i].num_cores, BROKEN_CHIP_THRESHOLD);
 
-		//set low pll
-		//A1_SetA1PLLClock(a1, BROKEN_CHIP_SYS_CLK, chip_id);
-		//cmd_READ_REG(a1, chip_id);
 		hexdump_error("new.PLL", a1->spi_rx, 8);
 		a1->chips[i].disabled = true;
 		a1->num_cores -= a1->chips[i].num_cores;
@@ -479,8 +511,6 @@ bool check_chip(struct A1_chain *a1, int i)
 		       "cores (threshold = %d)", cid,
 		       chip_id, a1->chips[i].num_cores, WEAK_CHIP_THRESHOLD);
 
-		//A1_SetA1PLLClock(a1, WEAK_CHIP_SYS_CLK, chip_id);
-		//cmd_READ_REG(a1, chip_id);
 		hexdump_error("new.PLL", a1->spi_rx, 8);
 		
 		return false;
@@ -543,10 +573,11 @@ int chain_detect(struct A1_chain *a1, int idxpll)
 	}
 
 	applog(LOG_WARNING, "collect core success");
-	applog(LOG_WARNING, "%d: no A1 chip-chain detected", cid);
+
 	return a1->num_chips;
 
 }
+
 
 
 

@@ -81,16 +81,6 @@ static struct work *wq_dequeue(struct work_queue *wq)
 }
 
 /*
- * if not cooled sufficiently, communication fails and chip is temporary
- * disabled. we let it inactive for 30 seconds to cool down
- *
- * TODO: to be removed after bring up / test phase
- */
-#define COOLDOWN_MS (30 * 1000)
-/* if after this number of retries a chip is still inaccessible, disable it */
-#define DISABLE_CHIP_FAIL_THRESHOLD	3
-
-/*
  * for now, we have one global config, defaulting values:
  * - ref_clk 16MHz / sys_clk 800MHz
  * - 2000 kHz SPI clock
@@ -539,15 +529,15 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				disable_chip(a1, c);
 				continue;
 			}
-            else
-            {
-                /* update temp database */
-                uint32_t temp = 0;
-                float    temp_f = 0.0f;
+//            else
+//            {
+//                /* update temp database */
+//                uint32_t temp = 0;
+//                float    temp_f = 0.0f;
 
-                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-                inno_fan_temp_add(&s_fan_ctrl, cid, temp);
-            }
+//                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+//                inno_fan_temp_add(&s_fan_ctrl, cid, temp);
+//            }
 
 			uint8_t qstate = reg[9] & 0x01;
 			uint8_t qbuff = 0;
@@ -555,11 +545,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
 			struct A1_chip *chip = &a1->chips[i - 1];
 			switch(qstate) 
 			{
-	//		case 3:
-	//			continue;
-	//		case 2:
-	//			applog(LOG_ERR, "%d: chip %d: invalid state = 2", cid, c);
-	//			continue;
+			
 			case 1:
 				//applog(LOG_INFO, "chip %d busy now", i);
 				break;
@@ -587,10 +573,19 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				break;
 			}
 		} 
-        inno_fan_speed_update(&s_fan_ctrl, cid);
+        //inno_fan_speed_update(&s_fan_ctrl, cid);
 	}
 
-	check_disabled_chips(a1);
+	switch(cid){
+		case 0:check_disabled_chips(a1, A1Pll1);;break;
+		case 1:check_disabled_chips(a1, A1Pll2);;break;
+		case 2:check_disabled_chips(a1, A1Pll3);;break;
+		case 3:check_disabled_chips(a1, A1Pll4);;break;
+		case 4:check_disabled_chips(a1, A1Pll5);;break;
+		case 5:check_disabled_chips(a1, A1Pll6);;break;
+		default:;
+	}
+
 	mutex_unlock(&a1->lock);
 
 	//board_selector->release();
@@ -668,7 +663,7 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 	{
 		int j;
 		struct A1_chip *chip = &a1->chips[i];
-		for (j = 0; j < 4; j++) 
+		for (j = 0; j < 1; j++) 
 		{
 			struct work *work = chip->work[j];
 			if (work == NULL)
@@ -683,7 +678,7 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 
 		if(!inno_cmd_resetjob(a1, i+1))
 		{
-			applog(LOG_WARNING, "chip %d clear work false", i);\
+			applog(LOG_WARNING, "chip %d clear work false", i);
 			continue;
 		}
 		
@@ -699,7 +694,6 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 	}
 	mutex_unlock(&a1->lock);
 
-	//board_selector->release();
 }
 
 static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu)

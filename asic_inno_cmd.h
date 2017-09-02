@@ -76,6 +76,7 @@ struct A1_chip {
 	int cooldown_begin;
 	/* number of consecutive failures to access the chip */
 	int fail_count;
+	int fail_reset;
 	/* mark chip disabled, do not try to re-enable it */
 	bool disabled;
 
