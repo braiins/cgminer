@@ -1,12 +1,12 @@
 #!/bin/sh
 
-make clean
-make distclean
+#make clean
+#make distclean
 
 ./autogen.sh
 
-ROOTFS_DIR=/home/Users/pengp/workspace/rootfs
-MAKE_JOBS=16
+ROOTFS_DIR=$1
+MAKE_JOBS=$2
 
 LDFLAGS=-L${ROOTFS_DIR}/lib \
 CFLAGS=-I${ROOTFS_DIR}/include \
@@ -15,6 +15,6 @@ CFLAGS=-I${ROOTFS_DIR}/include \
 
 make -j${MAKE_JOBS}
 
-cp ./cgminer /home/public/update/cgminer_pp.$1
-chmod 777 /home/public/update/cgminer_pp.$1
+#cp ./cgminer /home/public/update/cgminer_pp.$1
+#chmod 777 /home/public/update/cgminer_pp.$1
 
