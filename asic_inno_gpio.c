@@ -14,24 +14,24 @@
 
 
 int SPI_PIN_POWER_EN[ASIC_CHAIN_NUM] = {
-896,
-897,
-898,
-899
+872,
+873,
+874,
+875
 };
 
 int SPI_PIN_START_EN[ASIC_CHAIN_NUM] = {
-879,
-881,
-883,
-885,
+854,
+856,
+858,
+860,
 };
 
 int SPI_PIN_RESET[ASIC_CHAIN_NUM] = {
-880,
-882,
-884,
-886,
+855,
+857,
+859,
+861,
 };
 
 void asic_spi_init(void)
