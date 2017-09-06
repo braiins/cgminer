@@ -433,7 +433,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
         //applog(LOG_DEBUG, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
     }
 
-    if(lowest_f < ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD)
+    if(highest_f < ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD)
     {
         if(40 != fan_ctrl->duty) 
         {
