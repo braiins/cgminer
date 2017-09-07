@@ -354,15 +354,6 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
     /* 清空,为下一轮做准备 */
     inno_fan_temp_clear(fan_ctrl, chain_id);
 
-    static int times = 0;       /* 降低风扇控制的频率 */
-    /* 降低风扇控制的频率 */
-    if(times++ <  ASIC_INNO_FAN_CTLR_FREQ_DIV)
-    {
-        return;
-    }
-    /* applog(LOG_DEBUG, "inno_fan_speed_updat times:%d" , times); */
-    times = 0;
-    
     //applog(LOG_DEBUG, "chain_%d, init:%7.4f,now:%7.4f,delta:%7.4f",
     /* 
     applog(LOG_DEBUG, "chain_%d, init:%7.4f(%7.4f),now:%7.4f(%7.4f),delta:%7.4f(%7.4f)",
@@ -443,6 +434,16 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
 
         //applog(LOG_DEBUG, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
     } 
+
+    static int times = 0;       /* 降低风扇控制的频率 */
+    /* 降低风扇打印的频率 */
+    if(times++ <  ASIC_INNO_FAN_CTLR_FREQ_DIV)
+    {
+        return;
+    }
+    /* applog(LOG_DEBUG, "inno_fan_speed_updat times:%d" , times); */
+    times = 0;
+
     applog(LOG_ERR, "%s n:arv:%5.2f, lest:%5.2f, hest:%5.2f", __func__, arvarge_f, lowest_f, highest_f);
 #endif
 
