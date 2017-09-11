@@ -113,7 +113,6 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 	applog(LOG_ERR, "freq rate:%d.", ASIC_INNO_FAN_PWM_FREQ);
 	applog(LOG_ERR, "up   thrd:%5.2f.", ASIC_INNO_FAN_TEMP_UP_THRESHOLD);
 	applog(LOG_ERR, "down thrd:%5.2f.", ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD);
-	applog(LOG_ERR, "max  thrd:%5.2f.", ASIC_INNO_FAN_TEMP_MAX_THRESHOLD);
 	applog(LOG_ERR, "temp nums:%d.", fan_ctrl->temp_nums);
 	applog(LOG_ERR, "temp vmin:%d.", fan_ctrl->temp_v_min);
 	applog(LOG_ERR, "temp vmax:%d.", fan_ctrl->temp_v_max);
@@ -405,20 +404,11 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
     lowest_f = inno_fan_temp_to_float(fan_ctrl, (int)lowest);
     highest_f = inno_fan_temp_to_float(fan_ctrl, (int)highest);
 
-    /* 过温保护 */
-    if(highest_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
-    {
-        inno_fan_speed_max(fan_ctrl);
-        applog(LOG_ERR, "%s temp is too high speed max:arv:%5.2f, lest:%5.2f, hest:%5.2f", __func__, arvarge_f, lowest_f, highest_f);
-        //applog(LOG_DEBUG, "%s temp is too high speed max:arv:%5.2f, lest:%5.2f, hest:%5.2f", __func__, arvarge_f, lowest_f, highest_f);
-        return;
-    }
-
     if(highest_f > ASIC_INNO_FAN_TEMP_UP_THRESHOLD)
     {
-        if(10 != fan_ctrl->duty) 
+        if(0 != fan_ctrl->duty)
         {
-            inno_fan_pwm_set(fan_ctrl, 10);
+            inno_fan_pwm_set(fan_ctrl, 0);
             applog(LOG_ERR, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         } 
         //applog(LOG_DEBUG, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);

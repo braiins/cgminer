@@ -15,12 +15,10 @@
 #define ASIC_INNO_FAN_PWM_FREQ          (50000000 / ASIC_INNO_FAN_PWM_FREQ_TARGET)
 /* 芯片上电高于100°(<445),告警 */
 #define ASIC_INNO_FAN_TEMP_VAL_THRESHOLD (445)
-/* chip高于80°后,90% */
-#define ASIC_INNO_FAN_TEMP_UP_THRESHOLD (80.0f)
-/* chip板低于45°后,60% */
-#define ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD (45.0f)
-/* 算力板高于90°后,风扇最强 */
-#define ASIC_INNO_FAN_TEMP_MAX_THRESHOLD (100.0f)
+/* chip高于55°后,100% */
+#define ASIC_INNO_FAN_TEMP_UP_THRESHOLD (55.0f)
+/* chip板低于35°后,60% */
+#define ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD (35.0f)
 
 /* 去掉的最高分和最低分比例 */
 #define ASIC_INNO_FAN_TEMP_MARGIN_RATE  (5.0f / 72)
