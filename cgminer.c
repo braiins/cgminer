@@ -346,6 +346,7 @@ int opt_A1Pll3=120; // -1 Default
 int opt_A1Pll4=120; // -1 Default
 int opt_A1Pll5=120; // -1 Default
 int opt_A1Pll6=120; // -1 Default
+int opt_voltage = 1;
 
 
 char *opt_kernel_path;
@@ -851,6 +852,11 @@ static char *set_int_0_to_5(const char *arg, int *i)
 static char *set_int_0_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 10);
+}
+
+static char *set_int_0_to_31(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 31);
 }
 
 static char *set_int_0_to_100(const char *arg, int *i)
@@ -1636,8 +1642,8 @@ static struct opt_table opt_config_table[] = {
              "Set PLL Clock in bitmine A1 broad 6 chip (-1: 1000MHz, >0:Look PLL table)"),
 		     
 	OPT_WITH_ARG("--A1Vol",
-		     setvol, NULL, NULL,
-		     "user set v"),
+		     set_int_0_to_31, opt_show_intval, &opt_voltage,
+		     "set voltage (1 ~ 31)"),
 
 #endif
 #ifdef USE_BITFURY

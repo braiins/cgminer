@@ -404,6 +404,7 @@ void A1_detect(bool hotplug)
 
     /* 初始化风扇控制 */
     inno_fan_init(&s_fan_ctrl);
+	set_vid_value(opt_voltage);
 	
 	A1Pll1 = A1_ConfigA1PLLClock(opt_A1Pll1);
 	A1Pll2 = A1_ConfigA1PLLClock(opt_A1Pll2);

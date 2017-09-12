@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <linux/ioctl.h>
 
-
+#define SYSFS_VID_DEV "/dev/vidgen0.0"
 
 #define SYSFS_GPIO_EXPORT	"/sys/class/gpio/export"
 #define SYSFS_GPIO_DIR_STR	"/sys/class/gpio/gpio%d/direction"
@@ -43,5 +43,8 @@ void asic_spi_init(void);
 uint32_t set_spi_speed(uint32_t speed);
 
 uint32_t get_spi_speed(void);
+
+void set_vid_value(int level);
+
 
 #endif

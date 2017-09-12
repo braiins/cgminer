@@ -9,9 +9,11 @@
 #include <stdio.h>
 
 #include "asic_inno.h"
-
 #include "asic_inno_gpio.h"
 
+#define MAGIC_NUM  100 
+
+#define IOCTL_SET_VAL_0 _IOR(MAGIC_NUM, 0, char *)
 
 int SPI_PIN_POWER_EN[ASIC_CHAIN_NUM] = {
 872,
@@ -33,6 +35,27 @@ int SPI_PIN_RESET[ASIC_CHAIN_NUM] = {
 859,
 861,
 };
+
+void set_vid_value(int level)
+{
+	int fd; 
+    
+    printf("%s:%d.\n", __func__, level);
+
+    fd = open(SYSFS_VID_DEV, O_RDWR);
+    if(fd < 0)
+    {
+        fprintf(stderr, "open %s fail.\n", SYSFS_VID_DEV);
+        return;
+    }
+
+    if(ioctl(fd, IOCTL_SET_VAL_0, 0x80 | level) < 0)
+    {
+        fprintf(stderr, "set vid value fail.\n");
+        return;
+    }
+    close(fd);	
+}
 
 void asic_spi_init(void)
 {
