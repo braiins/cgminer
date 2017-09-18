@@ -161,7 +161,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 		check_chip(a1, i);
 
         /* 温度值 */
-        inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp, true);
+        inno_fan_temp_add(&s_fan_ctrl, chain_id, i, a1->chips[i].temp, true);
     }
     /* 设置初始值 */ 
     inno_fan_temp_init(&s_fan_ctrl, chain_id);
@@ -459,13 +459,13 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	bool work_updated = false;
 
 	mutex_lock(&a1->lock);
+	int cid = a1->chain_id;
 
 	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
 	{
-		//a1->temp = board_selector->get_temp(0);
+		inno_fan_speed_update(&s_fan_ctrl, cid);
 		a1->last_temp_time = get_current_ms();
-	}
-	int cid = a1->chain_id; 
+	} 
 
 	/* poll queued results */
 	while (true)
@@ -532,10 +532,9 @@ static int64_t A1_scanwork(struct thr_info *thr)
             {
                 /* update temp database */
                 uint32_t temp = 0;
-                float    temp_f = 0.0f;
 
                 temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-                inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+                inno_fan_temp_add(&s_fan_ctrl, cid, i-1, temp, false);
             }
 
 			uint8_t qstate = reg[9] & 0x01;
@@ -572,7 +571,6 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				break;
 			}
 		} 
-        inno_fan_speed_update(&s_fan_ctrl, cid);
 	}
 
 	switch(cid){

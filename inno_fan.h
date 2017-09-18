@@ -34,7 +34,7 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl);
 /* 设置启动温度 */
 void inno_fan_temp_init(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 /* 加入芯片温度 */
-void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on);
+void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int chip_id, int temp, bool warn_on);
 /* 清空芯片温度,为下轮循环准备 */
 void inno_fan_temp_clear(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 /* 根据温度更新转速 */

@@ -121,16 +121,11 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 	applog(LOG_ERR, "temp fmax:%5.2f.", fan_ctrl->temp_f_max);
 }
 
-void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on)
+void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int chip_id, int temp, bool warn_on)
 {
-    int index = 0;
-
-    index = fan_ctrl->index[chain_id];
-
-    applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d)", chain_id, index, inno_fan_temp_to_float(fan_ctrl, temp), temp);
-    fan_ctrl->temp[chain_id][index] = temp;
-    index++;
-    fan_ctrl->index[chain_id] = index; 
+    
+    fan_ctrl->temp[chain_id][chip_id] = temp;
+	applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d)", chain_id, chip_id, inno_fan_temp_to_float(fan_ctrl, temp), temp);
 
     /* 避免工作中输出 温度告警信息,影响算力 */
     if(!warn_on)
@@ -145,7 +140,7 @@ void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool w
         float temp_f = 0.0f;
         temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
         applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!\n",
-                chain_id, index, inno_fan_temp_to_float(fan_ctrl, temp), temp);
+                chain_id, chip_id, inno_fan_temp_to_float(fan_ctrl, temp), temp);
     }
 }
 
