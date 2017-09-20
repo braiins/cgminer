@@ -1,5 +1,5 @@
-#ifndef SPI_CONTEXT_H
-#define SPI_CONTEXT_H
+#ifndef A6_SPI_CONTEXT_H
+#define A6_SPI_CONTEXT_H
 
 #include <linux/types.h>
 #include <linux/spi/spidev.h>

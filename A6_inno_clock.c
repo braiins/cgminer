@@ -11,8 +11,8 @@
 #include "miner.h"
 #include "util.h"
 
-#include "asic_inno_cmd.h"
-#include "asic_inno_clock.h"
+#include "A6_inno_cmd.h"
+#include "A6_inno_clock.h"
 
 const struct PLL_Clock PLL_Clk_12Mhz[118]={
 	{0,  120,	A4_PLL(1,	80, 3)}, //default

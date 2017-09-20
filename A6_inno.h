@@ -1,5 +1,5 @@
-#ifndef _ASIC_INNO_
-#define _ASIC_INNO_
+#ifndef _A6_INNO_
+#define _A6_INNO_
 
 #define ASIC_CHAIN_NUM                  4
 #define ASIC_CHIP_NUM                   72
@@ -30,7 +30,7 @@
 #define WEAK_CHIP_SYS_CLK	(600 * 1000)
 #define BROKEN_CHIP_SYS_CLK	(400 * 1000)
 
-#include "asic_inno_cmd.h"
+#include "A6_inno_cmd.h"
 
 bool check_chip(struct A1_chain *a1, int i);
 int chain_detect(struct A1_chain *a1, int idxpll);

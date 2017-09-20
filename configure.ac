@@ -295,18 +295,32 @@ if test "x$bitfury16" = xyes; then
 fi
 AM_CONDITIONAL([HAS_BITFURY16], [test x$bitfury16 = xyes])
 
-bitmine_A1="no"
+bitmine_A5="no"
 
-AC_ARG_ENABLE([bitmine_A1],
-	[AC_HELP_STRING([--enable-bitmine_A1],[Compile support for Bitmine.ch A1 ASICs STANDALONE(default disabled)])],
-	[bitmine_A1=$enableval]
+AC_ARG_ENABLE([bitmine_A5],
+	[AC_HELP_STRING([--enable-bitmine_A5],[Compile support for Bitmine.ch A1 ASICs STANDALONE(default disabled)])],
+	[bitmine_A5=$enableval]
 	)
-if test "x$bitmine_A1" = xyes; then
+if test "x$bitmine_A5" = xyes; then
 	AC_DEFINE([USE_BITMINE_A1], [1], [Defined to 1 if Bitmine A1 support is wanted])
 	drivercount=x$drivercount
 	standalone="yes"
 fi
-AM_CONDITIONAL([HAS_BITMINE_A1], [test x$bitmine_A1 = xyes])
+AM_CONDITIONAL([HAS_BITMINE_A5], [test x$bitmine_A5 = xyes])
+
+
+bitmine_A6="no"
+
+AC_ARG_ENABLE([bitmine_A6],
+	[AC_HELP_STRING([--enable-bitmine_A6],[Compile support for Bitmine.ch A1 ASICs STANDALONE(default disabled)])],
+	[bitmine_A6=$enableval]
+	)
+if test "x$bitmine_A6" = xyes; then
+	AC_DEFINE([USE_BITMINE_A1], [1], [Defined to 1 if Bitmine A1 support is wanted])
+	drivercount=x$drivercount
+	standalone="yes"
+fi
+AM_CONDITIONAL([HAS_BITMINE_A6], [test x$bitmine_A6 = xyes])
 
 
 blockerupter="no"

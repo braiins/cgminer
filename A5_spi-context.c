@@ -9,7 +9,7 @@
  * any later version.  See COPYING for more details.
  */
 
-#include "spi-context.h"
+#include "A5_spi-context.h"
 
 #include "logging.h"
 #include "miner.h"
@@ -18,8 +18,6 @@
 #include <sys/ioctl.h>
 #include <assert.h>
 #include <unistd.h>
-
-static pthread_mutex_t spi_lock;
 
 struct spi_ctx *spi_init(struct spi_config *config)
 {
@@ -74,52 +72,49 @@ extern void spi_exit(struct spi_ctx *ctx)
 	free(ctx);
 }
 
-
 extern bool spi_write_data(struct spi_ctx *ctx, uint8_t *txbuf, int len)
 {
-	mutex_lock(&spi_lock);
-
-	bool ret = true;
-
+	mutex_lock(&(ctx->spi_lock));
+	
 	if((len <= 0) || (txbuf == NULL))
 	{
+		mutex_unlock(&ctx->spi_lock);
 		applog(LOG_ERR, "SPI: write para error");
-		ret = false;
+		return false;
 	}
 
 	if(write(ctx->fd, txbuf, len) <= 0)
 	{
+		mutex_unlock(&ctx->spi_lock);
 		applog(LOG_ERR, "SPI: write data error");
-		ret = false;
+		return false;
 	}
-	
-	mutex_unlock(&spi_lock);
 
-	return ret;
+	mutex_unlock(&ctx->spi_lock);
+	return true;
 }
 
 
 extern bool spi_read_data(struct spi_ctx *ctx, uint8_t *rxbuf, int len)
 {
-	mutex_lock(&spi_lock);
-
-	bool ret = true;
-
+	mutex_lock(&(ctx->spi_lock));
+	
 	if((len <= 0) || (rxbuf == NULL))
 	{
+		mutex_unlock(&ctx->spi_lock);
 		applog(LOG_ERR, "SPI: read para error");
-		ret = false;
+		return false;
 	}
 
 	if(read(ctx->fd, rxbuf, len) <= 0)
 	{
-		applog(LOG_ERR, "SPI: read data error");
-		ret = false;
+		mutex_unlock(&ctx->spi_lock);
+		applog(LOG_ERR, "SPI: read data error");		
+		return false;
 	}
 
-	mutex_unlock(&spi_lock);
-
-	return ret;
+	mutex_unlock(&ctx->spi_lock);
+	return true;
 }
 
 

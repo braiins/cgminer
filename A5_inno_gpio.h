@@ -1,5 +1,5 @@
-#ifndef _ASIC_INNO_GPIO_
-#define _ASIC_INNO_GPIO_
+#ifndef _A5_INNO_GPIO_
+#define _A5_INNO_GPIO_
 
 #include <stdlib.h>
 #include <assert.h>

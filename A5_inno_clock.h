@@ -1,5 +1,5 @@
-#ifndef _ASIC_INNO_CLOCK_
-#define _ASIC_INNO_CLOCK_
+#ifndef _A5_INNO_CLOCK_
+#define _A5_INNO_CLOCK_
 
 #define A1_PLL_POSTDIV_MASK		0b11
 #define A1_PLL_PREDIV_MASK		0b11111
@@ -105,7 +105,7 @@ struct A1_config_options {
 void A1_SetA1PLLClock(struct A1_chain *a1,int pllClkIdx);
 int A1_ConfigA1PLLClock(int optPll);
 
-extern const struct PLL_Clock PLL_Clk_12Mhz[118];
+extern const struct PLL_Clock PLL_Clk_12Mhz[142];
 
 
 

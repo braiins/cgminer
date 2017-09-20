@@ -112,19 +112,36 @@ cgminer_SOURCES += bf16-uartdevice.c bf16-uartdevice.h
 cgminer_SOURCES += driver-bitfury16.c driver-bitfury16.h
 endif
 
-if HAS_BITMINE_A1
-cgminer_SOURCES += driver-SPI-bitmine-A1.c
-cgminer_SOURCES += spi-context.c spi-context.h
+if HAS_BITMINE_A5
+cgminer_SOURCES += driver-SPI-bitmine-A5.c
+cgminer_SOURCES += A5_spi-context.c A5_spi-context.h
 cgminer_SOURCES += A1-common.h
 cgminer_SOURCES += A1-board-selector.h
 cgminer_SOURCES += A1-board-selector-CCD.c A1-board-selector-CCR.c
 cgminer_SOURCES += A1-trimpot-mcp4x.h A1-trimpot-mcp4x.c
 cgminer_SOURCES += i2c-context.c i2c-context.h
 # add by pengpeng of inno
-cgminer_SOURCES += asic_inno.c
-cgminer_SOURCES += asic_inno_cmd.c
-cgminer_SOURCES += asic_inno_clock.c
-cgminer_SOURCES += asic_inno_gpio.c
+cgminer_SOURCES += A5_inno.c A5_inno.h
+cgminer_SOURCES += A5_inno_cmd.c
+cgminer_SOURCES += A5_inno_clock.c
+cgminer_SOURCES += A5_inno_gpio.c
+cgminer_SOURCES += inno_fan.c
+cgminer_SOURCES += scrypt.c
+endif
+
+if HAS_BITMINE_A6
+cgminer_SOURCES += driver-SPI-bitmine-A6.c
+cgminer_SOURCES += A6_spi-context.c A6_spi-context.h
+cgminer_SOURCES += A1-common.h
+cgminer_SOURCES += A1-board-selector.h
+cgminer_SOURCES += A1-board-selector-CCD.c A1-board-selector-CCR.c
+cgminer_SOURCES += A1-trimpot-mcp4x.h A1-trimpot-mcp4x.c
+cgminer_SOURCES += i2c-context.c i2c-context.h
+# add by pengpeng of inno
+cgminer_SOURCES += A6_inno.c A6_inno.h
+cgminer_SOURCES += A6_inno_cmd.c
+cgminer_SOURCES += A6_inno_clock.c
+cgminer_SOURCES += A6_inno_gpio.c
 cgminer_SOURCES += inno_fan.c
 cgminer_SOURCES += scrypt.c
 endif

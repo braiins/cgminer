@@ -16,7 +16,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include "spi-context.h"
+#include "A6_spi-context.h"
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
@@ -24,10 +24,10 @@
 #include "A1-board-selector.h"
 #include "A1-trimpot-mcp4x.h"
 
-#include "asic_inno.h"
-#include "asic_inno_clock.h"
-#include "asic_inno_cmd.h"
-#include "asic_inno_gpio.h"
+#include "A6_inno.h"
+#include "A6_inno_clock.h"
+#include "A6_inno_cmd.h"
+#include "A6_inno_gpio.h"
 
 #include "inno_fan.h"
 

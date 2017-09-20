@@ -8,8 +8,8 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "asic_inno.h"
-#include "asic_inno_gpio.h"
+#include "A6_inno.h"
+#include "A6_inno_gpio.h"
 
 #define MAGIC_NUM  100 
 

@@ -5,14 +5,14 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include "spi-context.h"
+#include "A5_spi-context.h"
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
 
-#include "asic_inno.h"
-#include "asic_inno_cmd.h"
-#include "asic_inno_clock.h"
+#include "A5_inno.h"
+#include "A5_inno_cmd.h"
+#include "A5_inno_clock.h"
 
 
 
@@ -218,7 +218,6 @@ bool spi_poll_result(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uint
 	
 	return false;
 }
-
 
 bool inno_cmd_reset(struct A1_chain *pChain, uint8_t chip_id)
 {
@@ -472,7 +471,7 @@ bool inno_cmd_read_result(struct A1_chain *pChain, uint8_t chip_id, uint8_t *res
 
 	//printf("send command [read_result] \r\n");
 	assert(res != NULL);
-	
+
 	memset(spi_tx, 0, sizeof(spi_tx));
 	spi_tx[0] = CMD_READ_RESULT;
 	spi_tx[1] = chip_id;
@@ -526,7 +525,6 @@ bool inno_cmd_read_result(struct A1_chain *pChain, uint8_t chip_id, uint8_t *res
 			}				
 		}
 	}
-
 	return false;
 
 }
@@ -568,19 +566,19 @@ bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t *job)
 	memset(spi_tx, 0, sizeof(spi_tx));
 	memcpy(spi_tx, job, JOB_LENGTH);
 
-	if(!spi_write_data(ctx, spi_tx, JOB_LENGTH))
+	if(!spi_write_data(ctx, spi_tx, JOB_LENGTH + 4))
 	{
 		return false;
 	}
 	//printf("[write job] \r\n");
 	//hexdump("job:", spi_tx, JOB_LENGTH);
 
-	//usleep(100000);
+	//usleep(10);
 
-	if(inno_cmd_isBusy(pChain, chip_id) != WORK_BUSY)
-	{
-		return false;
-	}
+	//if(inno_cmd_isBusy(pChain, chip_id) != WORK_BUSY)
+	//{
+	//	return false;
+	//}
 
 	return true;
 

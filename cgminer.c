@@ -61,7 +61,7 @@ char *curly = ":D";
 #include "compat.h"
 #include "miner.h"
 #include "bench_block.h"
-#include "asic_inno_cmd.h"
+#include "A5_inno_clock.h"
 #ifdef USE_USBUTILS
 #include "usbutils.h"
 #endif
@@ -2315,17 +2315,51 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_ENDTABLE
 };
 
+const uint32_t magicNum[16]= {
+	0x00000020, 0x00000020, 0x02000020, 0x00000020,
+	0x10000020, 0x00000020, 0x00000020, 0x00000020, 
+	0x12000020, 0x00000020, 0x00000020, 0x00000020,
+	0x00000020, 0x00000020, 0x00000020, 0x00000020};
 static void calc_midstate(struct work *work)
 {
 	unsigned char data[64];
 	uint32_t *data32 = (uint32_t *)data;
 	sha256_ctx ctx;
-
+#ifdef CHIP_A6
 	flip64(data32, work->data);
 	sha256_init(&ctx);
 	sha256_update(&ctx, data, 64);
 	cg_memcpy(work->midstate, ctx.h, 32);
 	endian_flip32(work->midstate, work->midstate);
+#else
+	memcpy(work->data, &(magicNum[0]), 4);
+	flip64(data32, work->data);
+	sha256_init(&ctx);
+	sha256_update(&ctx, data, 64);
+	cg_memcpy(work->midstate, ctx.h, 32);
+	endian_flip32(work->midstate, work->midstate);
+
+	memcpy(work->data, &(magicNum[2]), 4);
+	flip64(data32, work->data);
+	sha256_init(&ctx);
+	sha256_update(&ctx, data, 64);
+	cg_memcpy(work->midstate1, ctx.h, 32);
+	endian_flip32(work->midstate1, work->midstate1);
+
+	memcpy(work->data, &(magicNum[4]), 4);
+	flip64(data32, work->data);
+	sha256_init(&ctx);
+	sha256_update(&ctx, data, 64);
+	cg_memcpy(work->midstate2, ctx.h, 32);
+	endian_flip32(work->midstate2, work->midstate2);
+	
+	memcpy(work->data, &(magicNum[8]), 4);
+	flip64(data32, work->data);
+	sha256_init(&ctx);
+	sha256_update(&ctx, data, 64);
+	cg_memcpy(work->midstate3, ctx.h, 32);
+	endian_flip32(work->midstate3, work->midstate3);
+#endif
 }
 
 /* Returns the current value of total_work and increments it */
@@ -3770,8 +3804,10 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		s = realloc_strcat(s, "\"}]}");
 	} else
 		s = realloc_strcat(s, "\"]}");
-	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
+
 	s = realloc_strcat(s, "\n");
+
+	applog(LOG_ERR, "DBG: sending %s submit RPC call: %s", pool->rpc_url, s);
 
 	cgtime(&tv_submit);
 	/* issue JSON-RPC request */
@@ -6723,6 +6759,20 @@ out:
 /* Each pool has one stratum send thread for sending shares to avoid many
  * threads being created for submission since all sends need to be serialised
  * anyway. */
+static const char maskstr[16][9]= {
+	"00000000", "00000000", "00000002", "00000000",
+	"00000010", "00000000", "00000000", "00000000", 
+	"00000012", "00000000", "00000000", "00000000",
+	"00000000", "00000000", "00000000", "00000000"}; 
+/*
+static const char maskstr[4][9] = 
+{
+	"00000000",
+	"00000002",
+	"00000010",
+	"00000012",
+};
+*/
 static void *stratum_sthread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
@@ -6747,6 +6797,7 @@ static void *stratum_sthread(void *userdata)
 		uint64_t *nonce2_64;
 		struct work *work;
 		bool submitted;
+//		char verstr[9];
 
 		if (unlikely(pool->removed))
 			break;
@@ -6791,14 +6842,41 @@ static void *stratum_sthread(void *userdata)
 		/* Give the stratum share a unique id */
 		sshare->id = swork_id++;
 		mutex_unlock(&sshare_lock);
-
+/*
+		switch (work->micro_job_id) {
+			case 1:
+				memcpy(verstr, maskstr[0], 9);
+				break;
+			case 2:
+				memcpy(verstr, maskstr[1], 9);
+				break;
+			case 4:
+				memcpy(verstr, maskstr[2], 9);
+				break;
+			case 8:
+				memcpy(verstr, maskstr[3], 9);
+				break;
+			default:
+				memcpy(verstr, maskstr[0], 9);
+				break;
+		}
+*/
+#ifdef CHIP_A6
 		snprintf(s, sizeof(s),
 			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, nonce2hex, work->ntime, noncehex, sshare->id);
 
 		applog(LOG_INFO, "Submitting share %08lx to pool %d",
 					(long unsigned int)htole32(hash32[6]), pool->pool_no);
+#else
+		snprintf(s, sizeof(s),
+			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
+			pool->rpc_user, work->job_id, nonce2hex, work->ntime, noncehex, maskstr[work->micro_job_id], sshare->id);
 
+		//applog(LOG_INFO, "rpc_request: %s", s);
+		applog(LOG_INFO, "Submitting share %08lx with magic id %d to pool %d",
+					(long unsigned int)htole32(hash32[6]), work->micro_job_id, pool->pool_no);
+#endif
 		/* Try resubmitting for up to 2 minutes if we fail to submit
 		 * once and the stratum pool nonce1 still matches suggesting
 		 * we may be able to resume. */
@@ -7706,13 +7784,17 @@ static void rebuild_nonce(struct work *work, uint32_t nonce)
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 
 	*work_nonce = htole32(nonce);
-
+#ifdef CHIP_A6
 	scrypt_regenhash(work);
+#else
+	regen_hash(work);
+#endif
 }
 
 /* For testing a nonce against diff 1 */
 bool test_nonce(struct work *work, uint32_t nonce)
 {
+#ifdef CHIP_A6
 	//uint32_t *hash_32 = (uint32_t *)(work->hash + 28);
 	uint16_t *hash_16 = (uint16_t *)(work->hash + 30);
 
@@ -7723,6 +7805,16 @@ bool test_nonce(struct work *work, uint32_t nonce)
 
 	//return (*hash_32 == 0);
 	return (*hash_16 == 0);
+#else
+	uint32_t *hash_32 = (uint32_t *)(work->hash + 28);
+
+	rebuild_nonce(work, nonce);
+
+	//hexdump("data:", work->data, 128);
+	//hexdump("hash:", work->hash, 32);
+
+	return (*hash_32 == 0);
+#endif
 }
 
 /* For testing a nonce against an arbitrary diff */

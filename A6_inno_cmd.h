@@ -1,5 +1,5 @@
-#ifndef _ASIC_INNO_CMD_
-#define _ASIC_INNO_CMD_
+#ifndef _A6_INNO_CMD_
+#define _A6_INNO_CMD_
 
 #include <stdint.h>
 #include <pthread.h>
