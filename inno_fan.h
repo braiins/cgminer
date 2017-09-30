@@ -5,7 +5,14 @@
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
-#include "asic_inno.h"
+#ifdef CHIP_A6
+#include "A6_inno.h"
+#else
+#include "A5_inno.h"
+#endif
+
+
+#define ASIC_INNO_FAN_TEMP_VAL_THRESHOLD (445)
 
 typedef struct INNO_FAN_CTRL_tag{
     /* 温度原始值 */
