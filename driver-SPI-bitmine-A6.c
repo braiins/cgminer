@@ -16,7 +16,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include "A6_spi-context.h"
+#include "spi-context.h"
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
@@ -44,6 +44,7 @@ static uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 
 /* FAN CTRL */
 static INNO_FAN_CTRL_T s_fan_ctrl;
+static uint32_t show_log[ASIC_CHAIN_NUM];
 
 /* one global board_selector and spi context is enough */
 //static struct board_selector *board_selector;
@@ -203,6 +204,7 @@ static bool detect_A1_chain(void)
 			return false;
 		}
 
+        mutex_init(&spi[i]->spi_lock);
 		spi[i]->power_en = SPI_PIN_POWER_EN[i];		
 		spi[i]->start_en = SPI_PIN_START_EN[i];		
 		spi[i]->reset = SPI_PIN_RESET[i];
@@ -215,6 +217,8 @@ static bool detect_A1_chain(void)
 		asic_gpio_init(spi[i]->reset, 0);
 		//asic_gpio_init(spi[i]->plug, 0);
 		//asic_gpio_init(spi[i]->led, 0);
+
+		show_log[i] = 0;
 	}
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
@@ -465,8 +469,9 @@ static int64_t A1_scanwork(struct thr_info *thr)
 
 	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
 	{
-		inno_fan_speed_update(&s_fan_ctrl, cid);
+		inno_fan_speed_update(&s_fan_ctrl, cgpu);
 		a1->last_temp_time = get_current_ms();
+		show_log[cid]++;
 	} 
 
 	/* poll queued results */
@@ -563,13 +568,15 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				{
 					chip->nonce_ranges_done++;
 					nonce_ranges_processed++;
-					applog(LOG_INFO, "set work success %d, nonces processed %d", cid, nonce_ranges_processed);
+					//applog(LOG_INFO, "set work success %d, nonces processed %d", cid, nonce_ranges_processed);
 				}
 				
-				//applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d",
-				//       cid, c,
-				//       chip->nonce_ranges_done, chip->nonces_found,
-				//       chip->hw_errors, chip->stales);
+				if(show_log[cid] > 30)					
+				{						
+					applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d", cid, c, chip->nonce_ranges_done, chip->nonces_found, chip->hw_errors, chip->stales);		
+					if(i==1) show_log[cid] = 0;	
+				}
+
 				break;
 			}
 		}
@@ -593,17 +600,13 @@ static int64_t A1_scanwork(struct thr_info *thr)
 
 	if (nonce_ranges_processed < 0)
 	{
-		applog(LOG_INFO, "nonce_ranges_processed less than 0");
+		//applog(LOG_INFO, "nonce_ranges_processed less than 0");
 		nonce_ranges_processed = 0;
 	}
 
-	if (nonce_ranges_processed != 0) 
-	{
-		applog(LOG_INFO, "%d, nonces processed %d", cid, nonce_ranges_processed);
-	}
 	/* in case of no progress, prevent busy looping */
-	//if (!work_updated)
-	//	cgsleep_ms(40);
+	if (!work_updated)
+		cgsleep_ms(20);
 
 	cgtime(&a1->tvScryptCurr);
 	timersub(&a1->tvScryptCurr, &a1->tvScryptLast, &a1->tvScryptDiff);
@@ -655,16 +658,16 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 
 	mutex_lock(&a1->lock);
 	/* stop chips hashing current work */
-	if (!abort_work(a1)) 
-	{
-		applog(LOG_ERR, "%d: failed to abort work in chip chain!", cid);
-	}
+	//if (!abort_work(a1)) 
+	//{
+	//	applog(LOG_ERR, "%d: failed to abort work in chip chain!", cid);
+	//}
 	/* flush the work chips were currently hashing */
 	for (i = 0; i < a1->num_active_chips; i++) 
 	{
 		int j;
 		struct A1_chip *chip = &a1->chips[i];
-		for (j = 0; j < 1; j++) 
+		for (j = 0; j < 2; j++) 
 		{
 			struct work *work = chip->work[j];
 			if (work == NULL)
@@ -677,16 +680,16 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 		
 		chip->last_queued_id = 0;
 
-		if(!inno_cmd_resetjob(a1, i+1))
-		{
-			applog(LOG_WARNING, "chip %d clear work false", i);
-			continue;
-		}
-		
 		//applog(LOG_INFO, "chip :%d flushing queued work success", i);
 	}
+
+	if(!inno_cmd_resetjob(a1, ADDR_BROADCAST))
+	{
+		applog(LOG_WARNING, "chip clear work false");
+	}
+		
 	/* flush queued work */
-	//applog(LOG_DEBUG, "%d: flushing queued work...", cid);
+	applog(LOG_DEBUG, "%d: flushing queued work...", cid);
 	while (a1->active_wq.num_elems > 0) 
 	{
 		struct work *work = wq_dequeue(&a1->active_wq);

@@ -503,6 +503,13 @@ struct cgpu_info {
 	bool new_work;
 
 	double temp;
+	//add by witt
+	double temp_max;
+	double temp_min;
+	int chip_num;
+	int core_num;
+	int fan_duty;
+	
 	int cutofftemp;
 
 	int64_t diff1;
@@ -1376,78 +1383,15 @@ struct pool {
 #define GETWORK_MODE_GBT 'G'
 #define GETWORK_MODE_SOLO 'C'
 
-#ifdef CHIP_A6
-	struct work {
+struct work {
 	unsigned char	data[128];
 	unsigned char	midstate[32];
-	unsigned char	target[32];
-	unsigned char	hash[32];
-
-	/* This is the diff the device is currently aiming for and must be
-	 * the minimum of work_difficulty & drv->max_diff */
-	double		device_diff;
-	uint64_t	share_diff;
-
-	int		rolls;
-	int		drv_rolllimit; /* How much the driver can roll ntime */
-	uint32_t	nonce; /* For devices that hash sole work */
-
-	struct thr_info	*thr;
-	int		thr_id;
-	struct pool	*pool;
-	struct timeval	tv_staged;
-
-	bool		mined;
-	bool		clone;
-	bool		cloned;
-	int		rolltime;
-	bool		longpoll;
-	bool		stale;
-	bool		mandatory;
-	bool		block;
-
-	bool		stratum;
-	char 		*job_id;
-	uint64_t	nonce2;
-	size_t		nonce2_len;
-	char		*ntime;
-	double		sdiff;
-	char		*nonce1;
-
-	bool		gbt;
-	char		*coinbase;
-	int		gbt_txns;
-
-	unsigned int	work_block;
-	uint32_t	id;
-	UT_hash_handle	hh;
-
-	/* This is the diff work we're aiming to submit and should match the
-	 * work->target binary */
-	double		work_difficulty;
-
-	// Allow devices to identify work if multiple sub-devices
-	int		subid;
-	// Allow devices to flag work for their own purposes
-	bool		devflag;
-	// Allow devices to timestamp work for their own purposes
-	struct timeval	tv_stamp;
-
-	struct timeval	tv_getwork;
-	struct timeval	tv_getwork_reply;
-	struct timeval	tv_cloned;
-	struct timeval	tv_work_start;
-	struct timeval	tv_work_found;
-	char		getwork_mode;
-	};	
-#else
-	struct work {
-	unsigned char	data[128];
-	unsigned char	midstate[32];
+#ifndef A6_CHIP	
 	unsigned char	midstate1[32];
 	unsigned char	midstate2[32];
 	unsigned char	midstate3[32];
 	uint16_t 		micro_job_id;
+#endif
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
@@ -1507,8 +1451,7 @@ struct pool {
 	struct timeval	tv_work_start;
 	struct timeval	tv_work_found;
 	char		getwork_mode;
-	};
-#endif
+};
 
 #ifdef USE_MODMINER
 struct modminer_fpga_state {

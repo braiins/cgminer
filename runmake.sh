@@ -28,6 +28,6 @@ CFLAGS=-I${ROOTFS_DIR}/include \
 make -j${MAKE_JOBS}
 cp cgminer cgminer_${CHIP_TYPE}
 
-#cp ./cgminer /home/public/update/cgminer_ccx.$1
-#chmod 777 /home/public/update/cgminer_ccx.$1
+#cp ./cgminer /home/public/update/cgminer_huwt.$1
+#chmod 777 /home/public/update/cgminer_huwt.$1
 
