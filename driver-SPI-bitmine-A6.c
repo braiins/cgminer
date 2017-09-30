@@ -161,8 +161,10 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 		check_chip(a1, i);
 
         /* 温度值 */
-        inno_fan_temp_add(&s_fan_ctrl, chain_id, i, a1->chips[i].temp, true);
-    }
+        inno_fan_temp_set(&s_fan_ctrl, chain_id, i, a1->chips[i].temp, true);
+    } 
+    inno_fan_chip_nums_set(&s_fan_ctrl, chain_id, a1->num_active_chips);
+
     /* 设置初始值 */ 
     inno_fan_temp_init(&s_fan_ctrl, chain_id);
 
@@ -534,7 +536,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
                 uint32_t temp = 0;
 
                 temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-                inno_fan_temp_add(&s_fan_ctrl, cid, i-1, temp, false);
+                inno_fan_temp_set(&s_fan_ctrl, cid, i-1, temp, false);
             }
 
 			uint8_t qstate = reg[9] & 0x01;
@@ -570,7 +572,9 @@ static int64_t A1_scanwork(struct thr_info *thr)
 				//       chip->hw_errors, chip->stales);
 				break;
 			}
-		} 
+		}
+        /* FIXME:循环内部有break,active_chips数目可能小于a1->num_active_chips */
+        inno_fan_chip_nums_set(&s_fan_ctrl, cid, a1->num_active_chips);
 	}
 
 	switch(cid){

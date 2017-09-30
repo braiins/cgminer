@@ -174,7 +174,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 		check_chip(a1, i);
 
         /* ÎÂ¶ÈÖµ */
-        inno_fan_temp_add(&s_fan_ctrl, chain_id, i, a1->chips[i].temp, true);
+        inno_fan_temp_set(&s_fan_ctrl, chain_id, i, a1->chips[i].temp, true);
     }
     /* ÉèÖÃ³õÊ¼Öµ */ 
     inno_fan_temp_init(&s_fan_ctrl, chain_id);
@@ -589,7 +589,7 @@ static int64_t A1_scanwork(struct thr_info *thr)
                 uint32_t temp = 0;
 
                 temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-                inno_fan_temp_add(&s_fan_ctrl, cid, i-1, temp, false);
+                inno_fan_temp_set(&s_fan_ctrl, cid, i-1, temp, false);
            
             }
             
