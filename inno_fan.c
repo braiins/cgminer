@@ -418,6 +418,9 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
     lowest_f = inno_fan_temp_to_float(fan_ctrl, (int)lowest);
     highest_f = inno_fan_temp_to_float(fan_ctrl, (int)highest);
 
+    /* FIXME:加入 温度过高停机,温度恢复启动 */
+
+    /* 需要降温 */
     if(highest_f > ASIC_INNO_FAN_TEMP_UP_THRESHOLD)
     {
         if(0 != fan_ctrl->duty)
@@ -428,6 +431,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
         //applog(LOG_DEBUG, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
     }
 
+    /* 可以升温 */
     if(highest_f < ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD)
     {
         if(40 != fan_ctrl->duty) 
@@ -439,14 +443,15 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
         //applog(LOG_DEBUG, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
     } 
 
+    applog(LOG_ERR, "%s chain%d:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, chain_id, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
+
 	cgpu->temp = arvarge_f;
 	cgpu->temp_max = highest_f;
 	cgpu->temp_min = lowest_f;
-	
+
 	cgpu->chip_num = a1->num_active_chips;
 	cgpu->core_num = a1->num_cores; 
 	cgpu->fan_duty = 100 - fan_ctrl->duty;
-	
 #endif
 
 }
