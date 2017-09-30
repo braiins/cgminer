@@ -116,6 +116,7 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 	applog(LOG_ERR, "duty max: %d.", ASIC_INNO_FAN_PWM_DUTY_MAX);
 	applog(LOG_ERR, "targ freq:%d.", ASIC_INNO_FAN_PWM_FREQ_TARGET);
 	applog(LOG_ERR, "freq rate:%d.", ASIC_INNO_FAN_PWM_FREQ);
+	applog(LOG_ERR, "max  thrd:%5.2f.", ASIC_INNO_FAN_TEMP_MAX_THRESHOLD);
 	applog(LOG_ERR, "up   thrd:%5.2f.", ASIC_INNO_FAN_TEMP_UP_THRESHOLD);
 	applog(LOG_ERR, "down thrd:%5.2f.", ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD);
 	applog(LOG_ERR, "temp nums:%d.", fan_ctrl->temp_nums);
@@ -423,7 +424,9 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
     /* 温度过高,该条链停机 */
     if(highest_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
     {
-		asic_gpio_write(ctx->power_en, 0);
+        applog(LOG_ERR, "%s chain:%d :arv:%5.2f, lest:%5.2f, hest:%5.2f, power done.", __func__, chain_id, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
+        asic_gpio_write(ctx->power_en, 0); 
+        goto out;
     }
 
     /* 需要降温 */
@@ -435,6 +438,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
             applog(LOG_ERR, "%s chain:%d +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, chain_id, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         } 
         //applog(LOG_DEBUG, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
+        goto out;
     }
 
     /* 可以升温 */
@@ -445,12 +449,12 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
             inno_fan_pwm_set(fan_ctrl, 40);
             applog(LOG_ERR, "%s chain:%d -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, chain_id, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         }
-
         //applog(LOG_DEBUG, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
+        goto out;
     } 
 
+out:
     applog(LOG_ERR, "%s chain%d:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, chain_id, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
-
 	cgpu->temp = arvarge_f;
 	cgpu->temp_max = highest_f;
 	cgpu->temp_min = lowest_f;
