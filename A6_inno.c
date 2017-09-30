@@ -9,7 +9,7 @@
 #include "miner.h"
 #include "util.h"
 
-#include "A6_spi-context.h"
+#include "spi-context.h"
 #include "A6_inno.h"
 #include "A6_inno_cmd.h"
 #include "A6_inno_clock.h"

@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include "A5_spi-context.h"
+#include "spi-context.h"
 #include "logging.h"
 #include "miner.h"
 #include "util.h"

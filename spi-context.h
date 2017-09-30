@@ -1,10 +1,11 @@
-#ifndef A6_SPI_CONTEXT_H
-#define A6_SPI_CONTEXT_H
+#ifndef SPI_CONTEXT_H
+#define SPI_CONTEXT_H
 
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #define SPI_DEVICE_TEMPLATE		"/dev/spidev%d.%d"
 #define DEFAULT_SPI_BUS			1
@@ -39,6 +40,7 @@ struct spi_ctx {
 	int reset;
 	int led;
 	int plug;
+	pthread_mutex_t spi_lock;
 	struct spi_config config;
 };
 

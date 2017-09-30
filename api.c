@@ -2006,7 +2006,11 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 			return;
 
 		struct cgpu_info *cgpu = get_devices(dev);
+		
 		float temp = cgpu->temp;
+		float temp_max = cgpu->temp_max;
+		float temp_min = cgpu->temp_min;
+		
 		double dev_runtime;
 
 		dev_runtime = cgpu_runtime(cgpu);
@@ -2025,38 +2029,43 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		root = api_add_int(root, "ID", &(cgpu->device_id), false);
 		root = api_add_string(root, "Enabled", enabled, false);
 		root = api_add_string(root, "Status", status, false);
-		root = api_add_temp(root, "Temperature", &temp, false);
+		root = api_add_temp(root, "TempAVG", &temp, false);
+		root = api_add_temp(root, "TempMAX", &temp_max, false);
+		root = api_add_temp(root, "TempMIN", &temp_min, false);
+		root = api_add_int(root, "CHIP", &(cgpu->chip_num), false);
+		root = api_add_int(root, "CORE", &(cgpu->core_num), false);
+		root = api_add_int(root, "DUTY", &(cgpu->fan_duty), false);
 		double mhs = cgpu->total_mhashes / dev_runtime;
 		root = api_add_mhs(root, "MHS av", &mhs, false);
 		char mhsname[27];
 		sprintf(mhsname, "MHS %ds", opt_log_interval);
 		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
-		root = api_add_mhs(root, "MHS 1m", &cgpu->rolling1, false);
-		root = api_add_mhs(root, "MHS 5m", &cgpu->rolling5, false);
-		root = api_add_mhs(root, "MHS 15m", &cgpu->rolling15, false);
+		//root = api_add_mhs(root, "MHS 1m", &cgpu->rolling1, false);
+		//root = api_add_mhs(root, "MHS 5m", &cgpu->rolling5, false);
+		//root = api_add_mhs(root, "MHS 15m", &cgpu->rolling15, false);
 		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
 		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
 		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
 		root = api_add_utility(root, "Utility", &(cgpu->utility), false);
-		int last_share_pool = cgpu->last_share_pool_time > 0 ?
-					cgpu->last_share_pool : -1;
-		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
-		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
-		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
-		root = api_add_int64(root, "Diff1 Work", &(cgpu->diff1), false);
-		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
-		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
-		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
+		//int last_share_pool = cgpu->last_share_pool_time > 0 ?
+		//			cgpu->last_share_pool : -1;
+		//root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
+		//root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
+		//root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
+		//root = api_add_int64(root, "Diff1 Work", &(cgpu->diff1), false);
+		//root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
+		//root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
+		//root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 #ifdef USE_USBUTILS
 		root = api_add_bool(root, "No Device", &(cgpu->usbinfo.nodev), false);
 #endif
-		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
-		double hwp = (cgpu->hw_errors + cgpu->diff1) ?
-				(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
-		root = api_add_percent(root, "Device Hardware%", &hwp, false);
-		double rejp = cgpu->diff1 ?
-				(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
-		root = api_add_percent(root, "Device Rejected%", &rejp, false);
+		//root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
+		//double hwp = (cgpu->hw_errors + cgpu->diff1) ?
+		//		(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
+		//root = api_add_percent(root, "Device Hardware%", &hwp, false);
+		//double rejp = cgpu->diff1 ?
+		//		(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
+		//root = api_add_percent(root, "Device Rejected%", &rejp, false);
 		root = api_add_elapsed(root, "Device Elapsed", &(dev_runtime), false);
 
 		root = print_data(io_data, root, isjson, precom);

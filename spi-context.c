@@ -9,7 +9,7 @@
  * any later version.  See COPYING for more details.
  */
 
-#include "A5_spi-context.h"
+#include "spi-context.h"
 
 #include "logging.h"
 #include "miner.h"

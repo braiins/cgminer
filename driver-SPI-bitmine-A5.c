@@ -16,7 +16,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 
-#include "A5_spi-context.h"
+#include "spi-context.h"
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
@@ -82,16 +82,6 @@ static struct work *wq_dequeue(struct work_queue *wq)
 	wq->num_elems--;
 	return work;
 }
-
-/*
- * if not cooled sufficiently, communication fails and chip is temporary
- * disabled. we let it inactive for 30 seconds to cool down
- *
- * TODO: to be removed after bring up / test phase
- */
-#define COOLDOWN_MS (30 * 1000)
-/* if after this number of retries a chip is still inaccessible, disable it */
-#define DISABLE_CHIP_FAIL_THRESHOLD	3
 
 /*
  * for now, we have one global config, defaulting values:
