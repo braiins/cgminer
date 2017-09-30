@@ -22,8 +22,6 @@
 
 /* 去掉的最高分和最低分比例 */
 #define ASIC_INNO_FAN_TEMP_MARGIN_RATE  (5.0f / 100.0f)
-/* 数值越小,温度打印得越频繁 */
-#define ASIC_INNO_FAN_CTLR_FREQ_DIV     (0)
 
 #define WEAK_CHIP_THRESHOLD	5
 #define BROKEN_CHIP_THRESHOLD 5

@@ -88,6 +88,8 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
         sleep(1);
     }
 #endif
+    mutex_init(&fan_ctrl->lock);
+
     inno_fan_pwm_set(fan_ctrl, 10); /* 90% */
     sleep(1);
     inno_fan_pwm_set(fan_ctrl, 20); /* 80% */
@@ -111,6 +113,7 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 	applog(LOG_ERR, "duty max: %d.", ASIC_INNO_FAN_PWM_DUTY_MAX);
 	applog(LOG_ERR, "targ freq:%d.", ASIC_INNO_FAN_PWM_FREQ_TARGET);
 	applog(LOG_ERR, "freq rate:%d.", ASIC_INNO_FAN_PWM_FREQ);
+	applog(LOG_ERR, "max  thrd:%5.2f.", ASIC_INNO_FAN_TEMP_MAX_THRESHOLD);
 	applog(LOG_ERR, "up   thrd:%5.2f.", ASIC_INNO_FAN_TEMP_UP_THRESHOLD);
 	applog(LOG_ERR, "down thrd:%5.2f.", ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD);
 	applog(LOG_ERR, "temp nums:%d.", fan_ctrl->temp_nums);
@@ -123,6 +126,7 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 
 void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on)
 {
+    float temp_f = 0.0f;
     int index = 0;
 
     index = fan_ctrl->index[chain_id];
@@ -140,12 +144,10 @@ void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool w
 
     /* 有芯片温度过高,输出告警打印 */
     /* applog(LOG_ERR, "inno_fan_temp_add: temp warn_on(init):%d\n", warn_on); */
-    if(temp < ASIC_INNO_FAN_TEMP_VAL_THRESHOLD)
+    temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
+    if(temp_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
     { 
-        float temp_f = 0.0f;
-        temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
-        applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!\n",
-                chain_id, index, inno_fan_temp_to_float(fan_ctrl, temp), temp);
+        applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!\n", chain_id, index, temp_f, temp);
     }
 }
 
@@ -266,29 +268,33 @@ void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
 
     duty_driver = ASIC_INNO_FAN_PWM_FREQ_TARGET / 100 * duty;
 
+	mutex_lock(&fan_ctrl->lock);
+
     /* 开启风扇结点 */
     fd = open(ASIC_INNO_FAN_PWM0_DEVICE_NAME, O_RDWR);
     if(fd < 0)
     {
         applog(LOG_ERR, "open %s fail", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
-        while(1);
+        mutex_unlock(&fan_ctrl->lock);
+        return;
     }
-
     if(ioctl(fd, IOCTL_SET_FREQ_0, ASIC_INNO_FAN_PWM_FREQ) < 0)
     {
         applog(LOG_ERR, "set fan0 frequency fail");
-        while(1);
+        mutex_unlock(&fan_ctrl->lock);
+        return;
     }
-
     if(ioctl(fd, IOCTL_SET_DUTY_0, duty_driver) < 0)
     {
         applog(LOG_ERR, "set duty fail \n");
-        while(1);
+        mutex_unlock(&fan_ctrl->lock);
+        return;
     }
-
     close(fd);
 
     fan_ctrl->duty = duty;
+
+    mutex_unlock(&fan_ctrl->lock);
 }
 
 void inno_fan_speed_up(INNO_FAN_CTRL_T *fan_ctrl)
@@ -308,7 +314,6 @@ void inno_fan_speed_up(INNO_FAN_CTRL_T *fan_ctrl)
         duty = 0;
     } 
     applog(LOG_DEBUG, "speed+(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
-    fan_ctrl->duty = duty;
 
     inno_fan_pwm_set(fan_ctrl, duty);
 }
@@ -330,7 +335,6 @@ void inno_fan_speed_down(INNO_FAN_CTRL_T *fan_ctrl)
         duty = ASIC_INNO_FAN_PWM_DUTY_MAX;
     }
     applog(LOG_DEBUG, "speed-(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
-    fan_ctrl->duty = duty;
 
     inno_fan_pwm_set(fan_ctrl, duty);
 }
@@ -353,15 +357,6 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
     /* 清空,为下一轮做准备 */
     inno_fan_temp_clear(fan_ctrl, chain_id);
 
-    //applog(LOG_DEBUG, "chain_%d, init:%7.4f,now:%7.4f,delta:%7.4f",
-    /* 
-    applog(LOG_DEBUG, "chain_%d, init:%7.4f(%7.4f),now:%7.4f(%7.4f),delta:%7.4f(%7.4f)",
-            chain_id, 
-            inno_fan_temp_to_float(fan_ctrl, fan_ctrl->temp_init[chain_id]), fan_ctrl->temp_init[chain_id], 
-            inno_fan_temp_to_float(fan_ctrl, fan_ctrl->temp_now[chain_id]), fan_ctrl->temp_now[chain_id],
-            fan_ctrl->temp_delta[chain_id]);
-            */
-    
 #if 0
     /* 控制策略1(否定,temp_init温度很低,风扇最大依然不够)
      * temp_init为初始值
@@ -404,6 +399,13 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
     lowest_f = inno_fan_temp_to_float(fan_ctrl, (int)lowest);
     highest_f = inno_fan_temp_to_float(fan_ctrl, (int)highest);
 
+    /* 加入整条链Power Down */
+    if(highest_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
+    {
+        applog(LOG_ERR, "%s z:arv:%5.2f, lest:%5.2f, hest:%5.2f, power down", __func__, arvarge_f, lowest_f, highest_f);
+    }
+
+    /* 温度过高 */
     if(highest_f > ASIC_INNO_FAN_TEMP_UP_THRESHOLD)
     {
         if(0 != fan_ctrl->duty)
@@ -411,9 +413,9 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
             inno_fan_pwm_set(fan_ctrl, 0);
             applog(LOG_ERR, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         } 
-        //applog(LOG_DEBUG, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
     }
 
+    /* 温度已经恢复低温 */
     if(highest_f < ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD)
     {
         if(40 != fan_ctrl->duty) 
@@ -421,18 +423,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
             inno_fan_pwm_set(fan_ctrl, 40);
             applog(LOG_ERR, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         }
-
-        //applog(LOG_DEBUG, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
     } 
-
-    static int times = 0;       /* 降低风扇控制的频率 */
-    /* 降低风扇打印的频率 */
-    if(times++ <  ASIC_INNO_FAN_CTLR_FREQ_DIV)
-    {
-        return;
-    }
-    /* applog(LOG_DEBUG, "inno_fan_speed_updat times:%d" , times); */
-    times = 0;
 
     applog(LOG_ERR, "%s n:arv:%5.2f, lest:%5.2f, hest:%5.2f", __func__, arvarge_f, lowest_f, highest_f);
 #endif

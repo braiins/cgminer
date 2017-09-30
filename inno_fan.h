@@ -11,21 +11,20 @@
 #include "A5_inno.h"
 #endif
 
-
-#define ASIC_INNO_FAN_TEMP_VAL_THRESHOLD (445)
-
 typedef struct INNO_FAN_CTRL_tag{
     /* 温度原始值 */
 	int temp[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
     int index[ASIC_CHAIN_NUM];                  /* chip index in chain */
-
-    int duty;                                   /* 0 - 100 */
 
     /* 以寄存器原始值为格式 */
     int temp_arvarge[ASIC_CHAIN_NUM];           /* 当前温度(均值) */
     int temp_init[ASIC_CHAIN_NUM];              /* 初始温度(均值) */
     int temp_highest[ASIC_CHAIN_NUM];           /* 当前温度(最高) */
     int temp_lowest[ASIC_CHAIN_NUM];            /* 当前温度(最低) */
+
+    /* 保护多链(线程)共享的数据 */
+	pthread_mutex_t lock;                       /* 互斥锁 */
+    int duty;                                   /* 0 - 100 */
 
     /* 用于转化寄存器原始值到实际温度 */
     int temp_nums;                              /* temp寄存器与温度对应表 的点数 */
