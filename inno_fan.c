@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 #include <linux/ioctl.h>
 
+#include "spi-context.h"
+
 #include "inno_fan.h"
 
 #define MAGIC_NUM  100 
@@ -126,6 +128,7 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 
 void inno_fan_temp_set(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int chip_id, int temp, bool warn_on)
 {
+    float temp_f = 0.0f;
     fan_ctrl->temp[chain_id][chip_id] = temp;
 	applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d)", chain_id, chip_id, inno_fan_temp_to_float(fan_ctrl, temp), temp);
 
@@ -137,12 +140,10 @@ void inno_fan_temp_set(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int chip_id, int
 
     /* 有芯片温度过高,输出告警打印 */
     /* applog(LOG_ERR, "inno_fan_temp_add: temp warn_on(init):%d\n", warn_on); */
-    if(temp < ASIC_INNO_FAN_TEMP_VAL_THRESHOLD)
+    temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
+    if(temp_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
     { 
-        float temp_f = 0.0f;
-        temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
-        applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!\n",
-                chain_id, chip_id, inno_fan_temp_to_float(fan_ctrl, temp), temp);
+        applog(LOG_ERR, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!\n", chain_id, chip_id, temp_f, temp);
     }
 }
 
@@ -343,6 +344,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
 {
 	struct A1_chain *a1 = cgpu->device_data;
 	int chain_id = a1->chain_id;
+    struct spi_ctx *ctx = a1->spi_ctx;
 	
     int arvarge = 0;        /* 平均温度 */
     int highest = 0;        /* 最高温度 */
@@ -418,7 +420,11 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu)
     lowest_f = inno_fan_temp_to_float(fan_ctrl, (int)lowest);
     highest_f = inno_fan_temp_to_float(fan_ctrl, (int)highest);
 
-    /* FIXME:加入 温度过高停机,温度恢复启动 */
+    /* 温度过高,该条链停机 */
+    if(highest_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
+    {
+		asic_gpio_write(ctx->power_en, 0);
+    }
 
     /* 需要降温 */
     if(highest_f > ASIC_INNO_FAN_TEMP_UP_THRESHOLD)
