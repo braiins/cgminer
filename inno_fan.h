@@ -1,22 +1,18 @@
-#ifndef _A5_INNO_FAN_
-#define _A5_INNO_FAN_
+#ifndef _INNO_FAN_
+#define _INNO_FAN_
 
 #include <stdint.h>
-#include <pthread.h>
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
-#ifdef CHIP_A6
-#include "A6_inno.h"
-#else
-#include "A5_inno.h"
-#endif
+#include "asic_inno.h"
 
 typedef struct INNO_FAN_CTRL_tag{
-    /* 以链为单位的不需要锁 */
     /* 温度原始值 */
 	int temp[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
-    int active_nums[ASIC_CHAIN_NUM];            /* chip index in chain */
+    int index[ASIC_CHAIN_NUM];                  /* chip index in chain */
+
+    int duty;                                   /* 0 - 100 */
 
     /* 以寄存器原始值为格式 */
     int temp_arvarge[ASIC_CHAIN_NUM];           /* 当前温度(均值) */
@@ -24,18 +20,13 @@ typedef struct INNO_FAN_CTRL_tag{
     int temp_highest[ASIC_CHAIN_NUM];           /* 当前温度(最高) */
     int temp_lowest[ASIC_CHAIN_NUM];            /* 当前温度(最低) */
 
-    /* 用于转化寄存器原始值到实际温度,仅初始化赋值,无需锁保护 */
+    /* 用于转化寄存器原始值到实际温度 */
     int temp_nums;                              /* temp寄存器与温度对应表 的点数 */
     int temp_v_max;                             /* temp最大值 对应最低温度 */
     int temp_v_min;                             /* temp最小值 对应最高温度 */
     float temp_f_min;                           /* 温度最小值 */
     float temp_f_max;                           /* 温度最大值 */
     float temp_f_step;                          /* 温度步长 */
-
-    /* 整个风扇控制模块,不以链为单位的需要锁 */
-    /* 风扇控制PWM相关 */
-    pthread_mutex_t lock;                       /* PWM锁 */
-    int duty;                                   /* PWM占空比,0 - 100,需要锁保护 */
 }INNO_FAN_CTRL_T;
 
 /* 模块初始化 */
@@ -43,13 +34,11 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl);
 /* 设置启动温度 */
 void inno_fan_temp_init(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 /* 加入芯片温度 */
-void inno_fan_temp_set(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int chip_id, int temp, bool warn_on);
-/* 设置芯片个数 */
-void inno_fan_chip_nums_set(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int active_nums);
+void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on);
 /* 清空芯片温度,为下轮循环准备 */
 void inno_fan_temp_clear(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 /* 根据温度更新转速 */
-void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl,struct cgpu_info *cgpu);
+void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 
 #if 0
 float inno_fan_temp_get(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
@@ -62,3 +51,4 @@ void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty);
 #endif
 
 #endif
+
