@@ -62,6 +62,7 @@ uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 /* FAN CTRL */
 static INNO_FAN_CTRL_T s_fan_ctrl;
 static uint32_t show_log[ASIC_CHAIN_NUM];
+static uint32_t update_cnt[ASIC_CHAIN_NUM];
 extern const uint32_t magicNum[16];
 static inno_reg_ctrl_t s_reg_ctrl;
 #define DANGEROUS_TMP  110
@@ -137,7 +138,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	a1->spi_ctx = ctx;
 	a1->chain_id = chain_id;
 	
-	a1->num_chips = chain_detect(a1);
+	a1->num_chips =  chain_detect(a1);
 	usleep(10000);
 	
 	if (a1->num_chips == 0)
@@ -404,7 +405,7 @@ static void inno_preinit(struct spi_ctx *ctx, int chain_id)
 
 static bool detect_A1_chain(void)
 {
-	int i, j;
+	int i;
 	//board_selector = (struct board_selector*)&dummy_board_selector;
 	applog(LOG_WARNING, "A1: checking A1 chain");
 
@@ -439,6 +440,7 @@ static bool detect_A1_chain(void)
 		//asic_gpio_init(spi[i]->led, 0);
 
 		show_log[i] = 0;
+		update_cnt[i] = 0;
 	}
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
@@ -719,12 +721,12 @@ void A1_detect(bool hotplug)
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
 		spi_exit(spi[i]);
-	}
+	}	
 }
 
 #define TEMP_UPDATE_INT_MS	60000
-#define VOLTAGE_UPDATE_INT  360
-uint32_t update_cnt = 0;
+#define VOLTAGE_UPDATE_INT  120
+
 static int64_t  A1_scanwork(struct thr_info *thr)
 {
 	int i;
@@ -750,10 +752,11 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 
 	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
 	{
-		update_cnt++;
+		update_cnt[cid]++;
+		show_log[cid]++;
 		//applog(LOG_INFO, "Chenchunxu:TEMP_UPDATE_INT_MS:%d.",update_cnt);
 
-		if (update_cnt >= VOLTAGE_UPDATE_INT)
+		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
 			//configure for vsensor
     		inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
@@ -774,7 +777,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 
                 temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
                 inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-				if(update_cnt >= VOLTAGE_UPDATE_INT)
+				if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 				{
 					inno_check_voltage(a1, i, &s_reg_ctrl);
 					//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
@@ -782,11 +785,11 @@ static int64_t  A1_scanwork(struct thr_info *thr)
             }     
 		}
 
-		if (update_cnt >= VOLTAGE_UPDATE_INT)
+		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
 			//configure for tsensor
     		inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
-			update_cnt = 0;
+			update_cnt[cid] = 0;
 		}
 		
 		inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
@@ -836,13 +839,6 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 		{
 			applog(LOG_WARNING, "%d: chip %d: invalid nonce 0x%08x", cid, chip_id, nonce);
 			applog(LOG_WARNING, "micro_job_id %d", micro_job_id);
-			//hexdump("data:", work->data, 128);
-			//hexdump("midstate1:", work->midstate, 32);
-			//hexdump("midstate2:", work->midstate1, 32);
-			//hexdump("midstate3:", work->midstate2, 32);
-			//hexdump("midstate4:", work->midstate3, 32);
-			//printf("sdiff:%lu", work->sdiff);
-
 			chip->hw_errors++;
 			/* add a penalty of a full nonce range on HW errors */
 			nonce_ranges_processed--;
@@ -883,7 +879,10 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 
 					if(show_log[cid] > 30)					
 					{						
-						applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d", cid, c, chip->nonce_ranges_done, chip->nonces_found, chip->hw_errors, chip->stales);		
+						applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d/%d/%5.2f",
+                               cid, c, chip->nonce_ranges_done, chip->nonces_found, 
+                               chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
+						
 						if(i==1) show_log[cid] = 0;	
 					}
 				}
@@ -945,15 +944,9 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 
 	if (nonce_ranges_processed < 0)
 	{
-		applog(LOG_INFO, "nonce_ranges_processed less than 0");
 		nonce_ranges_processed = 0;
 	}
-/*
-	if (nonce_ranges_processed != 0) 
-	{
-		applog(LOG_INFO, "%d, nonces processed %d", cid, nonce_ranges_processed);
-	}
-*/	
+
 	/* in case of no progress, prevent busy looping */
 	if (!work_updated)
 		cgsleep_ms(20);

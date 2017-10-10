@@ -17,44 +17,6 @@
 
 
 #define MUL_COEF 1.248
-static const int inno_tsadc_table[34] = {
-    /* val temp_f */
-    647, //-40, 
-    640, //-35, 
-    632, //-30, 
-    625, //-25, 
-    617, //-20, 
-    610, //-15, 
-    602, //-10, 
-    595, // -5, 
-    588, //  0, 
-    580, //  5, 
-    572, // 10, 
-    565, // 15, 
-    557, // 20, 
-    550, // 25, 
-    542, // 30, 
-    535, // 35, 
-    527, // 40, 
-    520, // 45, 
-    512, // 50, 
-    505, // 55, 
-    497, // 60, 
-    489, // 65, 
-    482, // 70, 
-    474, // 75, 
-    467, // 80, 
-    459, // 85, 
-    452, // 90, 
-    444, // 95, 
-    437, //100, 
-    429, //105, 
-    421, //110, 
-    414, //115, 
-    406, //120, 
-    399 //125, 
-};
-
 static const float inno_vsadc_table[32] = {
 	0.44047619,
 	0.437809524,
@@ -454,6 +416,10 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 		if(a1->num_cores <= LEAST_CORE_ONE_CHAIN && chip->fail_reset < RESET_CHAIN_CNT)
 		{
 			chip->fail_reset++;
+			asic_gpio_write(ctx->power_en, 0);
+			sleep(2);
+			asic_gpio_write(ctx->power_en, 1);
+			sleep(2);
 			asic_gpio_write(ctx->reset, 0);
 			usleep(500000);
 			asic_gpio_write(ctx->reset, 1);	
@@ -689,7 +655,7 @@ int chain_detect(struct A1_chain *a1)
 	uint8_t temp_reg[REG_LENGTH];
 	int i;
 
-	set_spi_speed(6500000);
+	set_spi_speed(3250000);
 	usleep(1000);
 
 	memset(buffer, 0, sizeof(buffer));

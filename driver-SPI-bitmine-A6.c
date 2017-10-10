@@ -35,18 +35,37 @@ struct spi_config cfg[ASIC_CHAIN_NUM];
 struct spi_ctx *spi[ASIC_CHAIN_NUM];
 struct A1_chain *chain[ASIC_CHAIN_NUM];
 
-static uint8_t A1Pll1=A5_PLL_CLOCK_800MHz;
-static uint8_t A1Pll2=A5_PLL_CLOCK_800MHz;
-static uint8_t A1Pll3=A5_PLL_CLOCK_800MHz;
-static uint8_t A1Pll4=A5_PLL_CLOCK_800MHz;
-static uint8_t A1Pll5=A5_PLL_CLOCK_800MHz;
-static uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
+/*
+struct Test_bench Test_bench_Array[6]={
+	{1260,   14,	0,	0}, //default
+	{1260,   15,	0,	0}, 
+	{1296,   14,	0,	0},
+	{1296,   15,	0,	0}, 
+	{1332,   14,	0,	0},
+	{1332,   15,	0,	0}, 
+};
+*/
+struct Test_bench Test_bench_Array[3]={
+	{1332,	 10,	0,	0},
+	{1332,	 12,	0,	0}, 
+	{1332,	 14,	0,	0}, 
+};
+
+
+uint8_t A1Pll1=A5_PLL_CLOCK_800MHz;
+uint8_t A1Pll2=A5_PLL_CLOCK_800MHz;
+uint8_t A1Pll3=A5_PLL_CLOCK_800MHz;
+uint8_t A1Pll4=A5_PLL_CLOCK_800MHz;
+uint8_t A1Pll5=A5_PLL_CLOCK_800MHz;
+uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 
 /* FAN CTRL */
 static INNO_FAN_CTRL_T s_fan_ctrl;
 static uint32_t show_log[ASIC_CHAIN_NUM];
-static uint32_t update_temp[ASIC_CHAIN_NUM];
-
+static uint32_t update_cnt[ASIC_CHAIN_NUM];
+static inno_reg_ctrl_t s_reg_ctrl;
+#define DANGEROUS_TMP  110
+#define STD_V          0.84
 
 /* one global board_selector and spi context is enough */
 //static struct board_selector *board_selector;
@@ -117,17 +136,8 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	memset(a1, 0, sizeof(*a1));
 	a1->spi_ctx = ctx;
 	a1->chain_id = chain_id;
-
-	applog(LOG_INFO,"chain_id:%d", chain_id);
-	switch(chain_id){
-		case 0:a1->num_chips = chain_detect(a1, A1Pll1);break;
-		case 1:a1->num_chips = chain_detect(a1, A1Pll2);break;
-		case 2:a1->num_chips = chain_detect(a1, A1Pll3);break;
-		case 3:a1->num_chips = chain_detect(a1, A1Pll4);break;
-		case 4:a1->num_chips = chain_detect(a1, A1Pll5);break;
-		case 5:a1->num_chips = chain_detect(a1, A1Pll6);break;
-		default:;
-	}
+	
+	a1->num_chips =  chain_detect(a1);
 	usleep(10000);
 	
 	if (a1->num_chips == 0)
@@ -158,20 +168,31 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 		goto failure;
 
 	usleep(200);
+	//configure for vsensor
+	inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
 
 	for (i = 0; i < a1->num_active_chips; i++)
     {
 		check_chip(a1, i);
 
-        /* 温度值 */
+		inno_check_voltage(a1, i+1, &s_reg_ctrl);
         inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp, true);
     }
-    /* 设置初始值 */ 
+    /* ÉèÖÃ³õÊ¼Öµ */ 
     inno_fan_temp_init(&s_fan_ctrl, chain_id);
+
+	//configure for tsensor
+	inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
 
 	applog(LOG_WARNING, "%d: found %d chips with total %d active cores",
 	       a1->chain_id, a1->num_active_chips, a1->num_cores);
-
+	//modify 0922       
+	if(inno_fan_temp_get_highest(&s_fan_ctrl,chain_id) > DANGEROUS_TMP)
+	{
+	 asic_gpio_write(spi[a1->chain_id]->power_en, 0);
+	 early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
+	}
+	
 	mutex_init(&a1->lock);
 	INIT_LIST_HEAD(&a1->active_wq.head);
 
@@ -181,6 +202,205 @@ failure:
 	exit_A1_chain(a1);
 	return NULL;
 }
+
+bool test_bench_init_chain(struct A1_chain *a1)
+{
+	int i;
+	
+	a1->num_chips = chain_detect(a1);
+	usleep(10000);
+	
+	if (a1->num_chips == 0)
+		return false;
+
+	applog(LOG_WARNING, "spidev%d.%d: %d: Found %d A1 chips",
+	       a1->spi_ctx->config.bus, a1->spi_ctx->config.cs_line,
+	       a1->chain_id, a1->num_chips);
+
+	a1->num_active_chips = a1->num_chips;
+
+	a1->num_cores = 0;
+	free(a1->chips);
+	a1->chips = NULL;
+	a1->chips = calloc(a1->num_active_chips, sizeof(struct A1_chip));
+	assert (a1->chips != NULL);
+
+	if (!inno_cmd_bist_fix(a1, ADDR_BROADCAST))
+		return false;
+
+	usleep(200);
+
+	for (i = 0; i < a1->num_active_chips; i++)
+    {
+		check_chip(a1, i);
+    }
+
+	applog(LOG_WARNING, "%d: found %d chips with total %d active cores",
+	       a1->chain_id, a1->num_active_chips, a1->num_cores);	
+}
+
+uint32_t pll_vid_test_bench(uint32_t uiPll, int uiVol)
+{
+	int i;
+	uint32_t uiScore = 0;
+
+	if(opt_voltage > 8){
+		for(i=opt_voltage-1; i>=8; i--){
+			set_vid_value(i);
+			usleep(100000);
+		}
+	}
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		asic_gpio_init(spi[i]->power_en, 0);
+		asic_gpio_init(spi[i]->start_en, 0);
+		asic_gpio_init(spi[i]->reset, 0);
+		//asic_gpio_init(spi[i]->plug, 0);
+		//asic_gpio_init(spi[i]->led, 0);
+	}
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		asic_gpio_write(spi[i]->power_en, 1);
+		asic_gpio_write(spi[i]->start_en, 1);
+		asic_gpio_write(spi[i]->reset, 1);
+		usleep(200000);
+		asic_gpio_write(spi[i]->reset, 0);
+		usleep(200000);
+		asic_gpio_write(spi[i]->reset, 1);	
+	}
+	
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{		
+	    test_bench_pll_config(chain[i], uiPll);
+	}
+	
+	if(uiVol > 8){
+		for(i=9; i<=uiVol; i++){
+			set_vid_value(i);
+			usleep(100000);
+		}
+	}
+			
+	opt_voltage = uiVol;
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		test_bench_init_chain(chain[i]);
+		//usleep(100000);
+	}
+	
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{		
+		uiScore += inno_cmd_test_chip(chain[i]);
+	}
+	return uiScore;
+}
+
+void config_best_pll_vid(uint32_t uiPll, int uiVol)
+{
+	int i;
+
+	if(opt_voltage > 8){
+		for(i=opt_voltage-1; i>=8; i--){
+			set_vid_value(i);
+			usleep(100000);
+		}
+	}
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		asic_gpio_init(spi[i]->power_en, 0);
+		asic_gpio_init(spi[i]->start_en, 0);
+		asic_gpio_init(spi[i]->reset, 0);
+		//asic_gpio_init(spi[i]->plug, 0);
+		//asic_gpio_init(spi[i]->led, 0);
+	}
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		asic_gpio_write(spi[i]->power_en, 1);
+		asic_gpio_write(spi[i]->start_en, 1);
+		asic_gpio_write(spi[i]->reset, 1);
+		usleep(200000);
+		asic_gpio_write(spi[i]->reset, 0);
+		usleep(200000);
+		asic_gpio_write(spi[i]->reset, 1);	
+	}
+	
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{		
+	    test_bench_pll_config(chain[i], uiPll);
+	}
+	
+	if(uiVol > 8){
+		for(i=9; i<=uiVol; i++){
+			set_vid_value(i);
+			usleep(100000);
+		}
+	}
+			
+	opt_voltage = uiVol;
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		test_bench_init_chain(chain[i]);
+	}
+	
+	return;
+}
+
+//add  0928
+int  cfg_tsadc_divider(struct A1_chain *a1,uint32_t pll_clk)
+{
+	uint8_t  cmd_return;
+	uint32_t tsadc_divider_tmp;
+	uint8_t  tsadc_divider;
+	
+	//cmd0d(0x0d00, 0x0250, 0xa006 | (BYPASS_AUXPLL<<6), 0x2800 | tsadc_divider, 0x0300, 0x0000, 0x0000, 0x0000)
+	uint8_t    buffer[64] = {0x02,0x50,0xa0,0x06,0x28,0x00,0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
+	#ifdef MPW
+		tsadc_divider_tmp = (pll_clk/2)*1000/256/650;
+	#else
+		tsadc_divider_tmp = (pll_clk/2)*1000/16/650;
+    #endif
+	tsadc_divider = tsadc_divider_tmp & 0xff;
+
+	buffer[5] = 0x00 | tsadc_divider;
+
+	if(!inno_cmd_write_sec_reg(a1,ADDR_BROADCAST,buffer)){
+		applog(LOG_WARNING, "#####Write t/v sensor Value Failed!\n");
+	}
+	applog(LOG_WARNING, "#####Write t/v sensor Value Success!\n");
+}
+
+static void inno_preinit(struct spi_ctx *ctx, int chain_id)
+{
+	int i;
+	struct A1_chain *a1 = malloc(sizeof(*a1));
+	assert(a1 != NULL);
+
+	applog(LOG_DEBUG, "%d: A1 init chain", chain_id);
+	
+	memset(a1, 0, sizeof(*a1));
+	a1->spi_ctx = ctx;
+	a1->chain_id = chain_id;
+	
+	applog(LOG_INFO,"chain_id:%d", chain_id);
+	switch(chain_id){
+		case 0:prechain_detect(a1, A1Pll1);break;
+		case 1:prechain_detect(a1, A1Pll2);break;
+		case 2:prechain_detect(a1, A1Pll3);break;
+		case 3:prechain_detect(a1, A1Pll4);break;
+		case 4:prechain_detect(a1, A1Pll5);break;
+		case 5:prechain_detect(a1, A1Pll6);break;
+		default:;
+	}
+	//add 0929
+	//cfg_tsadc_divider(a1,PLL_Clk_12Mhz[A1Pll1].speedMHz);
+}
+
 
 static bool detect_A1_chain(void)
 {
@@ -218,8 +438,8 @@ static bool detect_A1_chain(void)
 		//asic_gpio_init(spi[i]->plug, 0);
 		//asic_gpio_init(spi[i]->led, 0);
 
-		update_temp[i] = 0;
 		show_log[i] = 0;
+		update_cnt[i] = 0;
 	}
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
@@ -231,6 +451,11 @@ static bool detect_A1_chain(void)
 		asic_gpio_write(spi[i]->reset, 0);
 		usleep(500000);
 		asic_gpio_write(spi[i]->reset, 1);	
+	}
+
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{		
+	    inno_preinit(spi[i], i);
 	}
 
 	//divide the init to break two part
@@ -247,7 +472,6 @@ static bool detect_A1_chain(void)
 			usleep(200000);
 		}
 	}
-
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
@@ -424,8 +648,8 @@ void A1_detect(bool hotplug)
 		parsed_config_options = &A1_config_options;
 	}
 	applog(LOG_DEBUG, "A1 detect");
-
-    /* 初始化风扇控制 */
+    memset(&s_reg_ctrl,0,sizeof(s_reg_ctrl));
+    
     inno_fan_init(&s_fan_ctrl);
 	set_vid_value(8);
 	
@@ -459,8 +683,10 @@ void A1_detect(bool hotplug)
 	}	
 }
 
-#define TEMP_UPDATE_INT_MS	2000
-static int64_t A1_scanwork(struct thr_info *thr)
+#define TEMP_UPDATE_INT_MS	60000
+#define VOLTAGE_UPDATE_INT  120
+
+static int64_t  A1_scanwork(struct thr_info *thr)
 {
 	int i;
 	int32_t A1Pll = 1000;
@@ -473,24 +699,68 @@ static int64_t A1_scanwork(struct thr_info *thr)
 		return 0;
 	}
 
-	//board_selector->select(a1->chain_id);
-	//applog(LOG_DEBUG, "A1 running scanwork");
-
 	uint32_t nonce;
 	uint8_t chip_id;
 	uint8_t job_id;
 	bool work_updated = false;
+	uint8_t reg[REG_LENGTH];
 
 	mutex_lock(&a1->lock);
-	
 	int cid = a1->chain_id;
+
 	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
 	{
-		update_temp[cid]++;
+		update_cnt[cid]++;
 		show_log[cid]++;
+		//applog(LOG_INFO, "Chenchunxu:TEMP_UPDATE_INT_MS:%d.",update_cnt);
+
+		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
+		{
+			//configure for vsensor
+    		inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
+		}
+		
+		for (i = a1->num_active_chips; i > 0; i--) 
+		{
+			uint8_t c = i;
+			if (!inno_cmd_read_reg(a1, c, reg)) 
+			{
+				continue;
+			}
+            else
+            {
+                /* update temp database */
+                uint32_t temp = 0;
+                float    temp_f = 0.0f;
+
+                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+                inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+				if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
+				{
+					inno_check_voltage(a1, i, &s_reg_ctrl);
+					//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
+				}
+            }     
+		}
+
+		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
+		{
+			//configure for tsensor
+    		inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
+			update_cnt[cid] = 0;
+		}
+		
+		inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
+		
+		
+		//a1->temp = board_selector->get_temp(0);
 		a1->last_temp_time = get_current_ms();
+		if(inno_fan_temp_get_highest(&s_fan_ctrl,a1->chain_id) > DANGEROUS_TMP)
+		{
+	   		asic_gpio_write(spi[a1->chain_id]->power_en, 0);
+	   		early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
+		}
 	}
- 
 
 	/* poll queued results */
 	while (true)
@@ -534,7 +804,6 @@ static int64_t A1_scanwork(struct thr_info *thr)
 		chip->nonces_found++;
 	}
 
-	uint8_t reg[REG_LENGTH];
 	/* check for completed works */
 	if(a1->work_start_delay > 0)
 	{
@@ -543,35 +812,6 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	}
 	else
 	{
-		if(update_temp[cid] > 5)
-		{
-			for (i = a1->num_active_chips; i > 0; i--) 
-			{
-				uint8_t c = i;
-				if (is_chip_disabled(a1, c))
-					continue;
-				if (!inno_cmd_read_reg(a1, c, reg)) 
-				{
-					disable_chip(a1, c);
-					continue;
-				}
-	            else
-	            {
-	                /* update temp database */
-	                uint32_t temp = 0;
-	                float    temp_f = 0.0f;
-					struct A1_chip *chip = &a1->chips[i - 1];
-
-	                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-					chip->temp = temp;
-					
-	                inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-	            }
-			}
-			inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
-		}
-
-
 		if (inno_cmd_read_reg(a1, 25, reg)) 
 		{
 			uint8_t qstate = reg[9] & 0x01;
@@ -675,7 +915,12 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 	int i;
 
 	mutex_lock(&a1->lock);
-
+	/* stop chips hashing current work */
+	//if (!abort_work(a1)) 
+	//{
+	//	applog(LOG_ERR, "%d: failed to abort work in chip chain!", cid);
+	//}
+	/* flush the work chips were currently hashing */
 	for (i = 0; i < a1->num_active_chips; i++) 
 	{
 		int j;
