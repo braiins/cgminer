@@ -45,6 +45,8 @@ static uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 /* FAN CTRL */
 static INNO_FAN_CTRL_T s_fan_ctrl;
 static uint32_t show_log[ASIC_CHAIN_NUM];
+static uint32_t update_temp[ASIC_CHAIN_NUM];
+
 
 /* one global board_selector and spi context is enough */
 //static struct board_selector *board_selector;
@@ -216,6 +218,7 @@ static bool detect_A1_chain(void)
 		//asic_gpio_init(spi[i]->plug, 0);
 		//asic_gpio_init(spi[i]->led, 0);
 
+		update_temp[i] = 0;
 		show_log[i] = 0;
 	}
 
@@ -229,6 +232,22 @@ static bool detect_A1_chain(void)
 		usleep(500000);
 		asic_gpio_write(spi[i]->reset, 1);	
 	}
+
+	//divide the init to break two part
+	if(opt_voltage > 8){
+		for(i=9; i<=opt_voltage; i++){
+			set_vid_value(i);
+			usleep(200000);
+		}
+	}
+			
+	if(opt_voltage < 8){
+		for(i=7; i>=opt_voltage; i--){
+			set_vid_value(i);
+			usleep(200000);
+		}
+	}
+
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
@@ -408,7 +427,7 @@ void A1_detect(bool hotplug)
 
     /* 初始化风扇控制 */
     inno_fan_init(&s_fan_ctrl);
-	set_vid_value(opt_voltage);
+	set_vid_value(8);
 	
 	A1Pll1 = A1_ConfigA1PLLClock(opt_A1Pll1);
 	A1Pll2 = A1_ConfigA1PLLClock(opt_A1Pll2);
@@ -463,13 +482,15 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	bool work_updated = false;
 
 	mutex_lock(&a1->lock);
-
+	
+	int cid = a1->chain_id;
 	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
 	{
-		//a1->temp = board_selector->get_temp(0);
+		update_temp[cid]++;
+		show_log[cid]++;
 		a1->last_temp_time = get_current_ms();
 	}
-	int cid = a1->chain_id; 
+ 
 
 	/* poll queued results */
 	while (true)
@@ -522,63 +543,67 @@ static int64_t A1_scanwork(struct thr_info *thr)
 	}
 	else
 	{
-		for (i = a1->num_active_chips; i > 0; i--) 
+		if(update_temp[cid] > 5)
 		{
-			uint8_t c = i;
-			if (is_chip_disabled(a1, c))
-				continue;
-			if (!inno_cmd_read_reg(a1, c, reg)) 
+			for (i = a1->num_active_chips; i > 0; i--) 
 			{
-				disable_chip(a1, c);
-				continue;
+				uint8_t c = i;
+				if (is_chip_disabled(a1, c))
+					continue;
+				if (!inno_cmd_read_reg(a1, c, reg)) 
+				{
+					disable_chip(a1, c);
+					continue;
+				}
+	            else
+	            {
+	                /* update temp database */
+	                uint32_t temp = 0;
+	                float    temp_f = 0.0f;
+					struct A1_chip *chip = &a1->chips[i - 1];
+
+	                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+					chip->temp = temp;
+					
+	                inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+	            }
 			}
-            else
-            {
-                /* update temp database */
-                uint32_t temp = 0;
-                float    temp_f = 0.0f;
+			inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
+		}
 
-                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-                inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-            }
 
+		if (inno_cmd_read_reg(a1, 25, reg)) 
+		{
 			uint8_t qstate = reg[9] & 0x01;
-			uint8_t qbuff = 0;
-			struct work *work;
-			struct A1_chip *chip = &a1->chips[i - 1];
-			switch(qstate) 
+
+			if (qstate != 0x01)
 			{
-			
-			case 1:
-				//applog(LOG_INFO, "chip %d busy now", i);
-				break;
-				/* fall through */
-			case 0:
 				work_updated = true;
-
-				work = wq_dequeue(&a1->active_wq);
-				if (work == NULL) 
+				for (i = a1->num_active_chips; i > 0; i--) 
 				{
-					applog(LOG_INFO, "%d: chip %d: work underflow", cid, c);
-					break;
-				}
-				if (set_work(a1, c, work, qbuff)) 
-				{
-					chip->nonce_ranges_done++;
-					nonce_ranges_processed++;
-					//applog(LOG_INFO, "set work success %d, nonces processed %d", cid, nonce_ranges_processed);
-				}
-				
-				if(show_log[cid] > 30)					
-				{						
-					applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d", cid, c, chip->nonce_ranges_done, chip->nonces_found, chip->hw_errors, chip->stales);		
-					if(i==1) show_log[cid] = 0;	
-				}
+					uint8_t c=i;
+					struct A1_chip *chip = &a1->chips[i - 1];
+					struct work *work = wq_dequeue(&a1->active_wq);
+					assert(work != NULL);
 
-				break;
+					if (set_work(a1, c, work, 0))
+					{
+						nonce_ranges_processed++;
+						chip->nonce_ranges_done++;
+					}
+
+					if(show_log[cid] > 0)					
+					{						
+						applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d/%d/%5.2f",
+                               cid, c, chip->nonce_ranges_done, chip->nonces_found, 
+                               chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
+						
+						if(i==1) show_log[cid] = 0;	
+					}
+				}
 			}
-		} 
-        inno_fan_speed_update(&s_fan_ctrl, cid);
+		}
+
 	}
 
 	switch(cid){
@@ -593,11 +618,8 @@ static int64_t A1_scanwork(struct thr_info *thr)
 
 	mutex_unlock(&a1->lock);
 
-	//board_selector->release();
-
 	if (nonce_ranges_processed < 0)
 	{
-		//applog(LOG_INFO, "nonce_ranges_processed less than 0");
 		nonce_ranges_processed = 0;
 	}
 
@@ -619,7 +641,6 @@ static int64_t A1_scanwork(struct thr_info *thr)
 		case 5:A1Pll = PLL_Clk_12Mhz[A1Pll6].speedMHz;break;
 		default:;
 	}
-
 
 	return (int64_t)(2011173.18 * A1Pll / 1000 * (a1->num_cores/9.0) * (a1->tvScryptDiff.tv_usec / 1000000.0));
 
@@ -654,12 +675,7 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 	int i;
 
 	mutex_lock(&a1->lock);
-	/* stop chips hashing current work */
-	//if (!abort_work(a1)) 
-	//{
-	//	applog(LOG_ERR, "%d: failed to abort work in chip chain!", cid);
-	//}
-	/* flush the work chips were currently hashing */
+
 	for (i = 0; i < a1->num_active_chips; i++) 
 	{
 		int j;
@@ -669,8 +685,7 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 			struct work *work = chip->work[j];
 			if (work == NULL)
 				continue;
-			//applog(LOG_DEBUG, "%d: flushing chip %d, work %d: 0x%p",
-			//       cid, i, j + 1, work);
+
 			work_completed(cgpu, work);
 			chip->work[j] = NULL;
 		}

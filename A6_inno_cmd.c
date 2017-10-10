@@ -192,7 +192,6 @@ bool spi_poll_result(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uint
 	for(tmp_len = 0; tmp_len < tx_len; tmp_len += 2)
 	{
 		if(!spi_read_data(ctx, spi_rx, 2))
-		//if(!spi_transfer(ctx, spi_tx, spi_rx, 2))
 		{
 			applog(LOG_WARNING, "poll result: transfer fail !");
 			return false;
@@ -210,7 +209,6 @@ bool spi_poll_result(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uint
 				index = index + 2;
 			}while(index < len);
 
-			//hexdump("poll: RX", spi_rx + 2, len);
 			memcpy(buff, spi_rx, len);
 			return true;
 		}
@@ -259,27 +257,25 @@ bool inno_cmd_resetjob(struct A1_chain *pChain, uint8_t chip_id)
 	spi_tx[2] = 0xed;
 	spi_tx[3] = 0xed;
 
-	//tx_len = (2 + len + 1) & ~1;
-	//hexdump("send: TX", spi_tx, tx_len);
-
 	if(!spi_write_data(pChain->spi_ctx, spi_tx, 6))
 	{
 		applog(LOG_WARNING, "send command fail !");
 		return false;
 	}
 
-	memset(spi_rx, 0, sizeof(spi_rx));
 /*
+	memset(spi_rx, 0, sizeof(spi_rx));
 	if(!spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4))
 	{
 		applog(LOG_WARNING, "cmd reset: poll fail !");
 		return false;
 	}
 */
-	spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4);
 
-	if(inno_cmd_isBusy(pChain, chip_id) != WORK_FREE)
-	{	
+	memset(spi_rx, 0, sizeof(spi_rx));
+	if(!spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4))
+	{
+		applog(LOG_WARNING, "cmd reset: poll fail !");
 		return false;
 	}
 
@@ -546,12 +542,10 @@ uint8_t inno_cmd_isBusy(struct A1_chain *pChain, uint8_t chip_id)
 
 	if((buffer[9] & 0x01) == 1)
 	{
-		//applog(LOG_WARNING, "chip %d is busy now", chip_id);
 		return WORK_BUSY;
 	}
 	else
 	{
-		//applog(LOG_WARNING, "chip %d is free now", chip_id);
 		return WORK_FREE;
 	}
 
@@ -568,7 +562,7 @@ bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t *job)
 	memset(spi_tx, 0, sizeof(spi_tx));
 	memcpy(spi_tx, job, JOB_LENGTH);
 
-	if(!spi_write_data(ctx, spi_tx, JOB_LENGTH))
+	if(!spi_write_data(ctx, spi_tx, JOB_LENGTH + 10))
 	{
 		return false;
 	}
@@ -577,10 +571,10 @@ bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t *job)
 
 	//usleep(100000);
 
-	if(inno_cmd_isBusy(pChain, chip_id) != WORK_BUSY)
-	{
-		return false;
-	}
+	//if(inno_cmd_isBusy(pChain, chip_id) != WORK_BUSY)
+	//{
+	//	return false;
+	//}
 
 	return true;
 

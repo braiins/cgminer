@@ -353,6 +353,12 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 		if(a1->num_cores <= LEAST_CORE_ONE_CHAIN && chip->fail_reset < RESET_CHAIN_CNT)
 		{
 			chip->fail_reset++;
+			
+			asic_gpio_write(ctx->power_en, 0);
+			sleep(2);
+			asic_gpio_write(ctx->power_en, 1);
+			sleep(2);
+
 			asic_gpio_write(ctx->reset, 0);
 			usleep(500000);
 			asic_gpio_write(ctx->reset, 1);	

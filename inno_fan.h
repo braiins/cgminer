@@ -44,7 +44,10 @@ void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool w
 /* 清空芯片温度,为下轮循环准备 */
 void inno_fan_temp_clear(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 /* 根据温度更新转速 */
-void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
+void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_info *cgpu);
+
+float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp);
+
 
 #if 0
 float inno_fan_temp_get(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
