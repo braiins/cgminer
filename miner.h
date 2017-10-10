@@ -17,7 +17,7 @@
 #include "util.h"
 #include <sys/types.h>
 
-#define CHIP_A6
+//#define CHIP_A6
 
 #ifndef WIN32
 # include <sys/socket.h>
@@ -1386,7 +1386,7 @@ struct pool {
 struct work {
 	unsigned char	data[128];
 	unsigned char	midstate[32];
-#ifndef A6_CHIP	
+#ifndef CHIP_A6	
 	unsigned char	midstate1[32];
 	unsigned char	midstate2[32];
 	unsigned char	midstate3[32];

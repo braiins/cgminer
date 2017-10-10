@@ -17,6 +17,7 @@
 #define IOCTL_SET_FREQ_1 _IOR(MAGIC_NUM, 2, char *)
 #define IOCTL_SET_DUTY_1 _IOR(MAGIC_NUM, 3, char *)
 
+#ifdef CHIP_A6
 static const int sc_inno_fan_temp_table[] = {
     /* val temp_f */
     652, //-40, 
@@ -54,6 +55,78 @@ static const int sc_inno_fan_temp_table[] = {
     415, //120, 
     408, //125, 
 };
+#else
+static const int inno_tsadc_table[] = {
+    /* val temp_f */
+    647, //-40, 
+    640, //-35, 
+    632, //-30, 
+    625, //-25, 
+    617, //-20, 
+    610, //-15, 
+    602, //-10, 
+    595, // -5, 
+    588, //  0, 
+    580, //  5, 
+    572, // 10, 
+    565, // 15, 
+    557, // 20, 
+    550, // 25, 
+    542, // 30, 
+    535, // 35, 
+    527, // 40, 
+    520, // 45, 
+    512, // 50, 
+    505, // 55, 
+    497, // 60, 
+    489, // 65, 
+    482, // 70, 
+    474, // 75, 
+    467, // 80, 
+    459, // 85, 
+    452, // 90, 
+    444, // 95, 
+    437, //100, 
+    429, //105, 
+    421, //110, 
+    414, //115, 
+    406, //120, 
+    399 //125, 
+};
+
+static const float inno_vsadc_table[] = {
+	0.430095238,
+	0.42747619,
+	0.424904762,
+	0.422285714,
+	0.419666667,
+	0.417047619,
+	0.414428571,
+	0.411809524,
+	0.409238095,
+	0.406619048,
+	0.404,
+	0.401380952,
+	0.398761905,
+	0.396190476,
+	0.393571429,
+	0.391,
+	0.388380952,
+	0.385761905,
+	0.383142857,
+	0.38052381,
+	0.378,
+	0.375428571,
+	0.372904762,
+	0.370238095,
+	0.367714286,
+	0.365142857,
+	0.362666667,
+	0.36 
+};
+#endif
+
+
 
 static int inno_fan_temp_compare(const void *a, const void *b);
 static void inno_fan_speed_max(INNO_FAN_CTRL_T *fan_ctrl);
@@ -98,10 +171,9 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
         inno_fan_temp_clear(fan_ctrl, chain_id);
     }
 
-    /* 温度表对应的值 */
-    fan_ctrl->temp_nums = sizeof(sc_inno_fan_temp_table) / sizeof(sc_inno_fan_temp_table[0]);
-    fan_ctrl->temp_v_min = sc_inno_fan_temp_table[fan_ctrl->temp_nums - 1];
-    fan_ctrl->temp_v_max = sc_inno_fan_temp_table[0];
+    fan_ctrl->temp_nums = sizeof(inno_tsadc_table) / sizeof(inno_tsadc_table[0]);
+    fan_ctrl->temp_v_min = inno_tsadc_table[fan_ctrl->temp_nums - 1];
+    fan_ctrl->temp_v_max = inno_tsadc_table[0];
     fan_ctrl->temp_f_step = 5.0f;
     fan_ctrl->temp_f_min = -40.0f;
     fan_ctrl->temp_f_max = fan_ctrl->temp_f_min + fan_ctrl->temp_f_step * (fan_ctrl->temp_nums - 1);
@@ -208,7 +280,7 @@ static int inno_fan_temp_get_arvarge(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
     return (int)arvarge_temp;
 }
 
-static int inno_fan_temp_get_highest(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
+int inno_fan_temp_get_highest(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
 {
     return fan_ctrl->temp[chain_id][0];
 }
@@ -486,7 +558,7 @@ float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp)
     i_max = fan_ctrl->temp_nums;
     for(i = 1; i < i_max - 1; i++)
     {
-        if(temp > sc_inno_fan_temp_table[i])
+        if(temp > inno_tsadc_table[i])
         {
             break;
         }
@@ -504,8 +576,8 @@ float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp)
      * */
     temp_f_end = temp_f_min + i * temp_f_step;
     temp_f_start = temp_f_end - temp_f_step;
-    temp_v_start = sc_inno_fan_temp_table[i - 1];
-    temp_v_end = sc_inno_fan_temp_table[i]; 
+    temp_v_start = inno_tsadc_table[i - 1];
+    temp_v_end = inno_tsadc_table[i]; 
 
     temp_f = temp_f_start + temp_f_step * (temp - temp_v_start) / (temp_v_end - temp_v_start);
 

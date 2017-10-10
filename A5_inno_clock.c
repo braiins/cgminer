@@ -183,8 +183,8 @@ int A1_ConfigA1PLLClock(int optPll)
 			}
 		}
 
-		applog(LOG_NOTICE, "A1 = %d,%d",optPll,A1Pll);
-		applog(LOG_NOTICE, "A1 PLL Clock = %dMHz",PLL_Clk_12Mhz[A1Pll].speedMHz);
+		//applog(LOG_NOTICE, "A1 = %d,%d",optPll,A1Pll);
+		//applog(LOG_NOTICE, "A1 PLL Clock = %dMHz",PLL_Clk_12Mhz[A1Pll].speedMHz);
 	}
 
 	return A1Pll;

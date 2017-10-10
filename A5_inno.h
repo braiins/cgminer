@@ -1,7 +1,7 @@
 #ifndef _A5_INNO_
 #define _A5_INNO_
 
-#define ASIC_CHAIN_NUM                  2
+#define ASIC_CHAIN_NUM                  3
 #define ASIC_CHIP_NUM                   63
 
 #define ASIC_CHIP_A_BUCKET              (ASIC_CHAIN_NUM * ASIC_CHIP_NUM)
@@ -32,8 +32,19 @@
 
 #include "A5_inno_cmd.h"
 
+typedef struct{
+   float highest_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */;
+   float lowest_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */;
+   float avarge_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */; 
+   int stat_cnt[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];
+}inno_reg_ctrl_t;
+
+bool inno_check_voltage(struct A1_chain *a1, int chip_id, inno_reg_ctrl_t *s_reg_ctrl);
+void inno_configure_tvsensor(struct A1_chain *a1, int chip_id,bool is_tsensor);
+
 bool check_chip(struct A1_chain *a1, int i);
-int chain_detect(struct A1_chain *a1, int idxpll);
+void prechain_detect(struct A1_chain *a1, int idxpll);
+int chain_detect(struct A1_chain *a1);
 bool abort_work(struct A1_chain *a1);
 
 int get_current_ms(void);
@@ -43,6 +54,8 @@ void disable_chip(struct A1_chain *a1, uint8_t chip_id);
 bool get_nonce(struct A1_chain *a1, uint8_t *nonce, uint8_t *chip_id, uint8_t *job_id, uint8_t *micro_job_id);
 bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t queue_states);
 void check_disabled_chips(struct A1_chain *a1, int pllnum);
+uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work);
+void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll);
 
 #endif
 

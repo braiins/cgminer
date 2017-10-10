@@ -16,9 +16,82 @@
 #include "A5_inno_gpio.h"
 
 
+#define MUL_COEF 1.248
+static const int inno_tsadc_table[34] = {
+    /* val temp_f */
+    647, //-40, 
+    640, //-35, 
+    632, //-30, 
+    625, //-25, 
+    617, //-20, 
+    610, //-15, 
+    602, //-10, 
+    595, // -5, 
+    588, //  0, 
+    580, //  5, 
+    572, // 10, 
+    565, // 15, 
+    557, // 20, 
+    550, // 25, 
+    542, // 30, 
+    535, // 35, 
+    527, // 40, 
+    520, // 45, 
+    512, // 50, 
+    505, // 55, 
+    497, // 60, 
+    489, // 65, 
+    482, // 70, 
+    474, // 75, 
+    467, // 80, 
+    459, // 85, 
+    452, // 90, 
+    444, // 95, 
+    437, //100, 
+    429, //105, 
+    421, //110, 
+    414, //115, 
+    406, //120, 
+    399 //125, 
+};
+
+static const float inno_vsadc_table[32] = {
+	0.44047619,
+	0.437809524,
+	0.435285714,
+	0.432666667,
+	0.430095238,
+	0.42747619,
+	0.424904762,
+	0.422285714,
+	0.419666667,
+	0.417047619,
+	0.414428571,
+	0.411809524,
+	0.409238095,
+	0.406619048,
+	0.404,
+	0.401380952,
+	0.398761905,
+	0.396190476,
+	0.393571429,
+	0.391,
+	0.388380952,
+	0.385761905,
+	0.383142857,
+	0.38052381,
+	0.378,
+	0.375428571,
+	0.372904762,
+	0.370238095,
+	0.367714286,
+	0.365142857,
+	0.362666667,
+	0.36 
+};
 int opt_diff=15;
 
-static const uint32_t difficult_Tbl[21] = {
+static const uint32_t difficult_Tbl[22] = {
 	0x1d00ffff,// 1
 	0x1d007fff,// 2
 	0x1d005fff,// 3
@@ -39,7 +112,8 @@ static const uint32_t difficult_Tbl[21] = {
 	0x1b1fffff,// 2048
 	0x1b0fffff,// 4096
 	0x1b07ffff,// 8192
-	0x1b03ffff,// 16834
+	0x1b03ffff,// 16384
+	0x1b01ffff,// 32768
 };
 
 static const uint8_t default_reg[142][12] = 
@@ -188,6 +262,12 @@ static const uint8_t default_reg[142][12] =
     {0x02, 0x85, 0x40, 0x02, 0x00, 0x00, 0x80, 0xa0, 0x00, 0x20, 0xff, 0xff}   //1596 MHz
 };
 
+extern uint8_t A1Pll1;
+extern uint8_t A1Pll2;
+extern uint8_t A1Pll3;
+extern uint8_t A1Pll4;
+extern uint8_t A1Pll5;
+extern uint8_t A1Pll6;
 
 static void rev(unsigned char *s, size_t l)
 {
@@ -201,7 +281,7 @@ static void rev(unsigned char *s, size_t l)
 	}
 }
 
-static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
+uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 {
 	double sdiff = work->sdiff;
 	uint8_t tmp_buf[JOB_LENGTH];
@@ -265,8 +345,10 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 	p1[2] = bswap_32(p2[2]);
 
 	uint8_t diff[4] = {0x1e, 0x03, 0xff, 0xff};
-
-	if(sdiff>16833)
+	
+	if(sdiff>32767)
+		memcpy(diff, &(difficult_Tbl[21]), 4);
+	else if(sdiff>16383)
 		memcpy(diff, &(difficult_Tbl[20]), 4);
 	else if(sdiff>8191)
 		memcpy(diff, &(difficult_Tbl[19]), 4);
@@ -302,7 +384,7 @@ static uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
     job[158] = (uint8_t)((crc >> 8) & 0xff);
     job[159] = (uint8_t)((crc >> 0) & 0xff);
 
-	//printf("[create job] \r\n");
+	//printf("[create job] %d \r\n", sdiff);
 	//hexdump("job:", job, JOB_LENGTH);
 
 	return job;
@@ -368,6 +450,7 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 			continue;
 
 		//if the core in chain least than 630, reinit this chain 
+		/*
 		if(a1->num_cores <= LEAST_CORE_ONE_CHAIN && chip->fail_reset < RESET_CHAIN_CNT)
 		{
 			chip->fail_reset++;
@@ -384,6 +467,7 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 				check_chip(a1, i);
 			}
 		}
+		*/
 		
 		if (!inno_cmd_read_reg(a1, chip_id, reg)) 
 		{
@@ -507,17 +591,17 @@ bool check_chip(struct A1_chain *a1, int i)
 	}
 	else
 	{
-		hexdump("check chip:", buffer, REG_LENGTH);
+		//hexdump("check chip:", buffer, REG_LENGTH);
 	}
 
 	a1->chips[i].num_cores = buffer[11];
 	a1->num_cores += a1->chips[i].num_cores;
-	applog(LOG_WARNING, "%d: Found chip %d with %d active cores",
-	       cid, chip_id, a1->chips[i].num_cores);
+	//applog(LOG_WARNING, "%d: Found chip %d with %d active cores",
+	 //      cid, chip_id, a1->chips[i].num_cores);
 
 	//keep ASIC register value
 	memcpy(a1->chips[i].reg, buffer, 12);
-	a1->chips[i].temp= (buffer[8]<<8)|buffer[9];
+	a1->chips[i].temp= 0x000003ff & ((buffer[7] << 8) | buffer[8]);
 
 	if (a1->chips[i].num_cores < BROKEN_CHIP_THRESHOLD) 
 	{
@@ -551,11 +635,7 @@ bool check_chip(struct A1_chain *a1, int i)
 	return true;
 }
 
-/*
- * BIST_START works only once after HW reset, on subsequent calls it
- * returns 0 as number of chips.
- */
-int chain_detect(struct A1_chain *a1, int idxpll)
+void prechain_detect(struct A1_chain *a1, int idxpll)
 {
 	uint8_t buffer[64];
 	int cid = a1->chain_id;
@@ -588,13 +668,27 @@ int chain_detect(struct A1_chain *a1, int idxpll)
 		if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
 		{
 			applog(LOG_WARNING, "set default PLL fail");
-			return -1;
+			return;
 		}
-		applog(LOG_WARNING, "set default %d PLL success", i);
+		//applog(LOG_WARNING, "set default %d PLL success", i);
 
-		usleep(100000);
+		usleep(120000);
 	}
-	
+
+}
+
+
+/*
+ * BIST_START works only once after HW reset, on subsequent calls it
+ * returns 0 as number of chips.
+ */
+int chain_detect(struct A1_chain *a1)
+{	
+	uint8_t buffer[64];
+	int cid = a1->chain_id;
+	uint8_t temp_reg[REG_LENGTH];
+	int i;
+
 	set_spi_speed(6500000);
 	usleep(1000);
 
@@ -622,5 +716,283 @@ int chain_detect(struct A1_chain *a1, int idxpll)
 
 }
 
+void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll)
+{
+	uint8_t buffer[64];
+	int cid = a1->chain_id;
+	uint8_t temp_reg[REG_LENGTH];
+	int i;
+	uint8_t uiCfgA1Pll;
+	uint8_t uiOldA1Pll;
 
+	//add for A6
+	asic_spi_init();
+	
+	set_spi_speed(1500000);
+	
+	inno_cmd_reset(a1, ADDR_BROADCAST);
+	
+	usleep(1000);
+	
+	//printf("test_bench_pll_config uiPll:%d. \n",uiPll);	
+	uiCfgA1Pll = A1_ConfigA1PLLClock(uiPll);
+	//printf("test_bench_pll_config uiCfgA1Pll:%d. \n",uiCfgA1Pll);	
+/*	
+	switch(a1->chain_id){
+		case 0:uiOldA1Pll = A1Pll1;break;
+		case 1:uiOldA1Pll = A1Pll2;break;
+		case 2:uiOldA1Pll = A1Pll3;break;
+		case 3:uiOldA1Pll = A1Pll4;break;
+		case 4:uiOldA1Pll = A1Pll5;break;
+		case 5:uiOldA1Pll = A1Pll6;break;
+		default:;
+	}
+
+	printf("uiOldA1Pll:%d,uiCfgA1Pll:%d. \n",uiOldA1Pll, uiCfgA1Pll);
+	if(uiCfgA1Pll > uiOldA1Pll)
+	{
+		for(i = uiOldA1Pll+1; i < uiCfgA1Pll+1; i++)
+		{
+			memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
+			if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
+			{
+				applog(LOG_WARNING, "set default PLL fail");
+				return;
+			}
+			applog(LOG_WARNING, "set default %d PLL success", i);
+
+			usleep(200000);
+		}
+	}
+		
+	if(uiCfgA1Pll < uiOldA1Pll)
+	{
+		for(i = uiOldA1Pll-1; i > uiCfgA1Pll-1; i--)
+		{
+			memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
+			if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
+			{
+				applog(LOG_WARNING, "set default PLL fail");
+				return;
+			}
+			applog(LOG_WARNING, "set default %d PLL success", i);
+
+			usleep(200000);
+		}
+	}
+*/
+
+	for(i=0; i<uiCfgA1Pll+1; i++)
+	{
+		memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
+		if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
+		{
+			applog(LOG_WARNING, "set default PLL fail");
+			return;
+		}
+		//applog(LOG_WARNING, "set default %d PLL success", i);
+
+		usleep(120000);
+	}
+
+	switch(a1->chain_id){
+		case 0:A1Pll1 = uiCfgA1Pll;break;
+		case 1:A1Pll2 = uiCfgA1Pll;break;
+		case 2:A1Pll3 = uiCfgA1Pll;break;
+		case 3:A1Pll4 = uiCfgA1Pll;break;
+		case 4:A1Pll5 = uiCfgA1Pll;break;
+		case 5:A1Pll6 = uiCfgA1Pll;break;
+		default:;
+	}
+}
+
+void inno_configure_tvsensor(struct A1_chain *a1, int chip_id,bool is_tsensor)
+{
+ int i;
+ unsigned char *tmp_reg = malloc(128);
+ unsigned char *src_reg = malloc(128);
+ unsigned char *reg = malloc(128);
+ inno_cmd_read_reg(a1, 0x01, reg);
+ 
+ //chip_id = 0;
+
+  memset(tmp_reg, 0, sizeof(tmp_reg));
+  memcpy(src_reg,reg,REG_LENGTH-2);
+  inno_cmd_write_reg(a1,chip_id,src_reg);
+  usleep(200);
+
+ if(is_tsensor)//configure for tsensor
+ {
+  //Step1: wait for clock stable
+  //Step2: low the tsdac rst_n and release rst_n after 4 SysClk
+   //hexdump("write reg", reg, REG_LENGTH);
+
+#if DEBUG   
+   printf("Write Reg:");
+   for(i=0; i<20;i++)
+    printf("%x, ",reg[i]);
+
+    printf("\n\n");
+#endif
+
+   reg[7] = (src_reg[7]&0x7f);
+   memcpy(tmp_reg,reg,REG_LENGTH-2);
+   //hexdump("write reg", tmp_reg, REG_LENGTH);
+   inno_cmd_write_reg(a1,chip_id,tmp_reg);
+   usleep(200);
+   reg[7] = (src_reg[7]|0x80);
+   memcpy(tmp_reg,reg,REG_LENGTH-2);
+   inno_cmd_write_reg(a1,chip_id,tmp_reg);
+   usleep(200);
+   
+ #if DEBUG
+   printf("Write Reg:");
+	  
+	  for(i=0; i<20;i++)
+	   printf("%x, ",reg[i]);
+
+    printf("\n\n");
+#endif
+    //Step3: Config tsadc_clk(default match)
+    //Step4: low tsadc_tsen_pd
+    //Step5: high tsadc_ana_reg_2
+
+    reg[6] = (src_reg[6]|0x04);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+    inno_cmd_write_reg(a1,chip_id,tmp_reg);
+    usleep(200);
+
+	//Step6: high tsadc_en
+    reg[7] = (src_reg[7]|0x20);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+    inno_cmd_write_reg(a1,chip_id,tmp_reg);
+    usleep(200);
+
+    //Step7: tsadc_ana_reg_9 = 0;tsadc_ana_reg_8  = 0
+	reg[5] = (src_reg[5]&0xfc);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+	inno_cmd_write_reg(a1,chip_id,tmp_reg);
+	usleep(200);
+	
+	//Step8: tsadc_ana_reg_7 = 1;tsadc_ana_reg_1 = 0
+	reg[6] = (src_reg[6]&0x7d);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+	inno_cmd_write_reg(a1,chip_id,tmp_reg);
+	usleep(200);
+  }else{//configure for vsensor
+	 //Step1: wait for clock stable
+  //Step2: low the tsdac rst_n and release rst_n after 4 SysClk
+   //hexdump("write reg", reg, REG_LENGTH);
+   
+#if DEBUG
+   printf("Write Reg:");
+   
+   for(i=0; i<20;i++)
+    printf("%x, ",reg[i]);
+
+    printf("\n\n");
+#endif
+
+   reg[7] = (src_reg[7]&0x7f);
+   memcpy(tmp_reg,reg,REG_LENGTH-2);
+   //hexdump("write reg", tmp_reg, REG_LENGTH);
+   inno_cmd_write_reg(a1,chip_id,tmp_reg);
+   usleep(200);
+   reg[7] = (src_reg[7]|0x80);
+   memcpy(tmp_reg,reg,REG_LENGTH-2);
+   inno_cmd_write_reg(a1,chip_id,tmp_reg);
+   usleep(200);
+#if DEBUG
+   printf("Write Reg:");
+	  
+	  for(i=0; i<20;i++)
+	   printf("%x, ",reg[i]);
+
+    printf("\n\n");
+#endif
+    //Step3: Config tsadc_clk(default match)
+    //Step4: low tsadc_tsen_pd
+    //Step5: high tsadc_ana_reg_2
+
+    reg[6] = (src_reg[6]|0x04);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+    inno_cmd_write_reg(a1,chip_id,tmp_reg);
+    usleep(200);
+
+	//Step6: high tsadc_en
+    reg[7] = (src_reg[7]|0x20);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+    inno_cmd_write_reg(a1,chip_id,tmp_reg);
+    usleep(200);
+
+    //Step7: tsadc_ana_reg_9 = 0;tsadc_ana_reg_8  = 0
+	reg[5] = ((src_reg[5]|0x01)&0xfd);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+	inno_cmd_write_reg(a1,chip_id,tmp_reg);
+	usleep(200);
+	
+	//Step8: tsadc_ana_reg_7 = 1;tsadc_ana_reg_1 = 0
+	reg[6] = ((src_reg[6]|0x02)&0x7f);
+	memcpy(tmp_reg,reg,REG_LENGTH-2);
+	inno_cmd_write_reg(a1,chip_id,tmp_reg);
+	usleep(200);
+
+  }
+	free(tmp_reg);
+	free(src_reg);
+}
+
+
+
+bool inno_check_voltage(struct A1_chain *a1, int chip_id, inno_reg_ctrl_t *s_reg_ctrl)
+{
+  
+    uint8_t reg[128];
+    memset(reg, 0, 128);
+  
+	if (!inno_cmd_read_reg(a1, chip_id, reg)) {
+		applog(LOG_NOTICE, "%d: Failed to read register for ""chip %d -> disabling", a1->chain_id, chip_id);
+		a1->chips[chip_id].num_cores = 0;
+		a1->chips[chip_id].disabled = 1;
+		return false;
+	}else{
+		//hexdump("check chip:", reg, REG_LENGTH);
+	
+		usleep(2000);
+		//printf("after set tvsensor\n");
+			/* update temp database */
+			uint32_t rd_v = 0;
+			rd_v = 0x000003ff & ((reg[7] << 8) | reg[8]);
+			float tmp_v = (float)(rd_v * MUL_COEF)/1024;
+			//printf("[Read VOL %s:%d]rd_v = %d, tmp_v = %f\n",__FUNCTION__,__LINE__,rd_v,tmp_v);
+			
+			s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1]++;
+			
+           if(s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1] == 1)
+           {
+             s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1] = tmp_v;
+             s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1] = tmp_v;
+             s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1] = tmp_v;
+           }else{
+	         if(s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1] < tmp_v){
+	        	s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1] = tmp_v;
+	           }
+            if(s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1] > tmp_v){
+	        	s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1] = tmp_v;
+	           }
+	    	s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1] = (s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1] * (s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1] - 1) + tmp_v)/s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1];
+	       }
+       
+			printf("read tmp %f/%d form chain %d,chip %d h:%f,l:%f,av:%f,cnt:%d\n",tmp_v,rd_v,a1->chain_id, chip_id,s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1],s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1],s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1],s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1]);
+		
+			//if read valtage higher than standard 8% or less than 8%,we think the chain has some problem
+			if((tmp_v > (1.08 * inno_vsadc_table[opt_voltage])) || (tmp_v < (0.92 * inno_vsadc_table[opt_voltage]))){ 
+				applog(LOG_ERR,"Notice chain %d maybe has some promble in voltage\n",a1->chain_id);
+				//asic_gpio_write(a1->spi_ctx->power_en, 0);
+				//asic_gpio_write(GPIO_RED, 1);
+	 			//early_quit(1,"Notice chain %d maybe has some promble in voltage\n",a1->chain_id);
+
+			}			
+   }
+}
 

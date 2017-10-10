@@ -356,6 +356,52 @@ bool inno_cmd_bist_fix(struct A1_chain *pChain, uint8_t chip_id)
 	return true;
 }
 
+//add  0929
+bool inno_cmd_write_sec_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
+{
+		int tx_len;
+		uint8_t spi_tx[MAX_CMD_LENGTH];
+		uint8_t spi_rx[MAX_CMD_LENGTH];
+		uint8_t tmp_buf[MAX_CMD_LENGTH];
+		uint16_t clc_crc;
+		uint8_t j;
+		
+		printf("send command [write_reg] \n");
+		assert(reg != NULL);
+	
+		memset(spi_tx, 0, sizeof(spi_tx));
+		
+		spi_tx[0] = CMD_READ_SEC_REG;
+		spi_tx[1] = chip_id;
+		memcpy(spi_tx+2, reg, REG_LENGTH-2);
+	
+		memset(tmp_buf, 0, sizeof(tmp_buf));
+		for(j = 0; j < REG_LENGTH; j = j + 2)
+		{
+			tmp_buf[j + 0] = spi_tx[j + 1];
+			tmp_buf[j + 1] = spi_tx[j + 0]; 	
+		}
+		clc_crc = CRC16_2(tmp_buf, REG_LENGTH);
+	
+		spi_tx[REG_LENGTH+0] = (uint8_t)(clc_crc >> 8);
+		spi_tx[REG_LENGTH+1] = (uint8_t)(clc_crc);
+	
+		//hexdump("write reg", spi_tx, REG_LENGTH+2);
+		if(!spi_write_data(pChain->spi_ctx, spi_tx, 16))
+		{
+			applog(LOG_WARNING, "send command fail !");
+			return false;
+		}
+	
+		memset(spi_rx, 0, sizeof(spi_rx));
+		if(!spi_poll_result(pChain, CMD_WRITE_REG, chip_id, spi_rx, REG_LENGTH))
+		{
+			applog(LOG_WARNING, "cmd write reg: poll fail !");
+			return false;
+		}
+	
+		return true;
+}
 
 bool inno_cmd_write_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 {
@@ -366,7 +412,7 @@ bool inno_cmd_write_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 	uint16_t clc_crc;
 	uint8_t j;
 	
-	printf("send command [write_reg] \n");
+	//printf("send command [write_reg] \n");
 	assert(reg != NULL);
 
 	memset(spi_tx, 0, sizeof(spi_tx));
@@ -386,7 +432,7 @@ bool inno_cmd_write_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 	spi_tx[REG_LENGTH+0] = (uint8_t)(clc_crc >> 8);
 	spi_tx[REG_LENGTH+1] = (uint8_t)(clc_crc);
 
-	hexdump("write reg", spi_tx, REG_LENGTH+2);
+	//hexdump("write reg", spi_tx, REG_LENGTH+2);
 	if(!spi_write_data(pChain->spi_ctx, spi_tx, 16))
 	{
 		applog(LOG_WARNING, "send command fail !");
@@ -584,4 +630,168 @@ bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t *job)
 
 }
 
+uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
+{
+	int i, j, k;
+	struct work work1;
+	struct work work2;
+	uint32_t nonce;
+	uint8_t chip_id;
+	uint8_t job_id;
+	uint16_t micro_job_id;
+	uint8_t c;
+	int bad_chip_num = 0;
+	uint32_t uiScore = 0;
+	uint32_t rightNonce = 0xd5067d1f;
+	uint32_t rightNonce2 = 0xce1f5e74;
+	uint32_t chip_valid[ASIC_CHIP_NUM] = {0};
+	uint8_t tmp_buf[JOB_LENGTH];
+	uint16_t crc;
+	
+	uint8_t job1[JOB_LENGTH] = {
+		0x0C, 0x00, 0xF3, 0x4E, 0xFE, 0x37, 0x2A, 0x22, 
+		0x6F, 0xE3, 0xE7, 0xB5, 0x55, 0xAD, 0x80, 0x35, 
+		0xDD, 0x33, 0x54, 0x9C, 0xB4, 0x15, 0x04, 0xC9, 
+		0x62, 0xD3, 0x22, 0xFD, 0x9A, 0x5D, 0x85, 0x7F,                     
+		0xBD, 0x8D, 0x98, 0xEC, 0x90, 0xE3, 0x5A, 0xCD, 
+		0x37, 0x04, 0xA7, 0xE0, 0xE2, 0xFD, 0x94, 0xA3, 
+		0xE1, 0xB8, 0x0E, 0x98, 0x8B, 0xA1, 0x70, 0xB7, 
+		0x6B, 0xC2, 0xEE, 0x99, 0x22, 0xC6, 0xC6, 0x18,                     
+		0x13, 0x78, 0xED, 0x82, 0xEF, 0x83, 0xE2, 0x87, 
+		0xF2, 0xB0, 0x66, 0xC6, 0x1D, 0x63, 0x98, 0x66, 
+		0x15, 0x31, 0x1E, 0x8F, 0xB9, 0xEF, 0xD2, 0xDC, 
+		0xD0, 0x60, 0xD2, 0x48, 0x4C, 0xD5, 0x0A, 0x90,                     
+		0xAE, 0xD3, 0xEC, 0xA5, 0x90, 0xE3, 0x10, 0xC2, 
+		0x6A, 0x22, 0x45, 0x7C, 0x5B, 0xA8, 0x34, 0x6C, 
+		0x9E, 0xDB, 0xA9, 0x60, 0x82, 0xD9, 0x42, 0xD7, 
+		0xB6, 0x28, 0x63, 0x3F, 0x2D, 0x61, 0x08, 0x9A,                     
+		0x3A, 0xBA, 0x66, 0x7C, 0x46, 0x56, 0x9A, 0x1A, 
+		0xC2, 0x59, 0x18, 0xFF, 0x00, 0x18, 0x00, 0x00, 
+		0x00, 0x00, 0xFF, 0xFF, 0x3F, 0x1B, 0xFF, 0xFF, 
+		0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x89, 0x39,                     
+		0x00, 0x00, 
+	};
+
+	uint8_t job2[JOB_LENGTH] = {
+		0x0C, 0x00, 0x6A, 0x63, 0x80, 0xFD, 0x1C, 0x33,
+		0x48, 0xF8, 0x2C, 0xF2, 0x68, 0x0B, 0x07, 0x16, 
+		0x3B, 0xF8, 0x18, 0x48, 0xF3, 0x8B, 0x9B, 0x6F, 
+		0xDD, 0x93, 0x41, 0xBC, 0xA4, 0x99, 0x4D, 0x69,                     
+		0xD3, 0xBF, 0x4F, 0x41, 0xAB, 0x6C, 0x0A, 0x36, 
+		0x9A, 0x31, 0xEA, 0xCC, 0x33, 0x1B, 0x39, 0xFE, 
+		0xAD, 0xA8, 0x4C, 0x20, 0x44, 0x1D, 0x26, 0xB3, 
+		0x95, 0x79, 0xDA, 0xF2, 0x76, 0xBB, 0xA7, 0x6B,                     
+		0x4E, 0x7A, 0x93, 0x07, 0xD1, 0x5B, 0x78, 0xA5, 
+		0x1A, 0xA6, 0xB2, 0x34, 0xD4, 0xF5, 0x16, 0x4C, 
+		0xCF, 0x81, 0xAA, 0xF4, 0x03, 0xD9, 0xC8, 0xBD, 
+		0x33, 0x5A, 0x91, 0xB9, 0xA1, 0x26, 0x58, 0xFA,                     
+		0xC4, 0x86, 0xF3, 0x89, 0x34, 0x8E, 0x7C, 0xA1, 
+		0xFD, 0x7C, 0x7C, 0xD2, 0x14, 0xB2, 0xE4, 0x0C, 
+		0xF1, 0x42, 0xBB, 0xF3, 0x78, 0xEA, 0x9C, 0x84, 
+		0x07, 0xDF, 0xDB, 0x77, 0x91, 0x23, 0x6F, 0x2F,                     
+		0x90, 0xA1, 0x43, 0x2A, 0xB7, 0x17, 0x96, 0xBC, 
+		0xC9, 0x59, 0x18, 0xFF, 0x00, 0x18, 0x00, 0x00, 
+		0x00, 0x00, 0xFF, 0xFF, 0x1F, 0x1B, 0xFF, 0xFF, 
+		0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xF7, 0x7D, 
+		0x00, 0x00, 
+	};
+	applog(LOG_INFO, "ChipNum:%d. \n", pChain->num_active_chips);
+	for (k = 0; k < 3; k++){
+		for (i = pChain->num_active_chips; i > 0; i--) 
+		{
+			c = i;
+			job1[1] = i;
+			memset(tmp_buf, 0, sizeof(tmp_buf));
+    		for(j = 0; j < 79; j++)
+    		{
+        		tmp_buf[(2 * j) + 1] = job1[(2 * j) + 0];
+        		tmp_buf[(2 * j) + 0] = job1[(2 * j) + 1];
+    		}
+    		crc = CRC16_2(tmp_buf, 158);
+    		job1[158] = (uint8_t)((crc >> 8) & 0xff);
+    		job1[159] = (uint8_t)((crc >> 0) & 0xff);
+			
+			if (!inno_cmd_write_job(pChain, c, job1)) 
+			{
+				applog(LOG_ERR, "failed to write job for chip %d. \n", c);
+			} 			
+		}
+
+		usleep(300000);
+		while (true) 
+		{
+			nonce = 0;
+			chip_id = 0;
+			job_id = 0;
+			micro_job_id = 0;
+			usleep(10000);
+			if (!get_nonce(pChain, (uint8_t*)&nonce, &chip_id, &job_id, (uint8_t*)&micro_job_id))
+				break;
+			nonce = bswap_32(nonce);
+			if(nonce == rightNonce){
+				++chip_valid[chip_id - 1];
+				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x. \n", c, nonce);
+			}else{
+				applog(LOG_ERR, "bad nonce error, chip_id:%d, nonce:0x%x. \n", chip_id, nonce);
+			}
+		}
+		
+		for (i = pChain->num_active_chips; i > 0; i--) 
+		{
+			c = i;
+			job2[1] = c;
+			memset(tmp_buf, 0, sizeof(tmp_buf));
+    		for(j = 0; j < 79; j++)
+    		{
+        		tmp_buf[(2 * j) + 1] = job2[(2 * j) + 0];
+        		tmp_buf[(2 * j) + 0] = job2[(2 * j) + 1];
+    		}
+    		crc = CRC16_2(tmp_buf, 158);
+    		job2[158] = (uint8_t)((crc >> 8) & 0xff);
+    		job2[159] = (uint8_t)((crc >> 0) & 0xff);
+		
+			if (!inno_cmd_write_job(pChain, c, job2)) 
+			{
+				applog(LOG_ERR, "failed to write job for chip %d. \n", c);
+			} 			
+		}
+
+		usleep(600000);
+		while (true) 
+		{
+			nonce = 0;
+			chip_id = 0;
+			job_id = 0;
+			micro_job_id = 0;
+			usleep(10000);
+			if (!get_nonce(pChain, (uint8_t*)&nonce, &chip_id, &job_id, (uint8_t*)&micro_job_id))
+				break;
+			nonce = bswap_32(nonce);
+			if(nonce == rightNonce2){
+				++chip_valid[chip_id - 1];
+				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x. \n", c, nonce);
+			}else{
+				applog(LOG_ERR, "bad nonce error, chip_id:%d, nonce:0x%x. \n", chip_id, nonce);
+			}
+		}
+			
+	}
+	
+	for (i = 1; i <= pChain->num_active_chips; i++){
+		uiScore += chip_valid[i-1];
+		/* printf("chip_valid[%d]=%d . \n", i-1, chip_valid[i-1]);
+		if(chip_valid[i-1] >= 4){
+			applog(LOG_ERR, "inno_cmd_test_chip chip %d is good. \n", i);
+		}else{
+			bad_chip_num++;
+		}
+		*/
+		if(chip_valid[i-1] < 4){
+			bad_chip_num++;
+		}
+	} 
+		
+	applog(LOG_ERR, "inno_cmd_test_chip bad chip num is %d. \n", bad_chip_num);
+	return uiScore;
+}
 

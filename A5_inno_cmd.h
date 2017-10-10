@@ -20,6 +20,8 @@
 #define CMD_POWER_ON		0x02
 #define CMD_POWER_OFF		0x06
 #define CMD_POWER_RESET 	0x0c
+#define CMD_READ_SEC_REG    0x0d
+
 
 #define ADDR_BROADCAST		0x00
 
@@ -109,6 +111,14 @@ struct A1_chain {
 	int work_start_delay;
 };
 
+struct Test_bench {
+	uint32_t uiPll; 
+	int uiVol;
+	uint32_t uiScore;
+	uint32_t uiCoreNum;
+};
+
+
 unsigned short CRC16_2(unsigned char* pchMsg, unsigned short wDataLen);
 
 extern bool inno_cmd_reset(struct A1_chain *pChain, uint8_t chip_id);
@@ -131,6 +141,7 @@ extern bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t
 
 extern uint8_t inno_cmd_isBusy(struct A1_chain *pChain, uint8_t chip_id);
 
+extern uint32_t inno_cmd_test_chip(struct A1_chain *pChain);
 
 void flush_spi(struct A1_chain *pChain);
 void hexdump_error(char *prefix, uint8_t *buff, int len);
