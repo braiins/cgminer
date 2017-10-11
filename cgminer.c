@@ -31,6 +31,11 @@
 #include <limits.h>
 #include "scrypt.h"
 
+#ifndef CHIP_A6
+#include "A5_inno.h"
+#include "A5_inno_clock.h"
+#endif
+
 #ifdef USE_USBUTILS
 #include <semaphore.h>
 #endif
@@ -61,7 +66,7 @@ char *curly = ":D";
 #include "compat.h"
 #include "miner.h"
 #include "bench_block.h"
-#include "A5_inno_clock.h"
+
 #ifdef USE_USBUTILS
 #include "usbutils.h"
 #endif
@@ -3197,6 +3202,12 @@ double tsince_update(void)
 	return tdiff(&now, &update_tv_start);
 }
 
+#ifndef CHIP_A6
+extern uint8_t A1Pll1;
+extern const struct PLL_Clock PLL_Clk_12Mhz[142];
+extern struct A1_chain *chain[ASIC_CHAIN_NUM];
+#endif
+
 static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 {
 	char displayed_hashes[16], displayed_rolling[16];
@@ -3206,9 +3217,13 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	dev_runtime = cgpu_runtime(cgpu);
 
 	wu = cgpu->diff1 / dev_runtime * 60.0;
-
+#ifdef CHIP_A6
 	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
-	dr64 = (double)cgpu->rolling * 1000000ull;
+	dr64 = (double)cgpu->rolling * 1000000ull * 6ull;
+#else	
+	dh64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+	dr64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+#endif
 	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
 	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
@@ -6395,7 +6410,7 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 		char displayed_hashes[16], displayed_rolling[16];
 		char displayed_r1[16], displayed_r5[16], displayed_r15[16];
 		uint64_t d64;
-
+#ifdef CHIP_A6
 		d64 = (double)total_mhashes_done / total_secs * 1000000ull;
 		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
 		d64 = (double)total_rolling * 1000000ull;
@@ -6406,7 +6421,18 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 		suffix_string(d64, displayed_r5, sizeof(displayed_rolling), 4);
 		d64 = (double)rolling15 * 1000000ull;
 		suffix_string(d64, displayed_r15, sizeof(displayed_rolling), 4);
-
+#else
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_rolling, sizeof(displayed_rolling), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_r1, sizeof(displayed_rolling), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_r5, sizeof(displayed_rolling), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_r15, sizeof(displayed_rolling), 4);
+#endif
 		snprintf(statusline, sizeof(statusline),
 			"(%ds):%s (1m):%s (5m):%s (15m):%s (avg):%sh/s",
 			opt_log_interval, displayed_rolling, displayed_r1, displayed_r5,
