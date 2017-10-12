@@ -15,7 +15,7 @@ CFLAGS=-I${ROOTFS_DIR}/include \
 ./configure --prefix=${ROOTFS_DIR} \
 --enable-bitmine_${CHIP_TYPE} --without-curses --host=arm-xilinx-linux-gnueabi --build=x86_64-pc-linux-gnu # --target=arm
 make -j${MAKE_JOBS}
-cp cgminer cgminer_${CHIP_TYPE}
+cp cgminer innominer_T1
 
 # A6
 CHIP_TYPE=A6
@@ -26,7 +26,7 @@ CFLAGS=-I${ROOTFS_DIR}/include \
 ./configure --prefix=${ROOTFS_DIR} \
 --enable-bitmine_${CHIP_TYPE} --without-curses --host=arm-xilinx-linux-gnueabi --build=x86_64-pc-linux-gnu # --target=arm
 make -j${MAKE_JOBS}
-cp cgminer cgminer_${CHIP_TYPE}
+cp cgminer innominer_T2
 
 #cp ./cgminer /home/public/update/cgminer_huwt.$1
 #chmod 777 /home/public/update/cgminer_huwt.$1
