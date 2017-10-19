@@ -559,6 +559,7 @@ float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp)
     return temp_f;
 }
 
+#ifndef CHIP_A6
 void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_id)
 {
 	int i;
@@ -636,4 +637,4 @@ void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_
 		check_chip(a1, i);
     }
 }
-
+#endif

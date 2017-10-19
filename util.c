@@ -2011,12 +2011,13 @@ static int calculate_num_bits(int num)
 	}
 	return ret;
 }
-
+#endif
 
 uint32_t magicNum[16] = {0};
 int pre_version_mask[4] = {0};
 char maskstr[16][9] = {0}; 
 
+#ifndef CHIP_A6
 static void generate_magic_num_str(char *bbversion)
 {
 	int bversion;
