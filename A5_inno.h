@@ -25,7 +25,6 @@
 /* 数值越小,温度打印得越频繁 */
 #define ASIC_INNO_FAN_CTLR_FREQ_DIV     (0)
 
-#define ASIC_INNO_TEMP_CONTRL_THRESHOLD (25.0f)
 
 #define WEAK_CHIP_THRESHOLD	5
 #define BROKEN_CHIP_THRESHOLD 5

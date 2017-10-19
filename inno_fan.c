@@ -10,12 +10,6 @@
 
 #include "inno_fan.h"
 
-#ifndef CHIP_A6
-#include "A5_inno_cmd.h"
-#include "A5_inno.h"
-#endif
-
-
 #define MAGIC_NUM  100 
 
 #define IOCTL_SET_FREQ_0 _IOR(MAGIC_NUM, 0, char *)

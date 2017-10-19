@@ -9,7 +9,10 @@
 #include "A6_inno.h"
 #else
 #include "A5_inno.h"
+#include "A5_inno_cmd.h"
 #endif
+
+#define ASIC_INNO_TEMP_CONTRL_THRESHOLD (25.0f)
 
 typedef struct INNO_FAN_CTRL_tag{
     /* 温度原始值 */
