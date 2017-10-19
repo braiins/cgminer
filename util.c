@@ -2000,6 +2000,104 @@ static void decode_exit(struct pool __maybe_unused *pool, char __maybe_unused *b
 }
 #endif
 
+#ifndef CHIP_A6
+static int calculate_num_bits(int num)
+{
+	int ret=0;
+	while(num != 0)
+	{
+		ret++;
+		num /= 16;
+	}
+	return ret;
+}
+
+
+uint32_t magicNum[16] = {0};
+int pre_version_mask[4] = {0};
+char maskstr[16][9] = {0}; 
+
+static void generate_magic_num_str(char *bbversion)
+{
+	int bversion;
+	bversion = strtol(bbversion, NULL, 16);
+	//printf("bversion:%d. \n", bversion);
+	uint32_t uiMagicNum;
+	int i;
+	uint8_t buffer[4];
+	char *tmpstr;
+	int num_bits;
+	int j;
+	char defaultStr[9]= "00000000"; 
+
+	memset(buffer, 0, sizeof(buffer));
+	uint32_t *p1 = (uint32_t *)buffer;
+
+	for(i = 0; i < 4; i++)
+	{
+		uiMagicNum = bversion | pre_version_mask[i];
+		//printf("[ccx]uiMagicNum:0x%x. \n", uiMagicNum);
+		*p1 = bswap_32(uiMagicNum);
+		
+		//printf("[ccx]*p1:0x%x. \n", *p1);
+		switch(i){
+			case 0:magicNum[8] = *p1;break;
+			case 1:magicNum[4] = *p1;break;
+			case 2:magicNum[2] = *p1;break;
+			case 3:magicNum[0] = *p1;break;
+			default:;
+		}
+	}
+
+	for(i = 0; i < 16; i++)
+	{
+		if((i!= 2) && (i!=4) && (i!=8))
+		{
+			magicNum[i] = magicNum[0];
+		}
+	}
+	/*
+	for(i=0;i<16;i++)
+	{
+		printf("[ccx]magicNum[%d]:0x%x. \n", i, magicNum[i]);
+	}
+	*/
+	for(i = 0; i < 16; i++)
+	{
+		memcpy(maskstr[i], defaultStr, 9);
+	}
+
+	for(i = 0; i < 3; i++)
+	{
+		char cMask[8];
+		tmpstr = (char *)malloc(9);
+		memset(tmpstr, 0, sizeof(tmpstr));
+		num_bits = calculate_num_bits(pre_version_mask[i]);
+		for(j=0; j<(8-num_bits); j++){
+			tmpstr[j] = '0';
+		}
+
+		sprintf(cMask, "%x", pre_version_mask[i]);
+		memcpy(tmpstr+8-num_bits, cMask, num_bits);
+		tmpstr[8] = '\0';
+
+		//printf("[ccx]tmpstr:%s. \n", tmpstr);
+		switch(i){
+			case 0:memcpy(maskstr[8], tmpstr, 9);break;
+			case 1:memcpy(maskstr[4], tmpstr, 9);break;
+			case 2:memcpy(maskstr[2], tmpstr, 9);break;
+			default:;
+		}
+		free(tmpstr);
+	}
+	/*
+	for(i=0;i<16;i++)
+	{
+		printf("[ccx]maskstr[%d]:%s. \n", i, maskstr[i]);
+	} */
+}
+#endif
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
@@ -2024,6 +2122,10 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	nbit = __json_array_string(val, 6);
 	ntime = __json_array_string(val, 7);
 	clean = json_is_true(json_array_get(val, 8));
+
+#ifndef CHIP_A6
+	generate_magic_num_str(bbversion);
+#endif
 
 	if (!valid_ascii(job_id) || !valid_hex(prev_hash) || !valid_hex(coinbase1) ||
 	    !valid_hex(coinbase2) || !valid_hex(bbversion) || !valid_hex(nbit) ||
@@ -2191,6 +2293,51 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	return true;
 }
 
+static bool parse_set_version_mask(struct pool *pool, json_t *val)
+{
+	char *version_mask;
+	int mask;
+	int tmpMask;
+	int cnt = 0;
+	int i;
+
+	version_mask = __json_array_string(val, 0);
+	//printf("version_mask:%s. \n", version_mask);
+
+	mask = strtol(version_mask, NULL, 16);
+	//mask = 0x30000;
+	//printf("mask:0x%x. \n", mask);
+
+	pre_version_mask[0] = mask;
+
+	while(mask%16 == 0){
+		cnt++;
+		mask /= 16;
+	}
+
+	if(mask/16 != 0){
+		tmpMask = mask%16;
+	}else if(mask/8 != 0){
+		tmpMask = mask%8;
+	}else if(mask/4 != 0){
+		tmpMask = mask%4;
+	}else if(mask/2 != 0){
+		tmpMask = mask%2;
+	}
+
+	for(i=0; i<cnt; i++){
+		tmpMask *= 16;
+	}
+	pre_version_mask[2] = tmpMask;
+	pre_version_mask[1] = pre_version_mask[0] - tmpMask;
+	/*
+	for(i=0;i<4;i++){
+		printf("pre_version_mask[%d]:0x%x. \n", i, pre_version_mask[i]);
+	}
+	*/	
+	return true;
+}
+
 static void __suspend_stratum(struct pool *pool)
 {
 	clear_sockbuf(pool);
@@ -2355,6 +2502,11 @@ bool parse_method(struct pool *pool, char *s)
 			pool->stratum_notify = ret = true;
 		else
 			pool->stratum_notify = ret = false;
+		goto out_decref;
+	}
+
+	if (!strncasecmp(buf, "mining.set_version_mask", 23)) {
+		if (parse_set_version_mask(pool, params))
 		goto out_decref;
 	}
 
@@ -2881,10 +3033,17 @@ resend:
 		clear_sock(pool);
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
+#ifdef CHIP_A6	
 		if (pool->sessionid)
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
+#else
+		if (pool->sessionid)
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"innominer/"VERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
+		else
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"innominer/"VERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
+#endif
 	}
 
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {

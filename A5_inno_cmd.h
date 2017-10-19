@@ -143,6 +143,8 @@ extern uint8_t inno_cmd_isBusy(struct A1_chain *pChain, uint8_t chip_id);
 
 extern uint32_t inno_cmd_test_chip(struct A1_chain *pChain);
 
+extern bool inno_cmd_resetbist(struct A1_chain *pChain, uint8_t chip_id);
+
 void flush_spi(struct A1_chain *pChain);
 void hexdump_error(char *prefix, uint8_t *buff, int len);
 void hexdump(char *prefix, uint8_t *buff, int len);

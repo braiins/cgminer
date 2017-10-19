@@ -40,6 +40,11 @@
 #define HAVE_AN_FPGA 1
 #endif
 
+#ifndef CHIP_A6
+#include "A5_inno.h"
+#include "A5_inno_clock.h"
+#endif
+
 // BUFSIZ varies on Windows and Linux
 #define TMPBUFSIZ	8192
 
@@ -1992,6 +1997,12 @@ static const char *status2str(enum alive status)
 	}
 }
 
+#ifndef CHIP_A6
+extern uint8_t A1Pll1;
+extern const struct PLL_Clock PLL_Clk_12Mhz[142];
+extern struct A1_chain *chain[ASIC_CHAIN_NUM];
+#endif
+
 #ifdef HAVE_AN_ASIC
 static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom)
 {
@@ -2035,7 +2046,11 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		root = api_add_int(root, "CHIP", &(cgpu->chip_num), false);
 		root = api_add_int(root, "CORE", &(cgpu->core_num), false);
 		root = api_add_int(root, "DUTY", &(cgpu->fan_duty), false);
+#ifdef CHIP_A6		
 		double mhs = cgpu->total_mhashes / dev_runtime;
+#else
+		double mhs = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2ull * (chain[0]->num_cores);
+#endif
 		root = api_add_mhs(root, "MHS av", &mhs, false);
 		char mhsname[27];
 		sprintf(mhsname, "MHS %ds", opt_log_interval);

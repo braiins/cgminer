@@ -174,16 +174,22 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 
 	for (i = 0; i < a1->num_active_chips; i++)
     {
+		inno_check_voltage(a1, i+1, &s_reg_ctrl);
+    }
+	
+	//configure for tsensor
+	inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
+
+	for (i = 0; i < a1->num_active_chips; i++)
+    {
 		check_chip(a1, i);
 
-		inno_check_voltage(a1, i+1, &s_reg_ctrl);
         inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp, true);
     }
     /* ÉèÖÃ³õÊ¼Öµ */ 
     inno_fan_temp_init(&s_fan_ctrl, chain_id);
 
-	//configure for tsensor
-	inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
+	inno_temp_contrl(&s_fan_ctrl, a1, chain_id);
 
 	applog(LOG_WARNING, "%d: found %d chips with total %d active cores",
 	       a1->chain_id, a1->num_active_chips, a1->num_cores);
@@ -399,7 +405,7 @@ static void inno_preinit(struct spi_ctx *ctx, int chain_id)
 		default:;
 	}
 	//add 0929
-	//cfg_tsadc_divider(a1,PLL_Clk_12Mhz[A1Pll1].speedMHz);
+	cfg_tsadc_divider(a1, 120);
 }
 
 
@@ -724,7 +730,7 @@ void A1_detect(bool hotplug)
 	}	
 }
 
-#define TEMP_UPDATE_INT_MS	60000
+#define TEMP_UPDATE_INT_MS	180000
 #define VOLTAGE_UPDATE_INT  120
 
 static int64_t  A1_scanwork(struct thr_info *thr)
@@ -763,26 +769,24 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 		}
 		
 		for (i = a1->num_active_chips; i > 0; i--) 
-		{
-			uint8_t c = i;
-			if (!inno_cmd_read_reg(a1, c, reg)) 
+		{		
+			if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 			{
-				continue;
-			}
-            else
-            {
-                /* update temp database */
+				inno_check_voltage(a1, i, &s_reg_ctrl);
+				//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
+			}else{
+				if (!inno_cmd_read_reg(a1, i, reg)) 
+				{
+					applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
+					continue;
+				}
+				/* update temp database */
                 uint32_t temp = 0;
                 float    temp_f = 0.0f;
 
                 temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
                 inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-				if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
-				{
-					inno_check_voltage(a1, i, &s_reg_ctrl);
-					//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
-				}
-            }     
+			}    
 		}
 
 		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
@@ -790,17 +794,16 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			//configure for tsensor
     		inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
 			update_cnt[cid] = 0;
-		}
-		
-		inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
-		
-		
-		//a1->temp = board_selector->get_temp(0);
-		a1->last_temp_time = get_current_ms();
-		if(inno_fan_temp_get_highest(&s_fan_ctrl,a1->chain_id) > DANGEROUS_TMP)
-		{
-	   		asic_gpio_write(spi[a1->chain_id]->power_en, 0);
-	   		early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
+		}else{
+			inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
+				
+			//a1->temp = board_selector->get_temp(0);
+			a1->last_temp_time = get_current_ms();
+			if(inno_fan_temp_get_highest(&s_fan_ctrl,a1->chain_id) > DANGEROUS_TMP)
+			{
+	   			asic_gpio_write(spi[a1->chain_id]->power_en, 0);
+	   			early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
+			}
 		}
 	}
 

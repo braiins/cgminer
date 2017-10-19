@@ -50,6 +50,8 @@ float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp);
 
 int inno_fan_temp_get_highest(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 
+void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_id);
+
 #if 0
 float inno_fan_temp_get(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 #endif

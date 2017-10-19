@@ -2320,11 +2320,17 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_ENDTABLE
 };
 
-const uint32_t magicNum[16]= {
+/*
+uint32_t magicNum[16]= {
 	0x00000020, 0x00000020, 0x02000020, 0x00000020,
 	0x10000020, 0x00000020, 0x00000020, 0x00000020, 
 	0x12000020, 0x00000020, 0x00000020, 0x00000020,
 	0x00000020, 0x00000020, 0x00000020, 0x00000020};
+*/
+#ifndef CHIP_A6
+extern uint32_t magicNum[16];
+#endif
+
 static void calc_midstate(struct work *work)
 {
 	unsigned char data[64];
@@ -6785,12 +6791,16 @@ out:
 /* Each pool has one stratum send thread for sending shares to avoid many
  * threads being created for submission since all sends need to be serialised
  * anyway. */
+#ifndef CHIP_A6
+extern char maskstr[16][9];
+#endif
+/*
 static const char maskstr[16][9]= {
 	"00000000", "00000000", "00000002", "00000000",
 	"00000010", "00000000", "00000000", "00000000", 
 	"00000012", "00000000", "00000000", "00000000",
 	"00000000", "00000000", "00000000", "00000000"}; 
-/*
+
 static const char maskstr[4][9] = 
 {
 	"00000000",
