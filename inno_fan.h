@@ -10,6 +10,7 @@
 #else
 #include "A5_inno.h"
 #include "A5_inno_cmd.h"
+#include "A5_inno_clock.h"
 #endif
 
 #define ASIC_INNO_TEMP_CONTRL_THRESHOLD (25.0f)

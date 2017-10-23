@@ -379,6 +379,14 @@ void inno_fan_speed_down(INNO_FAN_CTRL_T *fan_ctrl)
     inno_fan_pwm_set(fan_ctrl, duty);
 }
 
+#ifndef CHIP_A6
+extern uint8_t A1Pll1;
+extern uint8_t A1Pll2;
+extern uint8_t A1Pll3;
+extern const struct PLL_Clock PLL_Clk_12Mhz[142];
+extern struct A1_chain *chain[ASIC_CHAIN_NUM];
+#endif
+
 void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_info *cgpu)
 {
 
@@ -474,8 +482,15 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
     cgpu->fan_duty = 100 - fan_ctrl->duty;
             
     cgpu->chip_num = a1->num_active_chips;
-    cgpu->core_num = a1->num_cores; 
-
+    cgpu->core_num = a1->num_cores;
+#ifndef CHIP_A6
+	switch(a1->chain_id){
+		case 0:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2ull * (a1->num_cores);break;
+		case 1:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll2].speedMHz * 2ull * (a1->num_cores);break;
+		case 2:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll3].speedMHz * 2ull * (a1->num_cores);break;
+		default:;
+	}
+#endif
     //static int times = 0;       /* 降低风扇控制的频率 */
     /* 降低风扇打印的频率 */
     //if(times++ <  ASIC_INNO_FAN_CTLR_FREQ_DIV)

@@ -30,6 +30,8 @@
 extern int SPI_PIN_POWER_EN[ASIC_CHAIN_NUM];
 extern int SPI_PIN_START_EN[ASIC_CHAIN_NUM];
 extern int SPI_PIN_RESET[ASIC_CHAIN_NUM];
+extern int SPI_PIN_LED[ASIC_CHAIN_NUM];
+extern int SPI_PIN_PLUG[ASIC_CHAIN_NUM];
 
 
 void asic_gpio_init(int gpio, int direction);
