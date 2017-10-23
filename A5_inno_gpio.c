@@ -36,6 +36,21 @@ int SPI_PIN_RESET[] = {
 861,
 };
 
+int SPI_PIN_LED[] = {
+881,
+882,
+883,
+884
+};
+
+int SPI_PIN_PLUG[] = {
+896,
+897,
+898,
+899
+};
+
+
 void set_vid_value(int level)
 {
 	int fd; 
