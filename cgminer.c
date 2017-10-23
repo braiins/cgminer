@@ -4873,6 +4873,41 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
+#ifdef CHIP_A6
+uint64_t share_diff(const struct work *work)
+{
+	uint64_t *data64, d64, ret;
+	bool new_best = false;
+	char rhash[32];
+	int opt_scrypt = 1;
+	uint64_t diffone = 0xFFFF000000000000ull;
+
+	swab256(rhash, work->hash);
+	if (opt_scrypt)
+		data64 = (uint64_t *)(rhash + 2);
+	else
+		data64 = (uint64_t *)(rhash + 4);
+	d64 = be64toh(*data64);
+	if (unlikely(!d64))
+		d64 = 1;
+	ret = diffone / d64;
+
+	cg_wlock(&control_lock);
+	if (unlikely(ret > best_diff)) {
+		new_best = true;
+		best_diff = ret;
+		suffix_string(best_diff, best_share, sizeof(best_share), 0);
+	}
+	if (unlikely(ret > work->pool->best_diff))
+		work->pool->best_diff = ret;
+	cg_wunlock(&control_lock);
+
+	if (unlikely(new_best))
+		applog(LOG_INFO, "New best share: %s", best_share);
+
+	return ret;
+}
+#else
 uint64_t share_diff(const struct work *work)
 {
 	bool new_best = false;
@@ -4901,6 +4936,7 @@ uint64_t share_diff(const struct work *work)
 
 	return ret;
 }
+#endif
 
 static void regen_hash(struct work *work)
 {
@@ -7377,6 +7413,47 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 	sha256(hash1, 32, hash);
 }
 
+#ifdef CHIP_A6
+void set_target(unsigned char *dest_target, double diff)
+{
+	unsigned char target[32];
+	uint64_t *data64, h64;
+	double d64;
+	int opt_scrypt = 1;
+	uint64_t diffone = 0xFFFF000000000000ull;
+
+	d64 = diffone;
+	d64 /= diff;
+	h64 = d64;
+
+	memset(target, 0, 32);
+	if (h64) {
+		unsigned char rtarget[32];
+
+		memset(rtarget, 0, 32);
+		if (opt_scrypt)
+			data64 = (uint64_t *)(rtarget + 2);
+		else
+			data64 = (uint64_t *)(rtarget + 4);
+		*data64 = htobe64(h64);
+		swab256(target, rtarget);
+	} else {
+		/* Support for the classic all FFs just-below-1 diff */
+		if (opt_scrypt)
+			memset(target, 0xff, 30);
+		else
+			memset(target, 0xff, 28);
+	}
+
+	if (opt_debug) {
+		char *htarget = bin2hex(target, 32);
+
+		applog(LOG_DEBUG, "Generated target %s", htarget);
+		free(htarget);
+	}
+	cg_memcpy(dest_target, target, 32);
+}
+#else
 void set_target(unsigned char *dest_target, double diff)
 {
 	unsigned char target[32];
@@ -7428,6 +7505,7 @@ void set_target(unsigned char *dest_target, double diff)
 	}
 	cg_memcpy(dest_target, target, 32);
 }
+#endif
 
 #if defined (USE_AVALON2) || defined (USE_AVALON4) || defined (USE_AVALON7) || defined (USE_AVALON_MINER) || defined (USE_HASHRATIO)
 bool submit_nonce2_nonce(struct thr_info *thr, struct pool *pool, struct pool *real_pool,
@@ -7894,13 +7972,16 @@ bool submit_tested_work(struct thr_info *thr, struct work *work)
 	struct work *work_out;
 	update_work_stats(thr, work);
 
-/*
 	if (!fulltest(work->hash, work->target)) {
-		applog(LOG_INFO, "%s %d: Share above target", thr->cgpu->drv->name,
+		applog(LOG_INFO, "-----------%s %d: Share above target-------------", thr->cgpu->drv->name,
 		       thr->cgpu->device_id);
+
+	    //hexdump("data:", work->data, 128);
+	    //hexdump("hash:", work->hash, 32);
+	    //hexdump("targ:", work->target, 32);
+
 		return false;
 	}
-*/
 
 	work_out = copy_work(work);
 	submit_work_async(work_out);

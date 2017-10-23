@@ -15,26 +15,42 @@
 
 #define IOCTL_SET_VAL_0 _IOR(MAGIC_NUM, 0, char *)
 
-int SPI_PIN_POWER_EN[ASIC_CHAIN_NUM] = {
+int SPI_PIN_POWER_EN[] = {
 872,
 873,
 874,
 875
 };
 
-int SPI_PIN_START_EN[ASIC_CHAIN_NUM] = {
+int SPI_PIN_START_EN[] = {
 854,
 856,
 858,
 860,
 };
 
-int SPI_PIN_RESET[ASIC_CHAIN_NUM] = {
+int SPI_PIN_RESET[] = {
 855,
 857,
 859,
 861,
 };
+
+int SPI_PIN_LED[] = {
+881,
+882,
+883,
+884,
+};
+
+int SPI_PIN_PLUG[] = {
+896,
+897,
+898,
+899,
+};
+
+
 
 void set_vid_value(int level)
 {

@@ -356,48 +356,43 @@ bool inno_cmd_bist_fix(struct A1_chain *pChain, uint8_t chip_id)
 //add  0929
 bool inno_cmd_write_sec_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 {
-		int tx_len;
-		uint8_t spi_tx[MAX_CMD_LENGTH];
-		uint8_t spi_rx[MAX_CMD_LENGTH];
-		uint8_t tmp_buf[MAX_CMD_LENGTH];
-		uint16_t clc_crc;
-		uint8_t j;
+	int tx_len;
+	uint8_t spi_tx[MAX_CMD_LENGTH];
+	uint8_t spi_rx[MAX_CMD_LENGTH];
+	uint8_t tmp_buf[MAX_CMD_LENGTH];
+	uint16_t clc_crc;
+	uint8_t j;
 		
-		printf("send command [write_reg] \n");
-		assert(reg != NULL);
+	applog(LOG_INFO,"send command [write_reg] \n");
+	assert(reg != NULL);
 	
-		memset(spi_tx, 0, sizeof(spi_tx));
+	memset(spi_tx, 0, sizeof(spi_tx));
 		
-		spi_tx[0] = CMD_READ_SEC_REG;
-		spi_tx[1] = chip_id;
-		memcpy(spi_tx+2, reg, REG_LENGTH-2);
+	spi_tx[0] = CMD_READ_SEC_REG;
+	spi_tx[1] = chip_id;
+	memcpy(spi_tx+2, reg, REG_LENGTH-2);
+	memset(tmp_buf, 0, sizeof(tmp_buf));
+
+	clc_crc = CRC16_2(tmp_buf, REG_LENGTH);
 	
-		memset(tmp_buf, 0, sizeof(tmp_buf));
-		for(j = 0; j < REG_LENGTH; j = j + 2)
-		{
-			tmp_buf[j + 0] = spi_tx[j + 1];
-			tmp_buf[j + 1] = spi_tx[j + 0]; 	
-		}
-		clc_crc = CRC16_2(tmp_buf, REG_LENGTH);
+	spi_tx[REG_LENGTH+0] = (uint8_t)(clc_crc >> 8);
+	spi_tx[REG_LENGTH+1] = (uint8_t)(clc_crc);
 	
-		spi_tx[REG_LENGTH+0] = (uint8_t)(clc_crc >> 8);
-		spi_tx[REG_LENGTH+1] = (uint8_t)(clc_crc);
+	//hexdump("write reg", spi_tx, REG_LENGTH+2);
+	if(!spi_write_data(pChain->spi_ctx, spi_tx, 16))
+	{
+		applog(LOG_WARNING, "send command fail !");
+		return false;
+	}
+	//printf("reg:0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",spi_tx[0],spi_tx[1],spi_tx[2],spi_tx[3],spi_tx[4],spi_tx[5],spi_tx[6],spi_tx[7],spi_tx[8],spi_tx[9],spi_tx[10],spi_tx[11],spi_tx[12],spi_tx[13],spi_tx[14],spi_tx[15],spi_tx[16],spi_tx[17]);
+	memset(spi_rx, 0, sizeof(spi_rx));
+	if(!spi_poll_result(pChain, CMD_READ_SEC_REG, chip_id, spi_rx, REG_LENGTH+4))
+	{
+		applog(LOG_WARNING, "cmd write reg: poll fail !");
+		return false;
+	}
 	
-		//hexdump("write reg", spi_tx, REG_LENGTH+2);
-		if(!spi_write_data(pChain->spi_ctx, spi_tx, 16))
-		{
-			applog(LOG_WARNING, "send command fail !");
-			return false;
-		}
-	
-		memset(spi_rx, 0, sizeof(spi_rx));
-		if(!spi_poll_result(pChain, CMD_WRITE_REG, chip_id, spi_rx, REG_LENGTH))
-		{
-			applog(LOG_WARNING, "cmd write reg: poll fail !");
-			return false;
-		}
-	
-		return true;
+	return true;
 }
 
 bool inno_cmd_write_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
