@@ -596,6 +596,7 @@ uint8_t inno_cmd_isBusy(struct A1_chain *pChain, uint8_t chip_id)
 
 bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t *job)
 {
+	int tx_len,i;
 	uint8_t spi_tx[MAX_CMD_LENGTH];
 	uint8_t spi_rx[MAX_CMD_LENGTH];
 	struct spi_ctx *ctx = pChain->spi_ctx;
@@ -607,6 +608,28 @@ bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t *job)
 	{
 		return false;
 	}
+
+/*
+	if(chip_id == 1)
+	{
+		tx_len = ASIC_CHIP_NUM*4;
+		memset(spi_rx, 0, sizeof(spi_rx));
+		for(i = 0; i < tx_len; i = i + 2)
+		{
+			if(!spi_read_data(ctx, spi_rx, 2))
+			{
+				applog(LOG_WARNING, "poll result: transfer fail !");
+				return false;
+			}
+			hexdump("poll: RX", spi_rx, 2);
+			if(spi_rx[0] == 0x00 && spi_rx[1] == 0 && spi_rx[2] == 0x00 && spi_rx[3] == 0x00)
+			{		
+				return true;
+			}
+		}
+	}
+*/
+
 	//printf("[write job] \r\n");
 	//hexdump("job:", spi_tx, JOB_LENGTH);
 
@@ -633,20 +656,25 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 	uint8_t c;
 	int bad_chip_num = 0;
 	uint32_t uiScore = 0;
-	uint32_t rightNonce = 0xd5067d1f;
-	uint32_t rightNonce2 = 0xce1f5e74;
+	uint32_t rightNonce = 0x556d9801;
+	uint32_t rightNonce2 = 0x2e993b02;
 	uint32_t chip_valid[ASIC_CHIP_NUM] = {0};
 	uint8_t tmp_buf[JOB_LENGTH];
 	uint16_t crc;
 	
 	uint8_t job1[JOB_LENGTH] = {
-
+		0x17, 0x00, 0xAB, 0xA9, 0x15, 0x9F, 0xCC, 0x8F, 0xDF, 0xC2, 0xA2, 0x96, 0x64, 0x29, 0x5E, 0xCB, 0x3E, 0x37, 0x81, 0x48, 0x41, 0xE7, 0x03, 0x1F, 0x07, 0xA6, 0x8D, 0xB7, 0x10, 0x9A, 0x13, 0x72,
+		0xC4, 0x21, 0x8F, 0x5D, 0x6A, 0x96, 0x4E, 0xD9, 0x11, 0x6B, 0xFF, 0x8B, 0x2E, 0x5D, 0xFC, 0x8C, 0x16, 0x34, 0xC7, 0x13, 0xEA, 0x18, 0xA2, 0xD6, 0x49, 0xFE, 0x8D, 0x31, 0xC4, 0xD2, 0x00, 0x00,
+		0x00, 0x20, 0x55, 0x6d, 0x98, 0x01, 0xD7, 0x89, 0x10, 0x1A, 0x01, 0xD6, 0xED, 0x59, 0xCD, 0xE7, 0xBA, 0x7B, 0xFF, 0x03, 0x00, 0x1E, 0x55, 0x6d, 0x98, 0x01, 0x00, 0x00,
 	};
 
 	uint8_t job2[JOB_LENGTH] = {
-
+		0x17, 0x00, 0xC2, 0x45, 0xB9, 0xCB, 0x99, 0xC6, 0x58, 0x28, 0xF9, 0x46, 0x96, 0xE7, 0x12, 0x3E, 0x00, 0xD1, 0x8B, 0x2A, 0x2F, 0x29, 0xDC, 0x24, 0x6F, 0xC1, 0x1E, 0x5D, 0xA9, 0x2F, 0x13, 0x72,
+		0xC4, 0x21, 0x8F, 0x5D, 0x6A, 0x96, 0x4E, 0xD9, 0x11, 0x6B, 0xFF, 0x8B, 0x2E, 0x5D, 0xFC, 0x8C, 0x16, 0x34, 0xC7, 0x13, 0xEA, 0x18, 0xA2, 0xD6, 0x49, 0xFE, 0x8D, 0x31, 0xC4, 0xD2, 0x00, 0x00,
+		0x00, 0x20, 0x2e, 0x99, 0x3b, 0x02, 0xD7, 0x89, 0x10, 0x1A, 0x01, 0xD6, 0xED, 0x59, 0xA7, 0x3D, 0xE4, 0xA4, 0xFF, 0x03, 0x00, 0x1E, 0x2e, 0x99, 0x3b, 0x02, 0x00, 0x00,
 	};
 	applog(LOG_INFO, "ChipNum:%d. \n", pChain->num_active_chips);
+	
 	for (k = 0; k < 3; k++){
 		for (i = pChain->num_active_chips; i > 0; i--) 
 		{
@@ -659,8 +687,8 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
         		tmp_buf[(2 * j) + 0] = job1[(2 * j) + 1];
     		}
     		crc = CRC16_2(tmp_buf, 90);
-    		job1[91] = (uint8_t)((crc >> 8) & 0xff);
-    		job1[92] = (uint8_t)((crc >> 0) & 0xff);
+    		job1[90] = (uint8_t)((crc >> 8) & 0xff);
+    		job1[91] = (uint8_t)((crc >> 0) & 0xff);
 			
 			if (!inno_cmd_write_job(pChain, c, job1)) 
 			{
@@ -668,7 +696,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 			} 			
 		}
 
-		usleep(300000);
+		sleep(1);
 		while (true) 
 		{
 			nonce = 0;
@@ -678,7 +706,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 			usleep(10000);
 			if (!get_nonce(pChain, (uint8_t*)&nonce, &chip_id, &job_id))
 				break;
-			nonce = bswap_32(nonce);
+			//nonce = bswap_32(nonce);
 			if(nonce == rightNonce){
 				++chip_valid[chip_id - 1];
 				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x. \n", c, nonce);
@@ -698,8 +726,8 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
         		tmp_buf[(2 * j) + 0] = job2[(2 * j) + 1];
     		}
     		crc = CRC16_2(tmp_buf, 90);
-    		job2[91] = (uint8_t)((crc >> 8) & 0xff);
-    		job2[92] = (uint8_t)((crc >> 0) & 0xff);
+    		job2[90] = (uint8_t)((crc >> 8) & 0xff);
+    		job2[91] = (uint8_t)((crc >> 0) & 0xff);
 		
 			if (!inno_cmd_write_job(pChain, c, job2)) 
 			{
@@ -707,7 +735,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 			} 			
 		}
 
-		usleep(600000);
+		sleep(1);
 		while (true) 
 		{
 			nonce = 0;
@@ -717,7 +745,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 			usleep(10000);
 			if (!get_nonce(pChain, (uint8_t*)&nonce, &chip_id, &job_id))
 				break;
-			nonce = bswap_32(nonce);
+			//nonce = bswap_32(nonce);
 			if(nonce == rightNonce2){
 				++chip_valid[chip_id - 1];
 				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x. \n", c, nonce);

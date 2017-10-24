@@ -45,10 +45,13 @@ struct Test_bench Test_bench_Array[6]={
 	{1332,   15,	0,	0}, 
 };
 */
-struct Test_bench Test_bench_Array[3]={
-	{1332,	 10,	0,	0},
-	{1332,	 12,	0,	0}, 
-	{1332,	 14,	0,	0}, 
+//pll/vid/good core/ score
+struct Test_bench Test_bench_Array[5]={
+	{1332,	0,	0,	0},
+	{1332,	0,	0,	0},
+	{1332,	0,	0,	0},
+	{1332,	0,	0,	0},
+	{1332,	0,	0,	0},
 };
 
 
@@ -63,9 +66,11 @@ uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 static INNO_FAN_CTRL_T s_fan_ctrl;
 static uint32_t show_log[ASIC_CHAIN_NUM];
 static uint32_t update_cnt[ASIC_CHAIN_NUM];
+static uint32_t first_flag[ASIC_CHAIN_NUM] = {0};
 static inno_reg_ctrl_t s_reg_ctrl;
 #define DANGEROUS_TMP  110
 #define STD_V          0.84
+int spi_plug_status[ASIC_CHAIN_NUM] = {0};
 
 /* one global board_selector and spi context is enough */
 //static struct board_selector *board_selector;
@@ -120,9 +125,7 @@ void exit_A1_chain(struct A1_chain *a1)
 	if (a1 == NULL)
 		return;
 	free(a1->chips);
-
 	asic_gpio_write(a1->spi_ctx->led, 1);
-	//a1->spi_ctx.led = 0;
 	a1->chips = NULL;
 	a1->spi_ctx = NULL;
 	free(a1);
@@ -132,7 +135,9 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 {
 	int i;
 	struct A1_chain *a1 = malloc(sizeof(*a1));
-	assert(a1 != NULL);
+	if (a1 == NULL){
+		goto failure;
+	}
 
 	applog(LOG_DEBUG, "%d: A1 init chain", chain_id);
 	
@@ -143,7 +148,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	a1->num_chips =  chain_detect(a1);
 	usleep(10000);
 	
-	if (a1->num_chips < 1)
+	if (a1->num_chips <= 0)
 		goto failure;
 
 	applog(LOG_WARNING, "spidev%d.%d: %d: Found %d A1 chips",
@@ -165,7 +170,9 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	}
 
 	a1->chips = calloc(a1->num_active_chips, sizeof(struct A1_chip));
-	assert (a1->chips != NULL);
+	if (a1->chips == NULL){
+		goto failure;
+	}
 
 	if (!inno_cmd_bist_fix(a1, ADDR_BROADCAST))
 		goto failure;
@@ -410,11 +417,10 @@ static void inno_preinit(struct spi_ctx *ctx, int chain_id)
 	cfg_tsadc_divider(a1, 120);
 }
 
-
+int chain_flag[ASIC_CHAIN_NUM] = {0};
 static bool detect_A1_chain(void)
 {
-	int i;
-	int res;
+	int i, j, cnt = 0;
 	//board_selector = (struct board_selector*)&dummy_board_selector;
 	applog(LOG_WARNING, "A1: checking A1 chain");
 
@@ -438,15 +444,15 @@ static bool detect_A1_chain(void)
 		spi[i]->power_en = SPI_PIN_POWER_EN[i];		
 		spi[i]->start_en = SPI_PIN_START_EN[i];		
 		spi[i]->reset = SPI_PIN_RESET[i];
-		spi[i]->led   = SPI_PIN_LED[i];
 		spi[i]->plug  = SPI_PIN_PLUG[i];
+		spi[i]->led   = SPI_PIN_LED[i];
 		
 
 		asic_gpio_init(spi[i]->power_en, 0);
 		asic_gpio_init(spi[i]->start_en, 0);
 		asic_gpio_init(spi[i]->reset, 0);
-		asic_gpio_init(spi[i]->led, 0);
 		asic_gpio_init(spi[i]->plug, 1);
+		asic_gpio_init(spi[i]->led, 0);
 
 		show_log[i] = 0;
 		update_cnt[i] = 0;
@@ -460,7 +466,14 @@ static bool detect_A1_chain(void)
 		usleep(500000);
 		asic_gpio_write(spi[i]->reset, 0);
 		usleep(500000);
-		asic_gpio_write(spi[i]->reset, 1);	
+		asic_gpio_write(spi[i]->reset, 1);
+		usleep(500000);
+
+		if(asic_gpio_read(spi[i]->plug) != 0)
+		{
+			applog(LOG_ERR, "chain:%d the plat is not inserted", i);
+			continue;
+		}
 	}
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
@@ -483,18 +496,16 @@ static bool detect_A1_chain(void)
 	//	}
 	//}
 
-	res = 0;
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
 		chain[i] = init_A1_chain(spi[i], i);
-		if (chain[i] == NULL)
-		{
-			applog(LOG_ERR, "init chain %d fail", i);
+		if (chain[i] == NULL){
+			applog(LOG_ERR, "init %d A1 chain fail", i);
 			continue;
-		}
-		else
-		{
-			res++;
+		}else{
+			cnt++;
+			chain_flag[i] = 1;
+			applog(LOG_WARNING, "Detected the %d A1 chain with %d chips", i, chain[i]->num_active_chips);
 		}
 
 		struct cgpu_info *cgpu = malloc(sizeof(*cgpu));
@@ -516,118 +527,141 @@ static bool detect_A1_chain(void)
 		       i, chain[i]->num_active_chips, chain[i]->num_cores);
 	}
 
-	return (res == 0) ? false : true;
-
-}
-
 #if 0
-bool detect_coincraft_desk(void)
-{
-	static const uint8_t mcp4x_mapping[] = { 0x2c, 0x2b, 0x2a, 0x29, 0x28 };
-	board_selector = ccd_board_selector_init();
-	if (board_selector == NULL) {
-		applog(LOG_INFO, "No CoinCrafd Desk backplane detected.");
-		return false;
+	Test_bench_Array[0].uiVol = opt_voltage;
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{
+		if(chain_flag[i] != 1)
+		{
+			continue;
+		}
+		Test_bench_Array[0].uiScore += inno_cmd_test_chip(chain[i]);
+		Test_bench_Array[0].uiCoreNum += chain[i]->num_cores;
 	}
-	board_selector->reset_all();
 
-	int boards_detected = 0;
-	int board_id;
-	for (board_id = 0; board_id < CCD_MAX_CHAINS; board_id++) {
-		uint8_t mcp_slave = mcp4x_mapping[board_id];
-		struct mcp4x *mcp = mcp4x_init(mcp_slave);
-		if (mcp == NULL)
+	for(i = 1; i < 3; i++)
+	{
+		if(Test_bench_Array[0].uiVol - i < 1)
+		{
 			continue;
-
-		if (A1_config_options.wiper != 0)
-			mcp->set_wiper(mcp, 0, A1_config_options.wiper);
-
-		applog(LOG_WARNING, "checking board %d...", board_id);
-		board_selector->select(board_id);
-
-		struct A1_chain *a1 = init_A1_chain(spi, board_id);
-		board_selector->release();
-		if (a1 == NULL)
-			continue;
-
-		struct cgpu_info *cgpu = malloc(sizeof(*cgpu));
-		assert(cgpu != NULL);
-
-		memset(cgpu, 0, sizeof(*cgpu));
-		cgpu->drv = &bitmineA1_drv;
-		cgpu->name = "BitmineA1.CCD";
-		cgpu->threads = 1;
-
-		cgpu->device_data = a1;
-
-		a1->cgpu = cgpu;
-		add_cgpu(cgpu);
-		boards_detected++;
-	}
-	if (boards_detected == 0)
-		return false;
-
-	applog(LOG_WARNING, "Detected CoinCraft Desk with %d boards",
-	       boards_detected);
-	return true;
-}
-
-bool detect_coincraft_rig_v3(void)
-{
-	board_selector = ccr_board_selector_init();
-	if (board_selector == NULL)
-		return false;
-
-	board_selector->reset_all();
-	int chains_detected = 0;
-	int c;
-	for (c = 0; c < CCR_MAX_CHAINS; c++) {
-		applog(LOG_WARNING, "checking RIG chain %d...", c);
-
-		if (!board_selector->select(c))
-			continue;
-
-		struct A1_chain *a1 = init_A1_chain(spi, c);
-		board_selector->release();
-
-		if (a1 == NULL)
-			continue;
-
-		if (A1_config_options.wiper != 0 && (c & 1) == 0) {
-			struct mcp4x *mcp = mcp4x_init(0x28);
-			if (mcp == NULL) {
-				applog(LOG_ERR, "%d: Cant access poti", c);
-			} else {
-				mcp->set_wiper(mcp, 0, A1_config_options.wiper);
-				mcp->set_wiper(mcp, 1, A1_config_options.wiper);
-				mcp->exit(mcp);
-				applog(LOG_WARNING, "%d: set wiper to 0x%02x",
-					c, A1_config_options.wiper);
+		}
+		sleep(1);
+		set_vid_value(Test_bench_Array[0].uiVol - i);
+		Test_bench_Array[i].uiVol = Test_bench_Array[0].uiVol - i;
+		sleep(1);
+		for(j = 0; j < ASIC_CHAIN_NUM; j++)
+		{	
+			if(chain_flag[j] != 1)
+			{
+				continue;
 			}
+			Test_bench_Array[i].uiScore += inno_cmd_test_chip(chain[j]);
+	    	Test_bench_Array[i].uiCoreNum += chain[j]->num_cores;
+		}
+	}
+
+	for(i = 1; i >= 0; i--)
+	{
+		set_vid_value(Test_bench_Array[0].uiVol - i);
+		sleep(1);
+	}
+	
+	for(i = 3; i < 5; i++)
+	{
+		if(Test_bench_Array[0].uiVol + i - 2 > 31)
+		{
+			continue;
+		}
+		sleep(1);
+		set_vid_value(Test_bench_Array[0].uiVol + i - 2);
+		Test_bench_Array[i].uiVol = Test_bench_Array[0].uiVol + i - 2;
+		sleep(1);
+		for(j = 0; j < ASIC_CHAIN_NUM; j++)
+		{
+			if(chain_flag[j] != 1)
+			{
+				continue;
+			}
+			Test_bench_Array[i].uiScore += inno_cmd_test_chip(chain[j]);
+	    	Test_bench_Array[i].uiCoreNum += chain[j]->num_cores;
+		}
+	}
+
+	for(j = 0; j < 5; j++)
+	{
+		printf("after pll_vid_test_bench Test_bench_Array[%d].uiScore=%d,Test_bench_Array[%d].uiCoreNum=%d. \n", j, Test_bench_Array[j].uiScore, j, Test_bench_Array[j].uiCoreNum);
+	}
+
+	int index = 0;
+	uint32_t cur= 0;
+	for(j = 1; j < 5; j++)
+	{
+		cur = Test_bench_Array[j].uiScore + 5 * (Test_bench_Array[j].uiVol - Test_bench_Array[index].uiVol);
+		
+		if(cur > Test_bench_Array[index].uiScore)
+		{
+			index = j;
 		}
 
-		struct cgpu_info *cgpu = malloc(sizeof(*cgpu));
-		assert(cgpu != NULL);
-
-		memset(cgpu, 0, sizeof(*cgpu));
-		cgpu->drv = &bitmineA1_drv;
-		cgpu->name = "BitmineA1.CCR";
-		cgpu->threads = 1;
-
-		cgpu->device_data = a1;
-
-		a1->cgpu = cgpu;
-		add_cgpu(cgpu);
-		chains_detected++;
+		if((cur == Test_bench_Array[index].uiScore) && (Test_bench_Array[j].uiVol > Test_bench_Array[index].uiVol))
+		{
+			index = j;
+		}
 	}
-	if (chains_detected == 0)
-		return false;
 
-	applog(LOG_WARNING, "Detected CoinCraft Rig with %d chains",
-	       chains_detected);
-	return true;
-}
+	printf("The best group is %d. vid is %d! \t \n", index, Test_bench_Array[index].uiVol);
+	
+	for(i=Test_bench_Array[0].uiVol + 2; i>=Test_bench_Array[index].uiVol; i--){
+		set_vid_value(i);
+		usleep(500000);
+	}
 #endif
+
+#if 0
+	for(i = 0; i < ASIC_CHAIN_NUM; i++)
+	{		
+		Test_bench_Array[0].uiScore += inno_cmd_test_chip(chain[i]);
+		Test_bench_Array[0].uiCoreNum += chain[i]->num_cores;
+	}
+	
+	for(j = 1; j < 3; j++)
+	{
+		//printf("pll_vid_test_bench Test_bench_Array[%d].uiPll =%d. \n", j, Test_bench_Array[j].uiPll);
+		//printf("pll_vid_test_bench Test_bench_Array[%d].uiVol =%d. \n", j, Test_bench_Array[j].uiVol);
+		Test_bench_Array[j].uiScore += pll_vid_test_bench(Test_bench_Array[j].uiPll, Test_bench_Array[j].uiVol);
+		//printf("Test_bench_Array[%d].uiScore=%d. \n", j, Test_bench_Array[j].uiScore);
+		for(i = 0; i < ASIC_CHAIN_NUM; i++)
+		{		
+	    	Test_bench_Array[j].uiCoreNum += chain[i]->num_cores;
+		}
+	}
+
+	for(j = 0; j < 3; j++)
+	{
+		printf("after pll_vid_test_bench Test_bench_Array[%d].uiScore=%d,Test_bench_Array[%d].uiCoreNum=%d. \n", j, Test_bench_Array[j].uiScore, j, Test_bench_Array[j].uiCoreNum);
+	}
+
+	int index = 0;
+	double cur= 0;
+	double max = ((double)(Test_bench_Array[0].uiPll * Test_bench_Array[0].uiCoreNum)) /((double)(Test_bench_Array[0].uiVol)) * ((double)(Test_bench_Array[0].uiScore) / (double)1134);
+	printf("max value:%lf. \n", max);
+	for(j = 1; j < 3; j++)
+	{
+		cur = ((double)(Test_bench_Array[j].uiPll * Test_bench_Array[j].uiCoreNum)) /((double)(Test_bench_Array[j].uiVol)) * ((double)(Test_bench_Array[j].uiScore) / (double)1134);
+		printf("OutputData[%d]=%lf. \n", j, cur);
+		if(cur >= max)
+		{
+			index = j;
+			max = cur;
+		}
+	}
+
+	printf("The best group is %d!!! \t \n", index);
+	config_best_pll_vid(Test_bench_Array[index].uiPll, Test_bench_Array[index].uiVol);
+#endif
+	return (cnt == 0) ? false : true;
+}
+
 
 /* Probe SPI channel and register chip chain */
 void A1_detect(bool hotplug)
@@ -725,6 +759,28 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 	mutex_lock(&a1->lock);
 	int cid = a1->chain_id;
 
+	if (first_flag[cid] != 1)
+	{
+		applog(LOG_ERR, "%d: A1_scanwork first in set all parameter!", a1->chain_id);
+		first_flag[cid]++;
+		for (i = a1->num_active_chips; i > 0; i--) 
+		{		
+			if (!inno_cmd_read_reg(a1, i, reg)) 
+			{
+				applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
+				continue;
+			}
+			/* update temp database */
+            uint32_t temp = 0;
+            float    temp_f = 0.0f;
+
+            temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+            inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+		}    
+
+		inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
+	}
+
 	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
 	{
 		update_cnt[cid]++;
@@ -782,7 +838,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 		if (!get_nonce(a1, (uint8_t*)&nonce, &chip_id, &job_id))
 			break;
 
-		//nonce = bswap_32(nonce);   //modify for A4
+		//nonce = bswap_32(nonce);   //modify for A6
 
 		work_updated = true;
 		if (chip_id < 1 || chip_id > a1->num_active_chips) 

@@ -416,7 +416,7 @@ static void inno_preinit(struct spi_ctx *ctx, int chain_id)
 	cfg_tsadc_divider(a1, 120);
 }
 
-int chain_flag[3] = {0};
+int chain_flag[ASIC_CHAIN_NUM] = {0};
 static bool detect_A1_chain(void)
 {
 	int i, j, cnt = 0;
@@ -519,6 +519,8 @@ static bool detect_A1_chain(void)
 
 		chain[i]->cgpu = cgpu;
 		add_cgpu(cgpu);
+
+		asic_gpio_write(chain[i]->spi_ctx->led, 0);
 
 		applog(LOG_WARNING, "Detected the %d A1 chain with %d chips / %d cores",
 		       i, chain[i]->num_active_chips, chain[i]->num_cores);
@@ -1022,45 +1024,6 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			}
 		}
 
-		/*
-		for (i = a1->num_active_chips; i > 0; i--) 
-		{
-			uint8_t c = i;
-			if (is_chip_disabled(a1, c))
-				continue;
-			if (!inno_cmd_read_reg(a1, c, reg)) 
-			{
-				disable_chip(a1, c);
-				continue;
-			}
-            else
-            {
-                 update temp database *
-                uint32_t temp = 0;
-
-                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-                inno_fan_temp_set(&s_fan_ctrl, cid, i-1, temp, false);
-           
-            }
-            
-			uint8_t qstate = reg[9] & 0x02;
-			uint8_t qbuff = 0;
-			//uint8_t qbuff = a1->spi_rx[6];
-			struct A1_chip *chip = &a1->chips[i - 1];
-		
-			if (qstate != 0x02) {
-				work_updated = true;
-				struct work *work = wq_dequeue(&a1->active_wq);
-				assert(work != NULL);
-
-				if (!set_work(a1, c, work, qbuff))
-					continue;
-
-				nonce_ranges_processed++;
-				chip->nonce_ranges_done++;
-			}
-		}
-		*/
 	}
 
 	switch(cid){

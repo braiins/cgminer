@@ -347,7 +347,6 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
     job[90] = (uint8_t)((crc >> 8) & 0xff);
     job[91] = (uint8_t)((crc >> 0) & 0xff);
 
-
 	return job;
 }
 
