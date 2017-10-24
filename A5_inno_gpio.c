@@ -64,7 +64,7 @@ void set_vid_value(int level)
         return;
     }
 
-    if(ioctl(fd, IOCTL_SET_VAL_0, 0x80 | level) < 0)
+    if(ioctl(fd, IOCTL_SET_VAL_0, 0x100 | level) < 0)
     {
         fprintf(stderr, "set vid value fail.\n");
         return;
