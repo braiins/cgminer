@@ -1653,8 +1653,8 @@ static struct opt_table opt_config_table[] = {
              "Set PLL Clock in bitmine A1 broad 6 chip (-1: 1000MHz, >0:Look PLL table)"),
 		     
 	OPT_WITH_ARG("--A1Vol",
-		     set_int_0_to_255, opt_show_intval, &opt_voltage,
-		     "set voltage (0 ~ 255)"),
+		     set_int_0_to_31, opt_show_intval, &opt_voltage,
+		     "set voltage (0 ~ 31)"),
 
 #endif
 #ifdef USE_BITFURY
