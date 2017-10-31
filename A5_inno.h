@@ -16,7 +16,7 @@
 /* 芯片上电高于100°,告警 */
 #define ASIC_INNO_FAN_TEMP_MAX_THRESHOLD (100.0f)
 /* chip高于55°后,100% */
-#define ASIC_INNO_FAN_TEMP_UP_THRESHOLD (55.0f)
+#define ASIC_INNO_FAN_TEMP_UP_THRESHOLD (65.0f)
 /* chip板低于35°后,60% */
 #define ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD (35.0f)
 

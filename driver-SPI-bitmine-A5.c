@@ -63,6 +63,7 @@ uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 /* FAN CTRL */
 static INNO_FAN_CTRL_T s_fan_ctrl;
 static uint32_t show_log[ASIC_CHAIN_NUM];
+static uint32_t write_flag[ASIC_CHAIN_NUM];
 static uint32_t update_cnt[ASIC_CHAIN_NUM];
 static uint32_t first_flag[ASIC_CHAIN_NUM] = {0};
 extern const uint32_t magicNum[16];
@@ -613,8 +614,9 @@ static bool detect_A1_chain(void)
 		set_vid_value(i);
 		usleep(500000);
 	}
-*/
 
+	opt_voltage = Test_bench_Array[index].uiVol;
+*/
 /*
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{		
@@ -843,6 +845,12 @@ void A1_detect(bool hotplug)
 #define TEMP_UPDATE_INT_MS	180000
 #define VOLTAGE_UPDATE_INT  120
 
+char szShowLog[ASIC_CHAIN_NUM][ASIC_CHIP_NUM][256] = {0};
+FILE* fd0;
+FILE* fd1;
+FILE* fd2;
+
+
 static int64_t  A1_scanwork(struct thr_info *thr)
 {
 	int i;
@@ -893,6 +901,24 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 		update_cnt[cid]++;
 		show_log[cid]++;
 		//applog(LOG_INFO, "Chenchunxu:TEMP_UPDATE_INT_MS:%d.",update_cnt);
+
+		if (write_flag[cid] > 0)
+		{
+			if(cid == 0){
+				fseek(fd0,0,SEEK_SET);
+				fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd0);
+				fflush(fd0);
+			}else if(cid == 1){
+				fseek(fd1,0,SEEK_SET);
+				fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd1);
+				fflush(fd1);
+			}else if(cid == 2){
+				fseek(fd2,0,SEEK_SET);
+				fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd2);
+				fflush(fd2);
+			}
+			write_flag[cid] = 0;
+		}
 
 		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
@@ -1012,13 +1038,20 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 						chip->nonce_ranges_done++;
 					}
 
-					if(show_log[cid] > 30)					
-					{						
-						applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d/%d/%5.2f",
-                               cid, c, chip->nonce_ranges_done, chip->nonces_found, 
-                               chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
+					if(show_log[cid] > 0)					
+					{												
+						applog(LOG_INFO, "%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%d/%5.2f",
+							   cid, c, chip->num_cores,chip->nonce_ranges_done, chip->nonces_found,
+							   chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
 						
-						if(i==1) show_log[cid] = 0;	
+						sprintf(szShowLog[cid][c-1], "%d/%d/%d/%d/%d/%d/%d/%d\r\n",
+								chip->nonce_ranges_done, chip->nonces_found,
+								chip->hw_errors, chip->stales,chip->temp,chip->num_cores,c-1,cid);
+						
+						if(i==1){
+							show_log[cid] = 0;
+							write_flag[cid]++;
+						}
 					}
 				}
 			}

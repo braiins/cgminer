@@ -133,7 +133,7 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 
     inno_fan_pwm_set(fan_ctrl, 10); /* 90% */
     sleep(1);
-    inno_fan_pwm_set(fan_ctrl, 20); /* 80% */
+    inno_fan_pwm_set(fan_ctrl, 5); /* 95% */
 
     for(chain_id = 0; chain_id < ASIC_CHAIN_NUM; chain_id++)
     {
