@@ -8474,9 +8474,11 @@ void flush_queue(struct cgpu_info *cgpu)
 	}
 }
 
+#ifndef CHIP_A6
 extern FILE* fd0;
 extern FILE* fd1;
 extern FILE* fd2;
+#endif
 
 #define  LOG_FILE_PREFIX "/home/www/conf/analys"
 
@@ -8492,7 +8494,7 @@ void hash_queued_work(struct thr_info *mythr)
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
 	int i;
-
+#ifndef CHIP_A6
 	char fileName[128] = {0};
 
 	for(i = 0;i < 3;i++){
@@ -8515,6 +8517,7 @@ void hash_queued_work(struct thr_info *mythr)
 		}
 	}
 	applog(LOG_ERR,"Open Log File Success!");
+#endif
 
 	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
@@ -10587,7 +10590,7 @@ begin_bench:
 			continue;
 		}
 	}
-
+#ifndef CHIP_A6
 	fclose(fd0);
 	fclose(fd1);
 	fclose(fd2);
@@ -10595,5 +10598,6 @@ begin_bench:
 	fd0 = NULL;
 	fd1 = NULL;
 	fd2 = NULL;
+#endif
 	return 0;
 }
