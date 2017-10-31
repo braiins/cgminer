@@ -56,7 +56,7 @@ void set_vid_value(int level)
 {
 	int fd; 
     
-    //printf("%s:%d.\n", __func__, level);
+    printf("%s:%d.\n", __func__, level);
 
     fd = open(SYSFS_VID_DEV, O_RDWR);
     if(fd < 0)

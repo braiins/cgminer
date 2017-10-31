@@ -54,7 +54,7 @@ static const float inno_vsadc_table[] = {
 
 int opt_diff=15;
 
-static const uint8_t difficult_Tbl[24][4] = {
+static const uint8_t difficult_Tbl[26][4] = {
 	{0x1e, 0xff, 0xff, 0xff},	// 1
 	{0x1e, 0x7f, 0xff, 0xff},	// 2
 	{0x1e, 0x3f, 0xff, 0xff},	// 4
@@ -71,7 +71,9 @@ static const uint8_t difficult_Tbl[24][4] = {
 	{0x1e, 0x00, 0x07, 0xff},	// 8192
 	{0x1e, 0x00, 0x03, 0xff},	// 16384
 	{0x1e, 0x00, 0x01, 0xff},	// 32768
-	{0x1e, 0x00, 0x00, 0xff}	// 65536
+	{0x1e, 0x00, 0x00, 0xff},	// 65536
+	{0x1e, 0x00, 0x00, 0x7f},	// 131072
+	{0x1e, 0x00, 0x00, 0x3f}	// 262144
 };
 
 static const uint8_t default_reg[142][12] = 
@@ -281,8 +283,12 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 
 	memcpy(data63to0, wdata, 64);
 	memcpy(data75to64, wdata+64, 12);
-
-	if(sdiff > 65535.0)
+									
+	if(sdiff > 262143.0)
+		memcpy(diff, difficult_Tbl[18], 4);
+	else if(sdiff > 131071.0)
+		memcpy(diff, difficult_Tbl[17], 4);								
+	else if(sdiff > 65535.0)
 		memcpy(diff, difficult_Tbl[16], 4);
 	else if(sdiff > 32767.0)
 	        memcpy(diff, difficult_Tbl[15], 4);
@@ -360,7 +366,7 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 #define COOLDOWN_MS (30 * 1000)
 /* if after this number of retries a chip is still inaccessible, disable it */
 #define DISABLE_CHIP_FAIL_THRESHOLD	3
-#define LEAST_CORE_ONE_CHAIN	603
+#define LEAST_CORE_ONE_CHAIN	600
 #define RESET_CHAIN_CNT	2
 
 
@@ -413,30 +419,6 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 			continue;
 		if (chip->cooldown_begin + COOLDOWN_MS > get_current_ms())
 			continue;
-
-		//if the core in chain least than 630, reinit this chain 
-		/*
-		if(a1->num_cores <= LEAST_CORE_ONE_CHAIN && chip->fail_reset < RESET_CHAIN_CNT)
-		{
-			chip->fail_reset++;
-			asic_gpio_write(ctx->power_en, 0);
-			sleep(2);
-			asic_gpio_write(ctx->power_en, 1);
-			sleep(2);
-			asic_gpio_write(ctx->reset, 0);
-			usleep(500000);
-			asic_gpio_write(ctx->reset, 1);	
-		
-			a1->num_chips = chain_detect(a1, pllnum);
-			
-			inno_cmd_bist_fix(a1, ADDR_BROADCAST);
-		
-			for (i = 0; i < a1->num_active_chips; i++)
-			{
-				check_chip(a1, i);
-			}
-		}
-		*/
 		
 		if (!inno_cmd_read_reg(a1, chip_id, reg)) 
 		{
@@ -460,6 +442,44 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 		chip->fail_count = 0;
 		chip->fail_reset = 0;
 	}
+
+	//if the core in chain least than 600, reinit this chain 	
+	if(a1->num_cores <= LEAST_CORE_ONE_CHAIN)
+	{
+		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		
+		asic_gpio_write(ctx->power_en, 0);
+		sleep(3);
+		asic_gpio_write(ctx->power_en, 1);
+		sleep(2);
+		asic_gpio_write(ctx->reset, 1);
+		sleep(1);
+		asic_gpio_write(ctx->start_en, 1);
+		sleep(2);
+		
+		inno_preinit(ctx, cid);
+		
+		a1->num_chips =  chain_detect(a1);
+		usleep(10000);
+		
+		if (a1->num_chips <= 0)
+			goto failure;
+
+		inno_cmd_bist_fix(a1, ADDR_BROADCAST);
+
+		for (i = 0; i < a1->num_active_chips; i++)
+		{
+			check_chip(a1, i);
+		}
+	}
+	
+	return;
+
+failure:
+	exit_A1_chain(a1);
+	return;
 }
 
 

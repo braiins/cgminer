@@ -66,6 +66,8 @@ uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 static INNO_FAN_CTRL_T s_fan_ctrl;
 static uint32_t show_log[ASIC_CHAIN_NUM];
 static uint32_t update_cnt[ASIC_CHAIN_NUM];
+static uint32_t write_flag[ASIC_CHAIN_NUM];
+static uint32_t check_disbale_flag[ASIC_CHAIN_NUM];
 static uint32_t first_flag[ASIC_CHAIN_NUM] = {0};
 static inno_reg_ctrl_t s_reg_ctrl;
 #define DANGEROUS_TMP  110
@@ -391,7 +393,7 @@ int  cfg_tsadc_divider(struct A1_chain *a1,uint32_t pll_clk)
 	applog(LOG_WARNING, "#####Write t/v sensor Value Success!\n");
 }
 
-static void inno_preinit(struct spi_ctx *ctx, int chain_id)
+void inno_preinit(struct spi_ctx *ctx, int chain_id)
 {
 	int i;
 	struct A1_chain *a1 = malloc(sizeof(*a1));
@@ -456,18 +458,18 @@ static bool detect_A1_chain(void)
 
 		show_log[i] = 0;
 		update_cnt[i] = 0;
+		write_flag[i] = 0;
+		check_disbale_flag[i] = 0;
 	}
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
 		asic_gpio_write(spi[i]->power_en, 1);
+		sleep(2);
+		asic_gpio_write(spi[i]->reset, 1);
+		sleep(1);
 		asic_gpio_write(spi[i]->start_en, 1);
-		asic_gpio_write(spi[i]->reset, 1);
-		usleep(500000);
-		asic_gpio_write(spi[i]->reset, 0);
-		usleep(500000);
-		asic_gpio_write(spi[i]->reset, 1);
-		usleep(500000);
+		sleep(2);
 
 		if(asic_gpio_read(spi[i]->plug) != 0)
 		{
@@ -736,6 +738,12 @@ void A1_detect(bool hotplug)
 
 #define TEMP_UPDATE_INT_MS	180000
 #define VOLTAGE_UPDATE_INT  120
+#define WRITE_CONFG_TIME  0
+#define CHECK_DISABLE_TIME  0
+
+char szShowLog[ASIC_CHAIN_NUM][ASIC_CHIP_NUM][256] = {0};
+FILE* fd[ASIC_CHAIN_NUM];
+#define  LOG_FILE_PREFIX "/home/www/conf/analys"
 
 static int64_t  A1_scanwork(struct thr_info *thr)
 {
@@ -785,7 +793,21 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 	{
 		update_cnt[cid]++;
 		show_log[cid]++;
-		//applog(LOG_INFO, "Chenchunxu:TEMP_UPDATE_INT_MS:%d.",update_cnt);
+		write_flag[cid]++;
+		check_disbale_flag[cid]++;
+
+		if (write_flag[cid] > WRITE_CONFG_TIME)
+		{
+			char fileName[128] = {0};
+			sprintf(fileName, "%s%d.log", LOG_FILE_PREFIX, cid);
+			fd[cid] = fopen(fileName, "w+");
+			fseek(fd[cid],0,SEEK_SET);
+			fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd[cid]);
+			fflush(fd[cid]);
+			fclose(fd[cid]);
+
+			write_flag[cid] = 0;
+		}
 
 		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
@@ -795,13 +817,19 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 		
 		for (i = a1->num_active_chips; i > 0; i--) 
 		{		
+			uint8_t c=i;
 			if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 			{
 				inno_check_voltage(a1, i, &s_reg_ctrl);
 				//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
-			}else{
-				if (!inno_cmd_read_reg(a1, i, reg)) 
+			}
+			else
+			{
+				if(is_chip_disabled(a1,c))
+					continue;
+				if (!inno_cmd_read_reg(a1, c, reg)) 
 				{
+					disable_chip(a1,c);
 					applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
 					continue;
 				}
@@ -903,12 +931,17 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 					}
 
 					if(show_log[cid] > 0)					
-					{						
-						applog(LOG_INFO, "%d: chip %d: job done: %d/%d/%d/%d/%d/%5.2f",
-                               cid, c, chip->nonce_ranges_done, chip->nonces_found, 
-                               chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
+					{												
+						applog(LOG_INFO, "%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%d/%5.2f",
+							   cid, c, chip->num_cores,chip->nonce_ranges_done, chip->nonces_found,
+							   chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
 						
-						if(i==1) show_log[cid] = 0;	
+						sprintf(szShowLog[cid][c-1], "%8d/%8d/%8d/%8d/%8d/%4d/%2d/%2d\r\n",
+								chip->nonce_ranges_done, chip->nonces_found,
+								chip->hw_errors, chip->stales,chip->temp,chip->num_cores,c-1,cid);
+						
+						if(i==1) show_log[cid] = 0;
+
 					}
 				}
 			}
@@ -916,15 +949,21 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 
 	}
 
-	switch(cid){
-		case 0:check_disabled_chips(a1, A1Pll1);;break;
-		case 1:check_disabled_chips(a1, A1Pll2);;break;
-		case 2:check_disabled_chips(a1, A1Pll3);;break;
-		case 3:check_disabled_chips(a1, A1Pll4);;break;
-		case 4:check_disabled_chips(a1, A1Pll5);;break;
-		case 5:check_disabled_chips(a1, A1Pll6);;break;
-		default:;
+	if(check_disbale_flag[cid] > CHECK_DISABLE_TIME)
+	{
+		applog(LOG_INFO, "start to check disable chips");
+		switch(cid){
+			case 0:check_disabled_chips(a1, A1Pll1);;break;
+			case 1:check_disabled_chips(a1, A1Pll2);;break;
+			case 2:check_disabled_chips(a1, A1Pll3);;break;
+			case 3:check_disabled_chips(a1, A1Pll4);;break;
+			case 4:check_disabled_chips(a1, A1Pll5);;break;
+			case 5:check_disabled_chips(a1, A1Pll6);;break;
+			default:;
+		}
+		check_disbale_flag[cid] = 0;
 	}
+
 
 	mutex_unlock(&a1->lock);
 

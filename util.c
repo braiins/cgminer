@@ -1101,7 +1101,7 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 		}
 	}
 
-	if (opt_debug) {
+	if (1) {
 		unsigned char hash_swap[32], target_swap[32];
 		char *hash_str, *target_str;
 
@@ -1110,11 +1110,10 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 		hash_str = bin2hex(hash_swap, 32);
 		target_str = bin2hex(target_swap, 32);
 
-		applog(LOG_DEBUG, " Proof: %s\nTarget: %s\nTrgVal? %s",
-			hash_str,
-			target_str,
-			rc ? "YES (hash <= target)" :
-			     "no (false positive; hash > target)");
+		applog(LOG_ERR, " Proof : %s",hash_str);
+		applog(LOG_ERR, " Target: %s",target_str);
+  		applog(LOG_ERR, "result:%s", rc ? "YES YES YES YES YES YES YES(hash <= target)" :
+ 			     "NO NO NO NO NO NO NO NO NO NO(false positive; hash > target)");
 
 		free(hash_str);
 		free(target_str);
@@ -1690,7 +1689,7 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 		char *slash;
 
 		snprintf(port, 6, "%.*s", port_len, port_start);
-		slash = strchr(port, '/');
+		slash = strpbrk(port, "/#");
 		if (slash)
 			*slash = '\0';
 	} else
@@ -2459,6 +2458,41 @@ static bool show_message(struct pool *pool, json_t *val)
 	return true;
 }
 
+static bool parse_extranonce(struct pool *pool, json_t *val)
+{
+	char s[RBUFSIZE], *nonce1;
+	int n2size;
+
+	nonce1 = json_array_string(val, 0);
+	if (!valid_hex(nonce1)) {
+		applog(LOG_INFO, "Failed to get valid nonce1 in parse_extranonce");
+		return false;
+	}
+	n2size = json_integer_value(json_array_get(val, 1));
+	if (!n2size) {
+		applog(LOG_INFO, "Failed to get valid n2size in parse_extranonce");
+		free(nonce1);
+		return false;
+	}
+
+	cg_wlock(&pool->data_lock);
+	free(pool->nonce1);
+	pool->nonce1 = nonce1;
+	pool->n1_len = strlen(nonce1) / 2;
+	free(pool->nonce1bin);
+	pool->nonce1bin = (unsigned char *)calloc(pool->n1_len, 1);
+	if (unlikely(!pool->nonce1bin))
+		quithere(1, "Failed to calloc pool->nonce1bin");
+	hex2bin(pool->nonce1bin, pool->nonce1, pool->n1_len);
+	pool->n2size = n2size;
+	cg_wunlock(&pool->data_lock);
+
+	applog(LOG_NOTICE, "Pool %d extranonce change requested", pool->pool_no);
+
+	return true;
+}
+
+
 bool parse_method(struct pool *pool, char *s)
 {
 	json_t *val = NULL, *method, *err_val, *params;
@@ -2516,6 +2550,12 @@ bool parse_method(struct pool *pool, char *s)
 		goto out_decref;
 	}
 
+	if (!strncasecmp(buf, "mining.set_extranonce", 21)) {
+		ret = parse_extranonce(pool, params);
+		json_decref(val);
+		return ret;
+	}
+
 	if (!strncasecmp(buf, "client.reconnect", 16)) {
 		ret = parse_reconnect(pool, params);
 		goto out_decref;
@@ -2539,6 +2579,77 @@ bool parse_method(struct pool *pool, char *s)
 out_decref:
 	json_decref(val);
 out:
+	return ret;
+}
+
+bool subscribe_extranonce(struct pool *pool)
+{
+	json_t *val = NULL, *res_val, *err_val;
+	char s[RBUFSIZE], *sret = NULL;
+	json_error_t err;
+	bool ret = false;
+
+	sprintf(s, "{\"id\": %d, \"method\": \"mining.extranonce.subscribe\", \"params\": []}",
+		swork_id++);
+
+	if (!stratum_send(pool, s, strlen(s)))
+		return ret;
+
+	/* Parse all data in the queue and anything left should be the response */
+	while (42) {
+		if (!socket_full(pool, DEFAULT_SOCKWAIT / 30)) {
+			applog(LOG_DEBUG, "Timed out waiting for response extranonce.subscribe");
+			/* some pool doesnt send anything, so this is normal */
+			ret = true;
+			goto out;
+		}
+
+		sret = recv_line(pool);
+		if (!sret)
+			return ret;
+		if (parse_method(pool, sret))
+			free(sret);
+		else
+			break;
+	}
+
+	val = JSON_LOADS(sret, &err);
+	free(sret);
+	res_val = json_object_get(val, "result");
+	err_val = json_object_get(val, "error");
+
+	if (!res_val || json_is_false(res_val) || (err_val && !json_is_null(err_val)))  {
+		char *ss;
+
+		if (err_val) {
+			ss = __json_array_string(err_val, 1);
+			if (!ss)
+				ss = (char *)json_string_value(err_val);
+			if (ss && (strcmp(ss, "Method 'subscribe' not found for service 'mining.extranonce'") == 0)) {
+				applog(LOG_INFO, "Cannot subscribe to mining.extranonce for pool %d", pool->pool_no);
+				ret = true;
+				goto out;
+			}
+			if (ss && (strcmp(ss, "Unrecognized request provided") == 0)) {
+				applog(LOG_INFO, "Cannot subscribe to mining.extranonce for pool %d", pool->pool_no);
+				ret = true;
+				goto out;
+			}
+			ss = json_dumps(err_val, JSON_INDENT(3));
+		}
+		else
+			ss = strdup("(unknown reason)");
+		applog(LOG_INFO, "Pool %d JSON extranonce subscribe failed: %s", pool->pool_no, ss);
+		free(ss);
+
+		goto out;
+	}
+
+	ret = true;
+	applog(LOG_INFO, "Stratum extranonce subscribe for pool %d", pool->pool_no);
+
+out:
+	json_decref(val);
 	return ret;
 }
 
@@ -3174,6 +3285,8 @@ bool restart_stratum(struct pool *pool)
 		suspend_stratum(pool);
 	if (!initiate_stratum(pool))
 		goto out;
+	if (pool->extranonce_subscribe && !subscribe_extranonce(pool))
+		return false;
 	if (!auth_stratum(pool))
 		goto out;
 	ret = true;

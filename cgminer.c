@@ -433,7 +433,7 @@ static struct pool *currentpool = NULL;
 int total_pools, enabled_pools;
 enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
-static int total_urls, total_users, total_passes, total_userpasses;
+static int total_urls, total_users, total_passes, total_userpasses, total_extranonce;
 
 static
 #ifndef HAVE_CURSES
@@ -781,6 +781,7 @@ struct pool *add_pool(void)
 	pool->rpc_proxy = NULL;
 	pool->quota = 1;
 	adjust_quota_gcd();
+	pool->extranonce_subscribe = false;
 
 	return pool;
 }
@@ -1031,8 +1032,15 @@ out:
 static char *set_url(char *arg)
 {
 	struct pool *pool = add_url();
+	
+	if (strstr(arg, ".nicehash.com") || strstr(arg, "#xnsub")) {
+		pool->extranonce_subscribe = true;
+		applog(LOG_ERR, "Pool %d extranonce subscribing enabled.", pool->pool_no);
+	}
 
-	setup_url(pool, arg);
+	applog(LOG_ERR, "start to set url ");
+
+	setup_url(pool, arg);	
 	return NULL;
 }
 
@@ -1118,6 +1126,18 @@ static char *set_userpass(const char *arg)
 	if (!pool->rpc_pass)
 		pool->rpc_pass = strdup("");
 
+	return NULL;
+}
+
+static char *set_extranonce_subscribe(char *arg)
+{
+	struct pool *pool;
+	total_extranonce++;
+	if (total_extranonce > total_pools)
+		add_pool();
+	pool = pools[total_extranonce - 1];
+	applog(LOG_ERR, "Enable extranonce subscribe on %d", pool->pool_no);
+	opt_set_bool(&pool->extranonce_subscribe);
 	return NULL;
 }
 
@@ -5228,11 +5248,19 @@ static void set_blockdiff(const struct work *work)
 	double numerator = 0xFFFFULL << powdiff;
 	double ddiff = numerator / (double)diff32;
 
+#ifdef CHIP_A6
+	if (unlikely(current_diff != (ddiff * 65536.0))) {
+		suffix_string(ddiff, block_diff, sizeof(block_diff), 0);
+		current_diff = ddiff * 65536.0;
+		applog(LOG_NOTICE, "Network diff set to %s", block_diff);
+	}
+#else
 	if (unlikely(current_diff != ddiff)) {
 		suffix_string(ddiff, block_diff, sizeof(block_diff), 0);
 		current_diff = ddiff;
 		applog(LOG_NOTICE, "Network diff set to %s", block_diff);
 	}
+#endif
 }
 
 /* Search to see if this string is from a block that has been seen before */
@@ -5560,6 +5588,9 @@ void write_config(FILE *fcfg)
 				pool->rpc_proxy ? "|" : "",
 				json_escape(pool->rpc_url));
 		}
+		//add for xnsub
+		//if (pool->extranonce_subscribe)
+		//	fputs("\n\t\t\"extranonce-subscribe\" : true,", fcfg);
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pool->rpc_user));
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\"\n\t}", json_escape(pool->rpc_pass));
 		}
@@ -6458,7 +6489,7 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 		char displayed_hashes[16], displayed_rolling[16];
 		char displayed_r1[16], displayed_r5[16], displayed_r15[16];
 		uint64_t d64;
-
+#ifdef CHIP_A6
 		d64 = (double)total_mhashes_done / total_secs * 1000000ull;
 		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
 		d64 = (double)total_rolling * 1000000ull;
@@ -6469,6 +6500,18 @@ static void hashmeter(int thr_id, uint64_t hashes_done)
 		suffix_string(d64, displayed_r5, sizeof(displayed_rolling), 4);
 		d64 = (double)rolling15 * 1000000ull;
 		suffix_string(d64, displayed_r15, sizeof(displayed_rolling), 4);
+#else
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_hashes, sizeof(displayed_hashes), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_rolling, sizeof(displayed_rolling), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_r1, sizeof(displayed_rolling), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_r5, sizeof(displayed_rolling), 4);
+		d64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+		suffix_string(d64, displayed_r15, sizeof(displayed_rolling), 4);
+#endif
 		snprintf(statusline, sizeof(statusline),
 			"(%ds):%s (1m):%s (5m):%s (15m):%s (avg):%sh/s",
 			opt_log_interval, displayed_rolling, displayed_r1, displayed_r5,
@@ -7128,8 +7171,9 @@ retry_stratum:
 		bool init = pool_tset(pool, &pool->stratum_init);
 
 		if (!init) {
-			bool ret = initiate_stratum(pool) && auth_stratum(pool);
-
+			applog(LOG_ERR, "------POOL ACTIVE  FOR NXSUB------");
+			bool ret = initiate_stratum(pool) && (!pool->extranonce_subscribe || subscribe_extranonce(pool)) && auth_stratum(pool);
+			
 			if (ret)
 				init_stratum_threads(pool);
 			else
@@ -8474,14 +8518,6 @@ void flush_queue(struct cgpu_info *cgpu)
 	}
 }
 
-#ifndef CHIP_A6
-extern FILE* fd0;
-extern FILE* fd1;
-extern FILE* fd2;
-#endif
-
-#define  LOG_FILE_PREFIX "/home/www/conf/analys"
-
 /* This version of hash work is for devices that are fast enough to always
  * perform a full nonce range and need a queue to maintain the device busy.
  * Work creation and destruction is not done from within this function
@@ -8493,31 +8529,6 @@ void hash_queued_work(struct thr_info *mythr)
 	struct device_drv *drv = cgpu->drv;
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
-	int i;
-#ifndef CHIP_A6
-	char fileName[128] = {0};
-
-	for(i = 0;i < 3;i++){
-		sprintf(fileName, "%s%d.log", LOG_FILE_PREFIX, i);
-		if(i == 0){
-			fd0 = fopen(fileName, "w+");
-			if(fd0 == NULL){
-				applog(LOG_ERR,"Open File%d Failed!",i);
-			}
-		}else if(i == 1){
-			fd1 = fopen(fileName, "w+");
-			if(fd1 == NULL){
-				applog(LOG_ERR,"Open File%d Failed!",i);
-			}
-		}else if(i == 2){
-			fd2 = fopen(fileName, "w+");
-			if(fd2 == NULL){
-				applog(LOG_ERR,"Open File%d Failed!",i);
-			}
-		}
-	}
-	applog(LOG_ERR,"Open Log File Success!");
-#endif
 
 	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
@@ -8541,7 +8552,6 @@ void hash_queued_work(struct thr_info *mythr)
 		hashes_done += hashes;
 		cgtime(&tv_end);
 		timersub(&tv_end, &tv_start, &diff);
-		
 		/* Update the hashmeter at most 5 times per second */
 		if ((hashes_done && (diff.tv_sec > 0 || diff.tv_usec > 200000)) ||
 		    diff.tv_sec >= opt_log_interval) {
@@ -10590,14 +10600,6 @@ begin_bench:
 			continue;
 		}
 	}
-#ifndef CHIP_A6
-	fclose(fd0);
-	fclose(fd1);
-	fclose(fd2);
 
-	fd0 = NULL;
-	fd1 = NULL;
-	fd2 = NULL;
-#endif
 	return 0;
 }
