@@ -444,36 +444,43 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 	}
 
 	//if the core in chain least than 600, reinit this chain 	
-	if(a1->num_cores <= LEAST_CORE_ONE_CHAIN)
-	{
-		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
-		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
-		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
-		
-		asic_gpio_write(ctx->power_en, 0);
-		sleep(3);
-		asic_gpio_write(ctx->power_en, 1);
-		sleep(2);
-		asic_gpio_write(ctx->reset, 1);
-		sleep(1);
-		asic_gpio_write(ctx->start_en, 1);
-		sleep(2);
-		
-		inno_preinit(ctx, cid);
-		
-		a1->num_chips =  chain_detect(a1);
-		usleep(10000);
-		
-		if (a1->num_chips <= 0)
-			goto failure;
+    if(asic_gpio_read(ctx->plug) == 0)
+    {
+	    if(a1->num_cores <= LEAST_CORE_ONE_CHAIN)
+	    {
+	    	applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+	    	applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+	    	applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+	    	
+	    	asic_gpio_write(ctx->power_en, 0);
+	    	sleep(3);
+	    	asic_gpio_write(ctx->power_en, 1);
+	    	sleep(2);
+	    	asic_gpio_write(ctx->reset, 1);
+	    	sleep(1);
+	    	asic_gpio_write(ctx->start_en, 1);
+	    	sleep(2);
+	    	
+	    	inno_preinit(ctx, cid);
+	    	
+	    	a1->num_chips =  chain_detect(a1);
+	    	usleep(10000);
+	    	
+	    	if (a1->num_chips <= 0)
+	    		goto failure;
 
-		inno_cmd_bist_fix(a1, ADDR_BROADCAST);
+	    	inno_cmd_bist_fix(a1, ADDR_BROADCAST);
 
-		for (i = 0; i < a1->num_active_chips; i++)
-		{
-			check_chip(a1, i);
-		}
-	}
+	    	for (i = 0; i < a1->num_active_chips; i++)
+	    	{
+	    		check_chip(a1, i);
+	    	}
+	    }
+    }
+    else
+    {
+	    applog(LOG_WARNING, "******there is no board insert******");
+    }
 	
 	return;
 
@@ -663,7 +670,7 @@ int chain_detect(struct A1_chain *a1)
 	uint8_t temp_reg[REG_LENGTH];
 	int i;
 
-	set_spi_speed(6500000);
+	set_spi_speed(3250000);
 	usleep(1000);
 
 	memset(buffer, 0, sizeof(buffer));
