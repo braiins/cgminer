@@ -7924,7 +7924,7 @@ void inc_hw_errors(struct thr_info *thr)
 
 	mutex_lock(&stats_lock);
 	hw_errors++;
-#ifdef CHIA_A6  
+#ifdef CHIP_A6  
     thr->cgpu->hw_errors = hw_errors / 1000;
 #else
 	thr->cgpu->hw_errors++;
