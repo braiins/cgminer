@@ -398,7 +398,6 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 	int cid = a1->chain_id;
 	uint8_t reg[REG_LENGTH];
 	struct spi_ctx *ctx = a1->spi_ctx;
-
 	for (i = 0; i < a1->num_active_chips; i++) 
 	{
 		int chip_id = i + 1;
@@ -410,30 +409,6 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 			continue;
 		if (chip->cooldown_begin + COOLDOWN_MS > get_current_ms())
 			continue;
-
-		//if the core in chain least than 630, reinit this chain 
-		/*
-		if(a1->num_cores <= LEAST_CORE_ONE_CHAIN && chip->fail_reset < RESET_CHAIN_CNT)
-		{
-			chip->fail_reset++;
-			asic_gpio_write(ctx->power_en, 0);
-			sleep(2);
-			asic_gpio_write(ctx->power_en, 1);
-			sleep(2);
-			asic_gpio_write(ctx->reset, 0);
-			usleep(500000);
-			asic_gpio_write(ctx->reset, 1);	
-		
-			a1->num_chips = chain_detect(a1, pllnum);
-			
-			inno_cmd_bist_fix(a1, ADDR_BROADCAST);
-		
-			for (i = 0; i < a1->num_active_chips; i++)
-			{
-				check_chip(a1, i);
-			}
-		}
-		*/
 		
 		if (!inno_cmd_read_reg(a1, chip_id, reg)) 
 		{
@@ -457,11 +432,46 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 		chip->fail_count = 0;
 		chip->fail_reset = 0;
 	}
+
+	//if the core in chain least than 600, reinit this chain 	
+	if(a1->num_cores <= LEAST_CORE_ONE_CHAIN)
+	{
+		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		
+		asic_gpio_write(ctx->power_en, 0);
+		sleep(3);
+		asic_gpio_write(ctx->power_en, 1);
+		sleep(2);
+		asic_gpio_write(ctx->reset, 1);
+		sleep(1);
+		asic_gpio_write(ctx->start_en, 1);
+		sleep(2);
+		
+		inno_preinit(ctx, cid);
+		
+		a1->num_chips =  chain_detect(a1);
+		usleep(10000);
+		
+		if (a1->num_chips <= 0)
+			goto failure;
+
+		inno_cmd_bist_fix(a1, ADDR_BROADCAST);
+
+		for (i = 0; i < a1->num_active_chips; i++)
+		{
+			check_chip(a1, i);
+		}
+	}
+	
+	return;
+
+failure:
+	exit_A1_chain(a1);
+	return;
 }
 
-//struct timeval tvLast;
-//struct timeval tvCurr;
-//struct timeval tvDiff;
 
 
 bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t queue_states)

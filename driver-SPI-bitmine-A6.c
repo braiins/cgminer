@@ -801,7 +801,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			char fileName[128] = {0};
 			sprintf(fileName, "%s%d.log", LOG_FILE_PREFIX, cid);
 			fd[cid] = fopen(fileName, "w+");
-			fseek(fd[cid],0,SEEK_SET);
+			//fseek(fd[cid],0,SEEK_SET);
 			fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd[cid]);
 			fflush(fd[cid]);
 			fclose(fd[cid]);

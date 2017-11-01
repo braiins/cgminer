@@ -1101,7 +1101,7 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 		}
 	}
 
-	if (1) {
+	if (opt_debug) {
 		unsigned char hash_swap[32], target_swap[32];
 		char *hash_str, *target_str;
 
