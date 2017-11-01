@@ -74,6 +74,8 @@ static const uint8_t difficult_Tbl[26][4] = {
 	{0x1e, 0x00, 0x00, 0xff},	// 65536
 	{0x1e, 0x00, 0x00, 0x7f},	// 131072
 	{0x1e, 0x00, 0x00, 0x3f}	// 262144
+	{0x1e, 0x00, 0x00, 0x1f}	// 524288
+	{0x1e, 0x00, 0x00, 0x0f}	// 1048576
 };
 
 static const uint8_t default_reg[142][12] = 
@@ -284,7 +286,12 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 	memcpy(data63to0, wdata, 64);
 	memcpy(data75to64, wdata+64, 12);
 									
-	if(sdiff > 262143.0)
+
+	if(sdiff > 1048575.0)
+		memcpy(diff, difficult_Tbl[20], 4);								
+	else if(sdiff > 524287.0)
+		memcpy(diff, difficult_Tbl[19], 4);								
+    else if(sdiff > 262143.0)
 		memcpy(diff, difficult_Tbl[18], 4);
 	else if(sdiff > 131071.0)
 		memcpy(diff, difficult_Tbl[17], 4);								
