@@ -738,8 +738,8 @@ void A1_detect(bool hotplug)
 
 #define TEMP_UPDATE_INT_MS	180000
 #define VOLTAGE_UPDATE_INT  120
-#define WRITE_CONFG_TIME  0
-#define CHECK_DISABLE_TIME  0
+#define WRITE_CONFG_TIME  1
+#define CHECK_DISABLE_TIME  1
 
 char szShowLog[ASIC_CHAIN_NUM][ASIC_CHIP_NUM][256] = {0};
 FILE* fd[ASIC_CHAIN_NUM];
