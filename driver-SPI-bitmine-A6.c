@@ -809,21 +809,25 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			write_flag[cid] = 0;
 		}
 
+        /*
 		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
 			//configure for vsensor
     		inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
 		}
+        */
 		
 		for (i = a1->num_active_chips; i > 0; i--) 
 		{		
 			uint8_t c=i;
+            /*
 			if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 			{
 				inno_check_voltage(a1, i, &s_reg_ctrl);
 				//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
 			}
 			else
+            */
 			{
 				if(is_chip_disabled(a1,c))
 					continue;
@@ -842,12 +846,16 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			}    
 		}
 
+        /*
 		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
 			//configure for tsensor
     		inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
 			update_cnt[cid] = 0;
-		}else{
+		}
+        else
+        */
+        {
 			inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
 				
 			//a1->temp = board_selector->get_temp(0);
