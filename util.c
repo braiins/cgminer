@@ -2541,7 +2541,7 @@ bool parse_method(struct pool *pool, char *s)
 	}
 
 	if (!strncasecmp(buf, "mining.set_version_mask", 23)) {
-		if (parse_set_version_mask(pool, params))
+		ret = parse_set_version_mask(pool, params);
 		goto out_decref;
 	}
 
