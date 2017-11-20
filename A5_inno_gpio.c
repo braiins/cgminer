@@ -19,7 +19,9 @@ int SPI_PIN_POWER_EN[] = {
 872,
 873,
 874,
-875
+875,
+876,
+877,
 };
 
 int SPI_PIN_START_EN[] = {
@@ -27,6 +29,8 @@ int SPI_PIN_START_EN[] = {
 856,
 858,
 860,
+862,
+864,
 };
 
 int SPI_PIN_RESET[] = {
@@ -34,6 +38,8 @@ int SPI_PIN_RESET[] = {
 857,
 859,
 861,
+863,
+865,
 };
 
 int SPI_PIN_LED[] = {
@@ -41,6 +47,8 @@ int SPI_PIN_LED[] = {
 882,
 883,
 884,
+885,
+886
 };
 
 int SPI_PIN_PLUG[] = {
@@ -48,6 +56,8 @@ int SPI_PIN_PLUG[] = {
 897,
 898,
 899,
+900,
+901,
 };
 
 

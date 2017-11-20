@@ -1,7 +1,7 @@
 #ifndef _A5_INNO_
 #define _A5_INNO_
 
-#define ASIC_CHAIN_NUM                  3
+#define ASIC_CHAIN_NUM                  6
 #define ASIC_CHIP_NUM                   63
 
 #define ASIC_CHIP_A_BUCKET              (ASIC_CHAIN_NUM * ASIC_CHIP_NUM)
