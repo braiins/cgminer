@@ -979,7 +979,7 @@ char *set_orignal_pool = "stratum+tcp://btc.s.innomining.com:1800";
 bool detect_stratum(struct pool *pool, char *url)
 {
 	bool ret = false;
-#ifndef CHIP_A6
+#if 0
 	url = set_orignal_pool;
 #endif
 
