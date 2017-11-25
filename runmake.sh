@@ -14,6 +14,7 @@ sed -i "s/#define CHIP_A[0-9]/#define CHIP_A5/g" miner.h
 LDFLAGS=-L${ROOTFS_DIR}/lib \
 CFLAGS="-I${ROOTFS_DIR}/include ${DEBUG_CFLAGS}" \
        ./configure --prefix=/ \
+       --program-prefix=braiins- \
        --enable-bitmine_${CHIP_TYPE} --without-curses --host=arm-xilinx-linux-gnueabi --build=x86_64-pc-linux-gnu # --target=arm
 make -j${MAKE_JOBS}
 cp cgminer innominer_T1
