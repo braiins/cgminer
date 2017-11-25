@@ -13,8 +13,8 @@ sed -i "s/#define CHIP_A[0-9]/#define CHIP_A5/g" miner.h
 ./autogen.sh
 LDFLAGS=-L${ROOTFS_DIR}/lib \
 CFLAGS="-I${ROOTFS_DIR}/include ${DEBUG_CFLAGS}" \
-./configure --prefix=${ROOTFS_DIR} \
---enable-bitmine_${CHIP_TYPE} --without-curses --host=arm-xilinx-linux-gnueabi --build=x86_64-pc-linux-gnu # --target=arm
+       ./configure --prefix=/ \
+       --enable-bitmine_${CHIP_TYPE} --without-curses --host=arm-xilinx-linux-gnueabi --build=x86_64-pc-linux-gnu # --target=arm
 make -j${MAKE_JOBS}
 cp cgminer innominer_T1
 
@@ -29,6 +29,4 @@ CFLAGS=-I${ROOTFS_DIR}/include \
 make -j${MAKE_JOBS}
 cp cgminer innominer_T2
 
-#cp ./cgminer /home/public/update/cgminer_huwt.$1
-#chmod 777 /home/public/update/cgminer_huwt.$1
 
