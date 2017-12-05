@@ -7,7 +7,7 @@ if [ -f Makefile ]; then
 fi
 
 # compat 清理不干净
-git co compat
+git checkout compat
 
 rm -rf compat/jansson-2.9/jansson_private_config.h.in
 rm -rf compat/jansson-2.9/test-driver
