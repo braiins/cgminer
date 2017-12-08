@@ -310,6 +310,7 @@ void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
 
 	mutex_lock(&fan_ctrl->lock);
 
+    a5_debug("FAN speed: %d (%d)", duty, duty_driver);
     /* 开启风扇结点 */
     fd = open(ASIC_INNO_FAN_PWM0_DEVICE_NAME, O_RDWR);
     if(fd < 0)
