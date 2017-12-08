@@ -1043,7 +1043,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 					
 					if(show_log[cid] > 0)					
 					{												
-						applog(LOG_INFO, "%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%d/%5.2f",
+						a5_debug("%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%d/%5.2f",
 							   cid, c, chip->num_cores,chip->nonce_ranges_done, chip->nonces_found,
 							   chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
 						
