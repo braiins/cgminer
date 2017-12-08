@@ -397,7 +397,7 @@ bool inno_cmd_write_sec_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *r
 	uint16_t clc_crc;
 	uint8_t j;
 		
-	applog(LOG_INFO,"send command [write_reg] \n");
+	applog(LOG_INFO,"send command [write_reg]");
 	assert(reg != NULL);
 	
 	memset(spi_tx, 0, sizeof(spi_tx));
@@ -592,7 +592,7 @@ bool inno_cmd_read_result(struct A1_chain *pChain, uint8_t chip_id, uint8_t *res
 			}
 			else
 			{
-				applog(LOG_INFO, "crc error clc=0x%4x, res=0x%4x \r\n", clc_crc, res_crc);
+				applog(LOG_INFO, "crc error clc=0x%4x, res=0x%4x \r", clc_crc, res_crc);
 				return false;
 			}				
 		}
@@ -721,7 +721,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 		0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xF7, 0x7D, 
 		0x00, 0x00, 
 	};
-	applog(LOG_INFO, "ChipNum:%d. \n", pChain->num_active_chips);
+	applog(LOG_INFO, "ChipNum:%d.", pChain->num_active_chips);
 	for (k = 0; k < 3; k++){
 		for (i = pChain->num_active_chips; i > 0; i--) 
 		{
@@ -739,7 +739,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 			
 			if (!inno_cmd_write_job(pChain, c, job1)) 
 			{
-				applog(LOG_ERR, "failed to write job for chip %d. \n", c);
+				applog(LOG_ERR, "failed to write job for chip %d.", c);
 			} 			
 		}
 
@@ -756,9 +756,9 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 			nonce = bswap_32(nonce);
 			if(nonce == rightNonce){
 				++chip_valid[chip_id - 1];
-				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x. \n", c, nonce);
+				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x.", c, nonce);
 			}else{
-				applog(LOG_ERR, "bad nonce error, chip_id:%d, nonce:0x%x. \n", chip_id, nonce);
+				applog(LOG_ERR, "bad nonce error, chip_id:%d, nonce:0x%x.", chip_id, nonce);
 			}
 		}
 		
@@ -778,7 +778,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 		
 			if (!inno_cmd_write_job(pChain, c, job2)) 
 			{
-				applog(LOG_ERR, "failed to write job for chip %d. \n", c);
+				applog(LOG_ERR, "failed to write job for chip %d.", c);
 			} 			
 		}
 
@@ -795,9 +795,9 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 			nonce = bswap_32(nonce);
 			if(nonce == rightNonce2){
 				++chip_valid[chip_id - 1];
-				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x. \n", c, nonce);
+				//applog(LOG_ERR, "chip:%d is good, nonce:0x%x.", c, nonce);
 			}else{
-				applog(LOG_ERR, "bad nonce error, chip_id:%d, nonce:0x%x. \n", chip_id, nonce);
+				applog(LOG_ERR, "bad nonce error, chip_id:%d, nonce:0x%x.", chip_id, nonce);
 			}
 		}
 			
@@ -807,7 +807,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 		uiScore += chip_valid[i-1];
 		/* printf("chip_valid[%d]=%d . \n", i-1, chip_valid[i-1]);
 		if(chip_valid[i-1] >= 4){
-			applog(LOG_ERR, "inno_cmd_test_chip chip %d is good. \n", i);
+			applog(LOG_ERR, "inno_cmd_test_chip chip %d is good.", i);
 		}else{
 			bad_chip_num++;
 		}
@@ -817,7 +817,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 		}
 	} 
 		
-	applog(LOG_ERR, "inno_cmd_test_chip bad chip num is %d. \n", bad_chip_num);
+	applog(LOG_ERR, "inno_cmd_test_chip bad chip num is %d.", bad_chip_num);
 	return uiScore;
 }
 

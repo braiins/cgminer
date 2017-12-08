@@ -183,11 +183,11 @@ void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool w
     }
 
     /* 有芯片温度过高,输出告警打印 */
-    /* applog(LOG_ERR, "inno_fan_temp_add: temp warn_on(init):%d\n", warn_on); */
+    /* applog(LOG_ERR, "inno_fan_temp_add: temp warn_on(init):%d", warn_on); */
     temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
     if(temp_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
     { 
-        applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!\n", chain_id, index, temp_f, temp);
+        applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!", chain_id, index, temp_f, temp);
     }
 }
 
@@ -243,7 +243,7 @@ static int inno_fan_temp_get_arvarge(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
 
     float temp_f = 0.0f;
     temp_f = inno_fan_temp_to_float(fan_ctrl, (int)arvarge_temp);
-	applog(LOG_DEBUG, "inno_fan_temp_get_arvarge, chain_id:%d, temp nums:%d, valid index[%d,%d], reseult:%7.4f(%d).\n",
+	applog(LOG_DEBUG, "inno_fan_temp_get_arvarge, chain_id:%d, temp nums:%d, valid index[%d,%d], reseult:%7.4f(%d).",
             chain_id, temp_nums, head_index, tail_index, inno_fan_temp_to_float(fan_ctrl, (int)arvarge_temp), (int)arvarge_temp); 
 
     return (int)arvarge_temp;
@@ -326,7 +326,7 @@ void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
     }
     if(ioctl(fd, IOCTL_SET_DUTY_0, duty_driver) < 0)
     {
-        applog(LOG_ERR, "set duty fail \n");
+        applog(LOG_ERR, "set duty fail");
         mutex_unlock(&fan_ctrl->lock);
         return;
     }
@@ -608,7 +608,7 @@ void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_
 
 		inno_fan_temp_init(fan_ctrl, a1->chain_id);
 		arvarge_f = inno_fan_temp_to_float(fan_ctrl, fan_ctrl->temp_arvarge[a1->chain_id]);
-		applog(LOG_WARNING, "%s +:arv:%7.4f. \t \n", __func__, arvarge_f);
+		applog(LOG_WARNING, "%s +:arv:%7.4f. \t", __func__, arvarge_f);
 		inno_fan_pwm_set(fan_ctrl, 100);
 		sleep(1);
 	}
