@@ -1095,6 +1095,9 @@ extern int opt_A1Pll4;
 extern int opt_A1Pll5;
 extern int opt_A1Pll6;
 extern int opt_voltage;
+extern int opt_A5_benchmark;
+extern int opt_A5_chain;
+extern int opt_A5_extra_debug;
 
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;

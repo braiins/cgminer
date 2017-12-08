@@ -352,6 +352,9 @@ int opt_A1Pll4=120; // -1 Default
 int opt_A1Pll5=120; // -1 Default
 int opt_A1Pll6=120; // -1 Default
 int opt_voltage = 1;
+int opt_A5_benchmark = 0;
+int opt_A5_chain = 0;
+int opt_A5_extra_debug = 0;
 
 
 char *opt_kernel_path;
@@ -1675,7 +1678,15 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--A1Vol",
 		     set_int_0_to_31, opt_show_intval, &opt_voltage,
 		     "set voltage (0 ~ 31)"),
-
+	OPT_WITH_ARG("--A5-benchmark",
+		     set_int_0_to_31, opt_show_intval, &opt_A5_benchmark,
+		     "benchmark A5 chain, pass test number as argument"),
+	OPT_WITH_ARG("--A5-chain",
+		     set_int_0_to_31, opt_show_intval, &opt_A5_chain,
+		     "select chain of chips to benchmark"),
+	OPT_WITH_ARG("--A5-extra-debug",
+		     set_int_0_to_31, opt_show_intval, &opt_A5_extra_debug,
+		     "turn on extra debugging"),
 #endif
 #ifdef USE_BITFURY
 	OPT_WITH_ARG("--bxf-bits",

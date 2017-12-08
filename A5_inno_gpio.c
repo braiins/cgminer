@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdio.h>
 
+#include "miner.h"
 #include "A5_inno.h"
 #include "A5_inno_gpio.h"
 
@@ -66,6 +67,7 @@ void set_vid_value(int level)
 	int fd; 
     
     //printf("%s:%d.\n", __func__, level);
+	a5_debug("VID: %d", level);
 
     fd = open(SYSFS_VID_DEV, O_RDWR);
     if(fd < 0)
@@ -106,6 +108,8 @@ uint32_t set_spi_speed(uint32_t speed)
 	char fpath[64]; 				  
 	uint32_t rdspeed;					  
 									  
+	a5_debug("SPI speed: %d", speed);
+
 	fd = open(SYSFS_SPI_VAL_STR, O_WRONLY);
 	if(fd == -1)						   
 	{									   
@@ -217,6 +221,8 @@ void asic_gpio_write(int gpio, int value)
 		write(fd, SYSFS_GPIO_VAL_HIGH, sizeof(SYSFS_GPIO_VAL_HIGH));
 	}	
 	close(fd);	
+
+	a5_debug("write to gpio%d: val=%d", gpio, value);
 }
 
 int asic_gpio_read(int gpio)
@@ -246,6 +252,7 @@ int asic_gpio_read(int gpio)
 	}
 	memset(fvalue, 0, sizeof(fvalue));
 	read(fd, fvalue, 1);
+	a5_debug("read from gpio%d: val=%c", gpio, fvalue[0]);
 	if(fvalue[0] == '0')
 	{
 		return 0;
