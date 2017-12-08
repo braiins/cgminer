@@ -17,7 +17,7 @@
 #include "util.h"
 #include <sys/types.h>
 
-#define CHIP_A6
+#define CHIP_A5
 
 #ifndef WIN32
 # include <sys/socket.h>
