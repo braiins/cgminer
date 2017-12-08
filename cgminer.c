@@ -3253,6 +3253,7 @@ extern struct A1_chain *chain[ASIC_CHAIN_NUM];
 
 static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 {
+	struct A1_chain **curchain = chain;
 	char displayed_hashes[16], displayed_rolling[16];
 	double dev_runtime, wu;
 	uint64_t dh64, dr64;
@@ -3264,8 +3265,9 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull * 6ull;
 #else	
-	dh64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
-	dr64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[0]->num_cores);
+	while (!*curchain) curchain++;
+	dh64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (curchain[0]->num_cores);
+	dr64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (curchain[0]->num_cores);
 #endif
 	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
 	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
