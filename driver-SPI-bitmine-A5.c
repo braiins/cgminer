@@ -387,9 +387,9 @@ int  cfg_tsadc_divider(struct A1_chain *a1,uint32_t pll_clk)
 	buffer[5] = 0x00 | tsadc_divider;
 
 	if(!inno_cmd_write_sec_reg(a1,ADDR_BROADCAST,buffer)){
-		applog(LOG_WARNING, "#####Write t/v sensor Value Failed!\n");
+		applog(LOG_WARNING, "#####Write t/v sensor Value Failed!");
 	}
-	applog(LOG_WARNING, "#####Write t/v sensor Value Success!\n");
+	applog(LOG_WARNING, "#####Write t/v sensor Value Success!");
 }
 
 void inno_preinit(struct spi_ctx *ctx, int chain_id)
