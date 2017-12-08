@@ -9,7 +9,7 @@ ROOTFS_DIR=$1
 MAKE_JOBS=$2
 DEBUG_CFLAGS=$3
 
-for i in 5 6; do
+for i in 5; do
     CHIP_TYPE=A$i
     sed -i "s/#define CHIP_A[0-9]/#define CHIP_A$i/g" miner.h
     ./autogen.sh
