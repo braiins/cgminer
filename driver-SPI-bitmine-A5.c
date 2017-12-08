@@ -527,7 +527,7 @@ static bool detect_A1_chain(void)
 		applog(LOG_WARNING, "Detected the %d A1 chain with %d chips / %d cores",
 		       i, chain[i]->num_active_chips, chain[i]->num_cores);
 	}
-/*
+	if (opt_A5_benchmark == 1) {
 	Test_bench_Array[0].uiVol = opt_voltage;
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
@@ -617,7 +617,8 @@ static bool detect_A1_chain(void)
 	}
 
 	opt_voltage = Test_bench_Array[index].uiVol;
-*/
+	exit(0);
+	}
 /*
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{		
