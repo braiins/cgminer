@@ -756,7 +756,74 @@ static void job_instance(uint8_t *job_buf, uint8_t *template_buf, uint8_t chip_i
 	job_buf[161] = 0;
 }
 
-void inno_cmd_test_chips_round(struct A1_chain *pChain, TestJob *job, uint32_t *chip_valid)
+static int inno_queue_active(struct A1_chain *pChain, uint8_t chip_id)
+{
+	uint8_t reg[REG_LENGTH];
+	if(!inno_cmd_read_reg(pChain, chip_id, reg)) {
+		applog(LOG_ERR, "failed to read registers of chip %d.", chip_id);
+		return -1;
+	}
+	return reg[9] & 3;
+}
+
+double time_diff(struct timespec start, struct timespec stop)
+{
+	return (stop.tv_sec - start.tv_sec) + (stop.tv_nsec - stop.tv_nsec)/1000000000.0;
+}
+#define time_diff_ms(x,y) (time_diff(x,y)*1000.0)
+
+
+double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job)
+{
+	uint8_t tmp_buf[JOB_LENGTH];
+	struct timespec start, stop;
+	int lastact = 0;
+
+	clock_gettime(0, &start);
+	job_instance(tmp_buf, job->data, chip_id, 1);
+	if (!inno_cmd_write_job(pChain, chip_id, tmp_buf)) {
+		applog(LOG_ERR, "failed to write job for chip %d.", chip_id);
+	}
+	job_instance(tmp_buf, job->data, chip_id, 2);
+	if (!inno_cmd_write_job(pChain, chip_id, tmp_buf)) {
+		applog(LOG_ERR, "failed to write job for chip %d.", chip_id);
+	}
+	for (;;) {
+		int act = inno_queue_active(pChain, chip_id);
+		if (act == -1) {
+			applog(LOG_ERR, "chip %d failed test", chip_id);
+			return -1;
+		}
+		if (act != lastact) {
+			clock_gettime(0, &stop);
+			applog(LOG_INFO, "chip %d: state change (%d->%d) in t=%lfms", chip_id, lastact, act, time_diff_ms(start, stop));
+			lastact = act;
+		}
+
+		if (act == 0)
+			break;
+	}
+	clock_gettime(0, &stop);
+
+	return time_diff_ms(start, stop);
+}
+
+void inno_cmd_xtest(struct A1_chain *pChain)
+{
+	double t;
+	int i;
+
+	for (i = 1; i <= pChain->num_active_chips; i++) {
+		t = inno_cmd_xtest_one(pChain, i, &test_jobs[0]);
+		if (t >= 0) {
+			applog(LOG_INFO, "chip %d finished in %lfms", i, t);
+		}
+	}
+}
+
+/* Original test */
+
+void inno_cmd_test_chip_round(struct A1_chain *pChain, TestJob *job, uint32_t *chip_valid)
 {
 	uint8_t tmp_buf[JOB_LENGTH];
 	uint8_t chip_id;
@@ -803,8 +870,8 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 	applog(LOG_INFO, "ChipNum:%d.", pChain->num_active_chips);
 
 	for (round = 0; round < 3; round++) {
-		inno_cmd_test_chips_round(pChain, &test_jobs[0], chip_valid);
-		inno_cmd_test_chips_round(pChain, &test_jobs[1], chip_valid);
+		inno_cmd_test_chip_round(pChain, &test_jobs[0], chip_valid);
+		inno_cmd_test_chip_round(pChain, &test_jobs[1], chip_valid);
 	}
 
 	
