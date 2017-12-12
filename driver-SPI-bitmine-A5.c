@@ -220,6 +220,32 @@ failure:
 	return NULL;
 }
 
+static void A1_printstats_chain(struct A1_chain *a1)
+{
+	int i;
+	for (i=0; i < a1->num_active_chips; i++) {
+		struct A1_chip *chip = &a1->chips[i];
+
+		printf("%d,%d,%d,%d,%d,%d,%d,%d,%5.2f,%f\n",
+				a1->chain_id, i + 1, chip->disabled,
+				chip->num_cores,
+				chip->nonce_ranges_done, chip->nonces_found,
+				chip->hw_errors, chip->stales,
+				inno_fan_temp_to_float(&s_fan_ctrl,chip->temp),
+				s_reg_ctrl.cur_vol[a1->chain_id][i]);
+	}
+}
+
+static void A1_printstats_all(void)
+{
+	int i;
+	for (i = 0; i < ASIC_CHAIN_NUM; i++) {
+		if (chain[i] != NULL)
+			A1_printstats_chain(chain[i]);
+	}
+}
+
+
 bool test_bench_init_chain(struct A1_chain *a1)
 {
 	int i;
@@ -527,13 +553,17 @@ static bool detect_A1_chain(void)
 		applog(LOG_WARNING, "Detected the %d A1 chain with %d chips / %d cores",
 		       i, chain[i]->num_active_chips, chain[i]->num_cores);
 	}
+	if (opt_A5_benchmark > 0) {
+		A1_printstats_all();
+	}
 	if (opt_A5_benchmark == 2) {
 		for(i = 0; i < ASIC_CHAIN_NUM; i++) {
 			if (chain[i] == NULL){
-				applog(LOG_ERR, "init %d A1 chain fail", i);
+				applog(LOG_ERR, "Test: chain %d not present", i);
 				continue;
 			}
-			inno_cmd_xtest(chain[i]);
+			inno_cmd_xtest(chain[i], 0);
+			inno_cmd_xtest(chain[i], 1);
 		}
 	}
 	if (opt_A5_benchmark == 1) {
@@ -626,7 +656,6 @@ static bool detect_A1_chain(void)
 	}
 
 	opt_voltage = Test_bench_Array[index].uiVol;
-	exit(0);
 	}
 /*
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
@@ -670,6 +699,10 @@ static bool detect_A1_chain(void)
 	printf("The best group is %d!!! \t \n", index);
 	config_best_pll_vid(Test_bench_Array[index].uiPll, Test_bench_Array[index].uiVol);
 */
+	if (opt_A5_benchmark > 0) {
+		A1_printstats_all();
+		exit(0);
+	}
 	return (cnt == 0) ? false : true;
 }
 

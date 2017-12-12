@@ -919,11 +919,11 @@ double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job
 	return time_diff_ms(start, now) / (double)done_jobs;
 }
 
-void inno_cmd_xtest(struct A1_chain *pChain)
+void inno_cmd_xtest(struct A1_chain *pChain, int good)
 {
 	double t;
 	int i;
-	TestJob *job = &test_jobs[2];
+	TestJob *job = &test_jobs[good + 1];
 
 	applog(LOG_INFO, "running xtest on job that has%s solution on chain %d", job->has_solution ? "" : " no", pChain->chain_id);
 	for (i = 1; i <= pChain->num_active_chips; i++) {
@@ -982,7 +982,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 	uint32_t uiScore = 0;
 	uint32_t chip_valid[ASIC_CHIP_NUM] = {0};
 	
-	applog(LOG_INFO, "ChipNum:%d.", pChain->num_active_chips);
+	applog(LOG_INFO, "Testing chain %d, ChipNum:%d.", pChain->chain_id, pChain->num_active_chips);
 
 	for (round = 0; round < 3; round++) {
 		inno_cmd_test_chip_round(pChain, &test_jobs[0], chip_valid);

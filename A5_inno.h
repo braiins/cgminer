@@ -34,9 +34,10 @@
 #include "A5_inno_cmd.h"
 
 typedef struct{
-   float highest_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */;
-   float lowest_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */;
-   float avarge_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */; 
+   float highest_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
+   float lowest_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
+   float avarge_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
+   float cur_vol[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
    int stat_cnt[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];
 }inno_reg_ctrl_t;
 

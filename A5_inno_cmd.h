@@ -144,7 +144,7 @@ extern bool inno_cmd_write_job(struct A1_chain *pChain, uint8_t chip_id, uint8_t
 extern uint8_t inno_cmd_isBusy(struct A1_chain *pChain, uint8_t chip_id);
 
 extern uint32_t inno_cmd_test_chip(struct A1_chain *pChain);
-void inno_cmd_xtest(struct A1_chain *pChain);
+void inno_cmd_xtest(struct A1_chain *pChain, int good);
 
 extern bool inno_cmd_resetbist(struct A1_chain *pChain, uint8_t chip_id);
 
