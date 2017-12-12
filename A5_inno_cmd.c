@@ -821,7 +821,7 @@ static void reap_dead_solutions(struct A1_chain *pChain)
 double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job, int todo_jobs)
 {
 	uint8_t tmp_buf[JOB_LENGTH];
-	struct timespec start, now, lastdeq;
+	struct timespec start, now, spinstart, lastdeq;
 	int issued_jobs = 0;
 	int in_queue_jobs = 0;
 	int done_jobs = 0;
@@ -847,7 +847,13 @@ double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job
 			used_slots[slot] = 1;
 			job_id = slot + 1;
 
+			clock_gettime(0, &spinstart);
 			do {
+				clock_gettime(0, &now);
+				if (time_diff_ms(spinstart, now) > 3000) {
+					applog(LOG_ERR, "timeout when waiting for queue to clear");
+					return -1;
+				}
 				qstatus = inno_queue_active(pChain, chip_id);
 				//xprintf("jobs in queue: %d qstatus: %d\n", in_queue_jobs, qstatus);
 			} while (qstatus == 3);
@@ -919,7 +925,7 @@ void inno_cmd_xtest(struct A1_chain *pChain)
 	int i;
 	TestJob *job = &test_jobs[2];
 
-	applog(LOG_INFO, "running xtest on job that has%s solution", job->has_solution ? "" : " no");
+	applog(LOG_INFO, "running xtest on job that has%s solution on chain %d", job->has_solution ? "" : " no", pChain->chain_id);
 	for (i = 1; i <= pChain->num_active_chips; i++) {
 		t = inno_cmd_xtest_one(pChain, i, job, 11);
 		if (t >= 0) {
