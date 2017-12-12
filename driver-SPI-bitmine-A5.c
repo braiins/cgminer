@@ -527,6 +527,15 @@ static bool detect_A1_chain(void)
 		applog(LOG_WARNING, "Detected the %d A1 chain with %d chips / %d cores",
 		       i, chain[i]->num_active_chips, chain[i]->num_cores);
 	}
+	if (opt_A5_benchmark == 2) {
+		for(i = 0; i < ASIC_CHAIN_NUM; i++) {
+			if (chain[i] == NULL){
+				applog(LOG_ERR, "init %d A1 chain fail", i);
+				continue;
+			}
+			inno_cmd_xtest(chain[i]);
+		}
+	}
 	if (opt_A5_benchmark == 1) {
 	Test_bench_Array[0].uiVol = opt_voltage;
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)

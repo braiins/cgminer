@@ -684,6 +684,7 @@ typedef struct TestJob TestJob;
 struct TestJob {
 	uint32_t right_nonce;
 	uint8_t data[JOB_LENGTH];
+	int has_solution;
 };
 
 TestJob test_jobs[] = {
@@ -712,6 +713,7 @@ TestJob test_jobs[] = {
 			0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x89, 0x39,
 			0x00, 0x00,
 		},
+		.has_solution = 1,
 	},
 	{
 		.right_nonce = 0xce1f5e74,
@@ -738,7 +740,35 @@ TestJob test_jobs[] = {
 			0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xF7, 0x7D,
 			0x00, 0x00,
 		},
+		.has_solution = 1,
 	},
+	{
+		.data = {
+			0x0C, 0x00, 0x6A, 0x63, 0x80, 0xFD, 0x1C, 0x33,
+			0x48, 0xF8, 0x2C, 0xF2, 0x68, 0x0B, 0x07, 0x16,
+			0x3B, 0xF8, 0x18, 0x48, 0xF3, 0x8B, 0x9B, 0x6F,
+			0xDD, 0x93, 0x41, 0xBC, 0xA4, 0x99, 0x4D, 0x69,
+			0xD3, 0xBF, 0x4F, 0x41, 0xAB, 0x6C, 0x0A, 0x36,
+			0x9A, 0x31, 0xEA, 0xCC, 0x33, 0x1B, 0x39, 0xFE,
+			0xAD, 0xA8, 0x4C, 0x20, 0x44, 0x1D, 0x26, 0xB3,
+			0x95, 0x79, 0xDA, 0xF2, 0x76, 0xBB, 0xA7, 0x6B,
+			0x4E, 0x7A, 0x93, 0x07, 0xD1, 0x5B, 0x78, 0xA5,
+			0x1A, 0xA6, 0xB2, 0x34, 0xD4, 0xF5, 0x16, 0x4C,
+			0xCF, 0x81, 0xAA, 0xF4, 0x03, 0xD9, 0xC8, 0xBD,
+			0x33, 0x5A, 0x91, 0xB9, 0xA1, 0x26, 0x58, 0xFA,
+			0xC4, 0x86, 0xF3, 0x89, 0x34, 0x8E, 0x7C, 0xA1,
+			0xFD, 0x7C, 0x7C, 0xD2, 0x14, 0xB2, 0xE4, 0x0C,
+			0xF1, 0x42, 0xBB, 0xF3, 0x78, 0xEA, 0x9C, 0x84,
+			0x07, 0xDF, 0xDB, 0x77, 0x91, 0x23, 0x6F, 0x2F,
+			0x90, 0xA1, 0x43, 0x2A, 0xB7, 0x17, 0x96, 0xBC,
+			0xC9, 0x59, 0x18, 0xFF, 0x00, 0x18, 0x00, 0x00,
+			0x00, 0x00, 0xFF, 0xFF, 0x1F, 0x0B, 0xFF, 0xFF,
+			0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xF7, 0x7D,
+			0x00, 0x00,
+		},
+		.has_solution = 0,
+	},
+
 };
 
 static void job_instance(uint8_t *job_buf, uint8_t *template_buf, uint8_t chip_id, uint8_t job_id)
@@ -771,52 +801,131 @@ double time_diff(struct timespec start, struct timespec stop)
 	return (stop.tv_sec - start.tv_sec) + (stop.tv_nsec - stop.tv_nsec)/1000000000.0;
 }
 #define time_diff_ms(x,y) (time_diff(x,y)*1000.0)
+#define N_SLOTS 15
 
+static void reap_dead_solutions(struct A1_chain *pChain)
+{
+	uint8_t res_chip_id;
+	uint8_t job_id;
+	uint32_t nonce;
+	uint16_t micro_job_id;
 
-double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job)
+	usleep(1000000);
+	while (get_nonce(pChain, (uint8_t*)&nonce, &res_chip_id, &job_id, (uint8_t*)&micro_job_id))
+		;
+}
+
+//#define xprintf(p...) printf(p)
+#define xprintf(p...)
+
+double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job, int todo_jobs)
 {
 	uint8_t tmp_buf[JOB_LENGTH];
-	struct timespec start, stop;
-	int lastact = 0;
+	struct timespec start, now, lastdeq;
+	int issued_jobs = 0;
+	int in_queue_jobs = 0;
+	int done_jobs = 0;
+	int used_slots[N_SLOTS] = {};
 
+	xprintf("running xtest on chip %d with job that has%s solution\n", chip_id, job->has_solution ? "" : " no");
+	clock_gettime(0, &lastdeq);
 	clock_gettime(0, &start);
-	job_instance(tmp_buf, job->data, chip_id, 1);
-	if (!inno_cmd_write_job(pChain, chip_id, tmp_buf)) {
-		applog(LOG_ERR, "failed to write job for chip %d.", chip_id);
-	}
-	job_instance(tmp_buf, job->data, chip_id, 2);
-	if (!inno_cmd_write_job(pChain, chip_id, tmp_buf)) {
-		applog(LOG_ERR, "failed to write job for chip %d.", chip_id);
-	}
-	for (;;) {
-		int act = inno_queue_active(pChain, chip_id);
-		if (act == -1) {
-			applog(LOG_ERR, "chip %d failed test", chip_id);
-			return -1;
-		}
-		if (act != lastact) {
-			clock_gettime(0, &stop);
-			applog(LOG_INFO, "chip %d: state change (%d->%d) in t=%lfms", chip_id, lastact, act, time_diff_ms(start, stop));
-			lastact = act;
-		}
+	while (done_jobs < todo_jobs) {
+		xprintf("done=%d todo=%d issued_jobs=%d in_queue=%d\n", done_jobs, todo_jobs, issued_jobs, in_queue_jobs);
+		while (issued_jobs < todo_jobs && in_queue_jobs < 2) {
+			int slot = issued_jobs % N_SLOTS;
+			int first_slot = slot;
+			int job_id, qstatus;
 
-		if (act == 0)
-			break;
-	}
-	clock_gettime(0, &stop);
+			while (used_slots[slot]) {
+				slot = (slot + 1) % N_SLOTS;
+				if (slot == first_slot) {
+					applog(LOG_ERR, "bite me");
+					return -1;
+				}
+			}
+			used_slots[slot] = 1;
+			job_id = slot + 1;
 
-	return time_diff_ms(start, stop);
+			do {
+				qstatus = inno_queue_active(pChain, chip_id);
+				//xprintf("jobs in queue: %d qstatus: %d\n", in_queue_jobs, qstatus);
+			} while (qstatus == 3);
+
+			xprintf("queueing one, job_id=%d, qstatus=%d\n", job_id, qstatus);
+			job_instance(tmp_buf, job->data, chip_id, job_id);
+			if (!inno_cmd_write_job(pChain, chip_id, tmp_buf)) {
+				applog(LOG_ERR, "failed to write job for chip %d.", chip_id);
+				return -1;
+			}
+			issued_jobs++;
+			if (job->has_solution)
+				in_queue_jobs++;
+			else
+				done_jobs++;
+			xprintf("enqueued one: issued=%d, inq=%d\n", issued_jobs, in_queue_jobs);
+		}
+		while (in_queue_jobs >= 2 || (issued_jobs == todo_jobs && in_queue_jobs > 0)) {
+			uint8_t res_chip_id;
+			uint8_t job_id;
+			uint32_t nonce;
+			uint16_t micro_job_id;
+
+			xprintf("waiting for result\n");
+			while (!get_nonce(pChain, (uint8_t*)&nonce, &res_chip_id, &job_id, (uint8_t*)&micro_job_id)) {
+				clock_gettime(0, &now);
+				if (time_diff_ms(lastdeq, now) > 3000) {
+					applog(LOG_ERR, "timeout, queue=%d", inno_queue_active(pChain, chip_id));
+					int i;
+					for (i = 0; i < N_SLOTS; i++) {
+						if (used_slots[i])
+							applog(LOG_ERR, "job_id %d not done", i + 1);
+					}
+					return -1;
+				}
+			}
+			clock_gettime(0, &lastdeq);
+
+			xprintf("got result job_id=%d\n", job_id);
+			if (res_chip_id != chip_id) {
+				applog(LOG_ERR, "bad chip responded (%d)", res_chip_id);
+				continue;
+			}
+
+			int slot = job_id - 1;
+			if (!used_slots[slot]) {
+				applog(LOG_ERR, "microjob from unused job_id (%d)", job_id);
+				return -1;
+			}
+			used_slots[slot] = 0;
+			nonce = bswap_32(nonce);
+			if (nonce != job->right_nonce) {
+				applog(LOG_ERR, "bad computed nonce (got %08x, correct %08x)", nonce, job->right_nonce);
+				return -1;
+			}
+			in_queue_jobs--;
+			done_jobs++;
+			xprintf("dequeued one: inq=%d\n", in_queue_jobs);
+		}
+	}
+	clock_gettime(0, &now);
+
+	return time_diff_ms(start, now) / (double)done_jobs;
 }
 
 void inno_cmd_xtest(struct A1_chain *pChain)
 {
 	double t;
 	int i;
+	TestJob *job = &test_jobs[2];
 
+	applog(LOG_INFO, "running xtest on job that has%s solution", job->has_solution ? "" : " no");
 	for (i = 1; i <= pChain->num_active_chips; i++) {
-		t = inno_cmd_xtest_one(pChain, i, &test_jobs[0]);
+		t = inno_cmd_xtest_one(pChain, i, job, 11);
 		if (t >= 0) {
 			applog(LOG_INFO, "chip %d finished in %lfms", i, t);
+		} else {
+			reap_dead_solutions(pChain);
 		}
 	}
 }
