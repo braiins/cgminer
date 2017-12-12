@@ -798,7 +798,7 @@ static int inno_queue_active(struct A1_chain *pChain, uint8_t chip_id)
 
 double time_diff(struct timespec start, struct timespec stop)
 {
-	return (stop.tv_sec - start.tv_sec) + (stop.tv_nsec - stop.tv_nsec)/1000000000.0;
+	return (stop.tv_sec - start.tv_sec) + (stop.tv_nsec - start.tv_nsec)/1000000000.0;
 }
 #define time_diff_ms(x,y) (time_diff(x,y)*1000.0)
 #define N_SLOTS 15
