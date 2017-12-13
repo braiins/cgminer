@@ -355,6 +355,8 @@ int opt_voltage = 1;
 int opt_A5_benchmark = 0;
 int opt_A5_chain = 0;
 int opt_A5_extra_debug = 0;
+/* bitmask of enabled chains or -1 for "all chains" */
+int opt_enabled_chains = -1;
 
 
 char *opt_kernel_path;
@@ -934,6 +936,30 @@ static char __maybe_unused *set_int_0_to_4(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 4);
 }
+
+static char *set_bitmask_from_list(const char *arg, int *i)
+{
+	int mask = 0;
+
+	for (;;) {
+		char *endptr;
+		unsigned long bit;
+
+		bit = strtol(arg, &endptr, 10);
+		if (*endptr != ',' && *endptr != 0)
+			return "Invalid list character encountered";
+		if (bit >= 31)
+			return "Bit index outside supported range";
+		mask |= 1 << bit;
+
+		if (*endptr == 0)
+			break;
+		arg = endptr + 1;
+	}
+	*i = mask;
+	return NULL;
+}
+
 
 #ifdef USE_FPGA_SERIAL
 static char *opt_add_serial;
@@ -1687,6 +1713,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--A5-extra-debug",
 		     set_int_0_to_31, opt_show_intval, &opt_A5_extra_debug,
 		     "turn on extra debugging"),
+	OPT_WITH_ARG("--enabled-chains",
+		     set_bitmask_from_list, opt_show_intval, &opt_enabled_chains,
+		     "list of enabled chains"),
 #endif
 #ifdef USE_BITFURY
 	OPT_WITH_ARG("--bxf-bits",

@@ -444,6 +444,11 @@ void inno_preinit(struct spi_ctx *ctx, int chain_id)
 	cfg_tsadc_divider(a1, 120);
 }
 
+static inline int is_chain_enabled(int i)
+{
+	return opt_enabled_chains < 0 || (opt_enabled_chains & (1 << i));
+}
+
 int chain_flag[ASIC_CHAIN_NUM] = {0};
 static bool detect_A1_chain(void)
 {
@@ -453,6 +458,8 @@ static bool detect_A1_chain(void)
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
+		if (!is_chain_enabled(i))
+			continue;
 		cfg[i].bus     = i;
 		cfg[i].cs_line = 0;
 		cfg[i].mode    = SPI_MODE_1;
@@ -489,6 +496,9 @@ static bool detect_A1_chain(void)
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
+		if (!is_chain_enabled(i))
+			continue;
+
 		asic_gpio_write(spi[i]->power_en, 1);
 		sleep(2);
 		asic_gpio_write(spi[i]->reset, 1);
@@ -499,13 +509,15 @@ static bool detect_A1_chain(void)
 		if(asic_gpio_read(spi[i]->plug) != 0)
 		{
 			applog(LOG_ERR, "chain:%d the plat is not inserted", i);
-			continue;
+			return false;
 		}
 	}
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{		
-	    inno_preinit(spi[i], i);
+		if (!is_chain_enabled(i))
+			continue;
+		inno_preinit(spi[i], i);
 	}
 
 	//divide the init to break two part
@@ -525,10 +537,13 @@ static bool detect_A1_chain(void)
 
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
+		if (!is_chain_enabled(i))
+			continue;
+
 		chain[i] = init_A1_chain(spi[i], i);
 		if (chain[i] == NULL){
 			applog(LOG_ERR, "init %d A1 chain fail", i);
-			continue;
+			return false;
 		}else{
 			cnt++;
 			chain_flag[i] = 1;
@@ -876,7 +891,6 @@ void A1_detect(bool hotplug)
 		return;
 	}
 
-	applog(LOG_WARNING, "A1 dectect finish");
 
     int i = 0;
 	/* release SPI context if no A1 products found */
@@ -884,6 +898,8 @@ void A1_detect(bool hotplug)
 	{
 		spi_exit(spi[i]);
 	}	
+	early_quit(1, "Chain detection failed, refuse to mine!");
+	exit(0);
 }
 
 #define TEMP_UPDATE_INT_MS	180000

@@ -1097,6 +1097,7 @@ extern int opt_A1Pll6;
 extern int opt_voltage;
 extern int opt_A5_benchmark;
 extern int opt_A5_chain;
+extern int opt_enabled_chains;
 extern int opt_A5_extra_debug;
 
 #ifdef USE_BITFORCE
