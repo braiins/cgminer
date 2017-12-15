@@ -1192,7 +1192,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 	*/
 	
 	//return (int64_t)(( A1Pll * 2 * a1->num_cores) * (a1->tvScryptDiff.tv_usec / 1000000.0));
-	return (int64_t)nonce_ranges_processed << 32;
+	return (int64_t)nonce_ranges_processed << 34;
 }
 /**
  * Add measurement to history and return moving average of 
