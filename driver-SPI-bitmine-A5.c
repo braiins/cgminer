@@ -993,6 +993,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 		write_flag[cid]++;
 		check_disbale_flag[cid]++;
 
+#if 0
 		if (write_flag[cid] > WRITE_CONFG_TIME)
 		{
 			char fileName[128] = {0};
@@ -1005,6 +1006,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			
 			write_flag[cid] = 0;
 		}
+#endif
 
 		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
@@ -1278,6 +1280,7 @@ static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
 		write_flag[cid]++;
 		check_disbale_flag[cid]++;
 
+#if 0
 		if (write_flag[cid] > WRITE_CONFG_TIME)
 		{
 			char fileName[128] = {0};
@@ -1290,6 +1293,7 @@ static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
 
 			write_flag[cid] = 0;
 		}
+#endif
 
 		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
 		{
