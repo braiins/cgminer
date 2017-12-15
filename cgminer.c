@@ -8248,7 +8248,7 @@ static void hash_sole_work(struct thr_info *mythr)
 				break;
 			}
 
-			hashes_done += 4 * hashes;
+			hashes_done += hashes;
 			if (hashes > cgpu->max_hashes)
 				cgpu->max_hashes = hashes;
 
@@ -8600,7 +8600,7 @@ void hash_queued_work(struct thr_info *mythr)
 			break;
 		}
 
-		hashes_done += 4 * hashes;
+		hashes_done += hashes;
 		cgtime(&tv_end);
 		timersub(&tv_end, &tv_start, &diff);
 		/* Update the hashmeter at most 5 times per second */
@@ -8651,7 +8651,7 @@ void hash_driver_work(struct thr_info *mythr)
 			break;
 		}
 
-		hashes_done += 4 * hashes;
+		hashes_done += hashes;
 		cgtime(&tv_end);
 		timersub(&tv_end, &tv_start, &diff);
 		/* Update the hashmeter at most 5 times per second */
