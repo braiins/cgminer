@@ -1099,6 +1099,7 @@ extern int opt_A5_benchmark;
 extern int opt_A5_chain;
 extern int opt_enabled_chains;
 extern int opt_A5_extra_debug;
+extern int opt_A5_fast_start;
 
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;

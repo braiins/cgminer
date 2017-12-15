@@ -84,6 +84,12 @@ struct A1_chip {
 	int temp;
 };
 
+#define HISTORY_SIZE 16
+struct moving_average {
+	unsigned n, ptr;
+	double data[HISTORY_SIZE];
+};
+
 struct A1_chain {
 	int chain_id;
 	struct cgpu_info *cgpu;
@@ -109,6 +115,14 @@ struct A1_chain {
 	struct timeval tvScryptCurr;
 	struct timeval tvScryptDiff;
 	int work_start_delay;
+
+	/* for benchmarking purposes */
+	unsigned nonces_found;
+	unsigned last_results_update;
+	unsigned nonce_ranges_done;
+	unsigned midstate_counter;
+	uint32_t bench_difficulty;
+	struct moving_average avg_found;
 };
 
 struct Test_bench {

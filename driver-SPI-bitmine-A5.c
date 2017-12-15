@@ -31,6 +31,8 @@
 
 #include "inno_fan.h"
 
+static int64_t A1_bench_scanwork(struct cgpu_info *cgpu);
+
 struct spi_config cfg[ASIC_CHAIN_NUM];
 struct spi_ctx *spi[ASIC_CHAIN_NUM];
 struct A1_chain *chain[ASIC_CHAIN_NUM];
@@ -500,11 +502,20 @@ static bool detect_A1_chain(void)
 			continue;
 
 		asic_gpio_write(spi[i]->power_en, 1);
-		sleep(2);
+		if (opt_A5_fast_start)
+			usleep(200000);
+		else
+			sleep(2);
 		asic_gpio_write(spi[i]->reset, 1);
-		sleep(1);
+		if (opt_A5_fast_start)
+			usleep(100000);
+		else
+			sleep(1);
 		asic_gpio_write(spi[i]->start_en, 1);
-		sleep(2);
+		if (opt_A5_fast_start)
+			usleep(200000);
+		else
+			sleep(2);
 
 		if(asic_gpio_read(spi[i]->plug) != 0)
 		{
@@ -571,7 +582,23 @@ static bool detect_A1_chain(void)
 	if (opt_A5_benchmark > 0) {
 		A1_printstats_all();
 	}
+	if (opt_A5_benchmark == 3) {
+		/* Benchmark No. 3 - simulate mining and compute resulting speed */
+		for(i = 0; i < ASIC_CHAIN_NUM; i++) {
+			struct A1_chain *a1 = chain[i];
+
+			if (a1 != NULL) {
+				a1->bench_difficulty = 1024;
+				a1->last_results_update = get_current_ms();
+				for (;;)
+					A1_bench_scanwork(chain[i]->cgpu);
+			}
+		}
+	}
 	if (opt_A5_benchmark == 2) {
+		/* Benchmark No. 2 - test each chip individually and measure
+		   the time it takes the chip to complete a job that has known
+		   solution */
 		for(i = 0; i < ASIC_CHAIN_NUM; i++) {
 			if (chain[i] == NULL){
 				applog(LOG_ERR, "Test: chain %d not present", i);
@@ -582,6 +609,8 @@ static bool detect_A1_chain(void)
 		}
 	}
 	if (opt_A5_benchmark == 1) {
+		/* Benchmark No. 1 - test good/bad chips on each chain under
+		   load and various voltage settings */
 	Test_bench_Array[0].uiVol = opt_voltage;
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
@@ -903,6 +932,7 @@ void A1_detect(bool hotplug)
 }
 
 #define TEMP_UPDATE_INT_MS	180000
+#define RESULTS_UPDATE_INT_MS	10000
 #define VOLTAGE_UPDATE_INT  120
 #define WRITE_CONFG_TIME  0
 #define CHECK_DISABLE_TIME  0
@@ -1163,6 +1193,260 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 	
 	//return (int64_t)(( A1Pll * 2 * a1->num_cores) * (a1->tvScryptDiff.tv_usec / 1000000.0));
 	return (int64_t)nonce_ranges_processed << 32;
+}
+/**
+ * Add measurement to history and return moving average of 
+ * last @c HISTORY_SIZE elements.
+ *
+ * @param mavg Moving average structure
+ * @param x Element to add to the history
+ */
+static double average_add(struct moving_average *mavg, double x)
+{
+	unsigned i, n;
+	double sum;
+
+	if (mavg->ptr >= HISTORY_SIZE)
+		mavg->ptr = 0;
+	mavg->data[mavg->ptr++] = x;
+	mavg->n++;
+
+	n = mavg->n;
+	if (n > HISTORY_SIZE)
+		n = HISTORY_SIZE;
+
+	sum = 0;
+	for (i = 0; i < HISTORY_SIZE; i++)
+		sum += mavg->data[i];
+
+	return sum / n;
+}
+
+static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
+{
+	int i;
+	int32_t A1Pll = 1000;
+	struct A1_chain *a1 = cgpu->device_data;
+
+	uint32_t nonce;
+	uint8_t chip_id;
+	uint8_t job_id;
+	bool work_updated = false;
+	uint16_t micro_job_id;
+	uint8_t reg[REG_LENGTH];
+
+	mutex_lock(&a1->lock);
+	int cid = a1->chain_id;
+
+	if (first_flag[cid] != 1)
+	{
+		applog(LOG_ERR, "%d: A1_scanwork first in set all parameter!", a1->chain_id);
+		first_flag[cid]++;
+		for (i = a1->num_active_chips; i > 0; i--)
+		{
+			if (!inno_cmd_read_reg(a1, i, reg))
+			{
+				applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
+				continue;
+			}
+			/* update temp database */
+			uint32_t temp = 0;
+			float    temp_f = 0.0f;
+
+			temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+			inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+		}
+
+		inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
+	}
+
+	if (a1->last_results_update + RESULTS_UPDATE_INT_MS < get_current_ms())
+	{
+		double avg = average_add(&a1->avg_found, a1->nonces_found/10.0);
+
+		applog(LOG_INFO, "mining results: this round: %.2lf found/sec (enqueued %.2lf jobs/sec)", a1->nonces_found/10.0, a1->nonce_ranges_done/10.0);
+		applog(LOG_INFO, "mining speed: %lf GHash/sec (difficulty=%d)", avg*4.295*a1->bench_difficulty, a1->bench_difficulty);
+		a1->nonce_ranges_done = 0;
+		a1->nonces_found = 0;
+		a1->last_results_update = get_current_ms();
+	}
+
+	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
+	{
+		update_cnt[cid]++;
+		show_log[cid]++;
+		write_flag[cid]++;
+		check_disbale_flag[cid]++;
+
+		if (write_flag[cid] > WRITE_CONFG_TIME)
+		{
+			char fileName[128] = {0};
+			sprintf(fileName, "%s%d.log", LOG_FILE_PREFIX, cid);
+			fd[cid] = fopen(fileName, "w+");
+			//fseek(fd[cid],0,SEEK_SET);
+			fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd[cid]);
+			fflush(fd[cid]);
+			fclose(fd[cid]);
+
+			write_flag[cid] = 0;
+		}
+
+		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
+		{
+			//configure for vsensor
+			inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
+		}
+
+		for (i = a1->num_active_chips; i > 0; i--)
+		{
+			uint8_t c=i;
+			if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
+			{
+				inno_check_voltage(a1, i, &s_reg_ctrl);
+				//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
+			}
+			else
+			{
+				if(is_chip_disabled(a1,c))
+					continue;
+				if (!inno_cmd_read_reg(a1, c, reg))
+				{
+					disable_chip(a1,c);
+					applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
+					continue;
+				}
+				/* update temp database */
+				uint32_t temp = 0;
+				float    temp_f = 0.0f;
+
+				temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
+				inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
+			}
+		}
+
+		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
+		{
+			//configure for tsensor
+			inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
+			update_cnt[cid] = 0;
+		}else{
+			inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
+
+			//a1->temp = board_selector->get_temp(0);
+			a1->last_temp_time = get_current_ms();
+			if(inno_fan_temp_get_highest(&s_fan_ctrl,a1->chain_id) > DANGEROUS_TMP)
+			{
+				asic_gpio_write(spi[a1->chain_id]->power_en, 0);
+				early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
+			}
+		}
+	}
+
+	/* poll queued results */
+	while (true)
+	{
+		if (!get_nonce(a1, (uint8_t*)&nonce, &chip_id, &job_id, (uint8_t*)&micro_job_id))
+			break;
+		nonce = bswap_32(nonce);   //modify for A4
+		work_updated = true;
+		if (chip_id < 1 || chip_id > a1->num_active_chips)
+		{
+			applog(LOG_WARNING, "%d: wrong chip_id %d", cid, chip_id);
+			continue;
+		}
+		if (job_id < 1 && job_id > 4)
+		{
+			applog(LOG_WARNING, "%d: chip %d: result has wrong ""job_id %d", cid, chip_id, job_id);
+			flush_spi(a1);
+			continue;
+		}
+
+		struct A1_chip *chip = &a1->chips[chip_id - 1];
+
+#if 0
+		if (!submit_nonce(thr, work, nonce))
+		{
+			applog(LOG_WARNING, "%d: chip %d: invalid nonce 0x%08x", cid, chip_id, nonce);
+			applog(LOG_WARNING, "micro_job_id %d", micro_job_id);
+			chip->hw_errors++;
+			/* add a penalty of a full nonce range on HW errors */
+			nonce_ranges_processed--;
+			continue;
+		}
+#endif
+		applog(LOG_INFO, "YEAH: %d: chip %d / job_id %d: nonce 0x%08x", cid, chip_id, job_id, nonce);
+		a1->nonces_found++;
+		chip->nonces_found++;
+	}
+
+	/* check for completed works */
+	if(a1->work_start_delay > 0)
+	{
+		applog(LOG_INFO, "wait for pll stable");
+		a1->work_start_delay--;
+	}
+	else
+	{
+		if (inno_cmd_read_reg(a1, 25, reg))
+		{
+			uint8_t qstate = reg[9] & 0x02;
+			//hexdump("reg:", reg, REG_LENGTH);
+			if (qstate != 0x02)
+			{
+				work_updated = true;
+				for (i = a1->num_active_chips; i > 0; i--)
+				{
+					uint8_t c=i;
+					struct A1_chip *chip = &a1->chips[i - 1];
+
+					if (set_work_benchmark(a1, c, 0))
+					{
+						chip->nonce_ranges_done++;
+						a1->nonce_ranges_done++;
+					}
+
+					if(show_log[cid] > 0)
+					{
+						a5_debug("%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%d/%5.2f",
+								cid, c, chip->num_cores,chip->nonce_ranges_done, chip->nonces_found,
+								chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
+
+						sprintf(szShowLog[cid][c-1], "%8d/%8d/%8d/%8d/%8d/%4d/%2d/%2d\r\n",
+								chip->nonce_ranges_done, chip->nonces_found,
+								chip->hw_errors, chip->stales,chip->temp,chip->num_cores,c-1,cid);
+
+						if(i==1) show_log[cid] = 0;
+
+					}
+				}
+			}
+		}
+
+	}
+
+	if(check_disbale_flag[cid] > CHECK_DISABLE_TIME)
+	{
+		applog(LOG_INFO, "start to check disable chips");
+		switch(cid){
+			case 0:check_disabled_chips(a1, A1Pll1);;break;
+			case 1:check_disabled_chips(a1, A1Pll2);;break;
+			case 2:check_disabled_chips(a1, A1Pll3);;break;
+			case 3:check_disabled_chips(a1, A1Pll4);;break;
+			case 4:check_disabled_chips(a1, A1Pll5);;break;
+			case 5:check_disabled_chips(a1, A1Pll6);;break;
+			default:;
+		}
+		check_disbale_flag[cid] = 0;
+	}
+
+
+	mutex_unlock(&a1->lock);
+
+	/* in case of no progress, prevent busy looping */
+	if (!work_updated)
+		cgsleep_ms(20);
+
+	return 0;
 }
 
 

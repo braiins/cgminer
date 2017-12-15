@@ -355,6 +355,7 @@ int opt_voltage = 1;
 int opt_A5_benchmark = 0;
 int opt_A5_chain = 0;
 int opt_A5_extra_debug = 0;
+int opt_A5_fast_start = 0;
 /* bitmask of enabled chains or -1 for "all chains" */
 int opt_enabled_chains = -1;
 
@@ -1713,6 +1714,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--A5-extra-debug",
 		     set_int_0_to_31, opt_show_intval, &opt_A5_extra_debug,
 		     "turn on extra debugging"),
+	OPT_WITHOUT_ARG("--A5-fast-start",
+			opt_set_bool, &opt_A5_fast_start,
+			"Lower intervals in initialization sequence"),
 	OPT_WITH_ARG("--enabled-chains",
 		     set_bitmask_from_list, opt_show_intval, &opt_enabled_chains,
 		     "list of enabled chains"),

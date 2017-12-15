@@ -243,7 +243,27 @@ static void rev(unsigned char *s, size_t l)
 	}
 }
 
-uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
+/**
+ * Store u32 as little-endian into memory
+ */
+
+static void store_u32_le(uint8_t *ptr, unsigned x)
+{
+	*ptr++ = x;
+	*ptr++ = x >> 8;
+	*ptr++ = x >> 16;
+	*ptr++ = x >> 24;
+}
+
+/**
+ * Assemble a "new job" command to be sent to chip.
+ *
+ * @param chip_id Number of chip on the chain
+ * @param job_id Job ID in chip queue
+ * @param work Description of work to be packaged in job
+ */
+
+uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work, unsigned midstate_id)
 {
 	double sdiff = work->sdiff;
 	uint8_t tmp_buf[JOB_LENGTH];
@@ -291,15 +311,24 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work)
 	uint32_t *p2 = (uint32_t *) (work->data + 64);
 	unsigned char mid[32], data[12];
 	uint32_t diffIdx;
+	static int blah;
 	//uint32_t diffIdx,*diff=(uint32_t*)&job[50]; //difficulty pointer
 
 	job[0] = (job_id << 4) | CMD_WRITE_JOB;
 	job[1] = chip_id;
 	
-	swab256(job + 2, work->midstate3);
-	swab256(job + 34, work->midstate2);
-	swab256(job + 66, work->midstate1);
-	swab256(job + 98, work->midstate);
+	if (midstate_id > 0) {
+		/* store different "unique" data for each midstate */
+		for (i = 0; i < 4; i++) {
+			store_u32_le(&job[2 + i*32], midstate_id*4 + i);
+		}
+	} else {
+		swab256(job + 2, work->midstate3);
+		swab256(job + 34, work->midstate2);
+		swab256(job + 66, work->midstate1);
+		swab256(job + 98, work->midstate);
+	}
+
 	p1 = (uint32_t *) &job[130];
 	p2 = (uint32_t *) (work->data + 64);
 	p1[0] = bswap_32(p2[0]);
@@ -473,6 +502,44 @@ failure:
 }
 
 
+bool set_work_benchmark(struct A1_chain *a1, uint8_t chip_id, uint8_t queue_states)
+{
+	int cid = a1->chain_id;
+	struct A1_chip *chip = &a1->chips[chip_id - 1];
+	bool retval = false;
+
+	int job_id = chip->last_queued_id + 1;
+
+#if 0
+	//applog(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x", cid, chip_id, job_id, queue_states);
+	if (job_id == (queue_states & 0x0f) || job_id == (queue_states >> 4))
+	{
+		applog(LOG_WARNING, "%d: job overlap: %d, 0x%02x", cid, job_id, queue_states);
+	}
+
+	if (chip->work[chip->last_queued_id] != NULL)
+	{
+		work_completed(a1->cgpu, chip->work[chip->last_queued_id]);
+		chip->work[chip->last_queued_id] = NULL;
+		retval = true;
+	}
+#endif
+	struct work work = { .sdiff = a1->bench_difficulty };
+	uint8_t *jobdata = create_job(chip_id, job_id, &work, ++a1->midstate_counter);
+	if (!inno_cmd_write_job(a1, chip_id, jobdata))
+	{
+		/* give back work */
+		applog(LOG_ERR, "%d: failed to set work for chip %d.%d", cid, chip_id, job_id);
+		disable_chip(a1, chip_id);
+	}
+	else
+	{
+		chip->last_queued_id++;
+		chip->last_queued_id &= 3;
+	}
+	return true;
+}
+
 
 bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t queue_states)
 {
@@ -495,7 +562,7 @@ bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t q
 		retval = true;
 	}
 	
-	uint8_t *jobdata = create_job(chip_id, job_id, work);
+	uint8_t *jobdata = create_job(chip_id, job_id, work, 0);
 	if (!inno_cmd_write_job(a1, chip_id, jobdata)) 
 	{
 		/* give back work */
