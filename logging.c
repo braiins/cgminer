@@ -70,6 +70,7 @@ void _applog(int prio, const char *str, bool force)
 		int ms = (int)(tv.tv_usec / 1000);
 		tm = localtime(&tmp_time);
 
+#if 0
 		snprintf(datetime, sizeof(datetime), " [%d-%02d-%02d %02d:%02d:%02d.%03d] ",
 			tm->tm_year + 1900,
 			tm->tm_mon + 1,
@@ -85,6 +86,10 @@ void _applog(int prio, const char *str, bool force)
 		}
 
 		my_log_curses(prio, datetime, str, force);
+#else
+		fprintf(stderr, "%s\n", str);
+		fflush(stderr);
+#endif
 	}
 }
 
