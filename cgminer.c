@@ -10383,6 +10383,82 @@ int main(int argc, char *argv[])
 
 	gwsched_thr_id = 0;
 
+	/* initialize/connect to pools */
+	if (!total_pools) {
+		applog(LOG_WARNING, "Need to specify at least one pool server.");
+#ifdef HAVE_CURSES
+		if (!use_curses || !input_pool(false))
+#endif
+			early_quit(1, "Pool setup failed");
+	}
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool = pools[i];
+		size_t siz;
+
+		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+
+		if (!pool->rpc_userpass) {
+			if (!pool->rpc_pass)
+				pool->rpc_pass = strdup("");
+			if (!pool->rpc_user)
+				early_quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
+			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
+			pool->rpc_userpass = cgmalloc(siz);
+			snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
+		}
+	}
+	/* Set the currentpool to pool 0 */
+	currentpool = pools[0];
+
+	if (opt_benchmark || opt_benchfile)
+		goto skip_pool_init;
+
+	for (i = 0; i < total_pools; i++) {
+		struct pool *pool  = pools[i];
+
+		enable_pool(pool);
+		pool->idle = true;
+	}
+
+	/* Look for at least one active pool before starting */
+	applog(LOG_NOTICE, "Probing for an alive pool");
+	probe_pools();
+	do {
+		sleep(1);
+		slept++;
+	} while (!pools_active && slept < 60);
+
+	while (!pools_active) {
+		if (!pool_msg) {
+			applog(LOG_ERR, "No servers were found that could be used to get work from.");
+			applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
+			applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
+			for (i = 0; i < total_pools; i++) {
+				struct pool *pool = pools[i];
+
+				applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
+				i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
+			}
+			pool_msg = true;
+			if (use_curses)
+				applog(LOG_ERR, "Press any key to exit, or cgminer will wait indefinitely for an alive pool.");
+		}
+		if (!use_curses)
+			early_quit(0, "No servers could be used! Exiting.");
+#ifdef HAVE_CURSES
+		touchwin(logwin);
+		wrefresh(logwin);
+		halfdelay(10);
+		if (getch() != ERR)
+			early_quit(0, "No servers could be used! Exiting.");
+		cbreak();
+#endif
+	};
+
+skip_pool_init:
+
 #ifdef USE_USBUTILS
 	usb_initialise();
 
@@ -10444,34 +10520,6 @@ int main(int argc, char *argv[])
 #endif
 	}
 
-	if (!total_pools) {
-		applog(LOG_WARNING, "Need to specify at least one pool server.");
-#ifdef HAVE_CURSES
-		if (!use_curses || !input_pool(false))
-#endif
-			early_quit(1, "Pool setup failed");
-	}
-
-	for (i = 0; i < total_pools; i++) {
-		struct pool *pool = pools[i];
-		size_t siz;
-
-		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
-		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
-
-		if (!pool->rpc_userpass) {
-			if (!pool->rpc_pass)
-				pool->rpc_pass = strdup("");
-			if (!pool->rpc_user)
-				early_quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
-			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
-			pool->rpc_userpass = cgmalloc(siz);
-			snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
-		}
-	}
-	/* Set the currentpool to pool 0 */
-	currentpool = pools[0];
-
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog)
 		openlog(PACKAGE, LOG_PID, LOG_USER);
@@ -10517,52 +10565,6 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	if (opt_benchmark || opt_benchfile)
-		goto begin_bench;
-
-	for (i = 0; i < total_pools; i++) {
-		struct pool *pool  = pools[i];
-
-		enable_pool(pool);
-		pool->idle = true;
-	}
-
-	/* Look for at least one active pool before starting */
-	applog(LOG_NOTICE, "Probing for an alive pool");
-	probe_pools();
-	do {
-		sleep(1);
-		slept++;
-	} while (!pools_active && slept < 60);
-
-	while (!pools_active) {
-		if (!pool_msg) {
-			applog(LOG_ERR, "No servers were found that could be used to get work from.");
-			applog(LOG_ERR, "Please check the details from the list below of the servers you have input");
-			applog(LOG_ERR, "Most likely you have input the wrong URL, forgotten to add a port, or have not set up workers");
-			for (i = 0; i < total_pools; i++) {
-				struct pool *pool = pools[i];
-
-				applog(LOG_WARNING, "Pool: %d  URL: %s  User: %s  Password: %s",
-				i, pool->rpc_url, pool->rpc_user, pool->rpc_pass);
-			}
-			pool_msg = true;
-			if (use_curses)
-				applog(LOG_ERR, "Press any key to exit, or cgminer will wait indefinitely for an alive pool.");
-		}
-		if (!use_curses)
-			early_quit(0, "No servers could be used! Exiting.");
-#ifdef HAVE_CURSES
-		touchwin(logwin);
-		wrefresh(logwin);
-		halfdelay(10);
-		if (getch() != ERR)
-			early_quit(0, "No servers could be used! Exiting.");
-		cbreak();
-#endif
-	};
-
-begin_bench:
 	total_mhashes_done = 0;
 	for (i = 0; i < total_devices; i++) {
 		struct cgpu_info *cgpu = devices[i];
