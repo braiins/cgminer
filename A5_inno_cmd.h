@@ -48,6 +48,8 @@
 #define MAX_CHAIN_LENGTH	64
 #define MAX_CMD_LENGTH		(JOB_LENGTH + MAX_CHAIN_LENGTH * 2 * 2)
 
+#define A1_WORK_Q_SIZE		4
+
 #define WORK_BUSY 0
 #define WORK_FREE 1
 
@@ -66,7 +68,7 @@ struct A1_chip {
 	uint8_t reg[12];
 	int num_cores;
 	int last_queued_id;
-	struct work *work[4];
+	struct work *work[A1_WORK_Q_SIZE];
 	/* stats */
 	int hw_errors;
 	int stales;

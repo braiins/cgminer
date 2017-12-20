@@ -2492,6 +2492,21 @@ void _free_work(struct work **workptr, const char *file, const char *func, const
 	*workptr = NULL;
 }
 
+struct miner_stats *make_miner_stats(int n_chips)
+{
+	struct miner_stats *minstats;
+
+	minstats = cgcalloc(1, sizeof(*minstats) +
+			n_chips*sizeof(minstats->chips[0]));
+	minstats->n_chips = n_chips;
+	return minstats;
+}
+
+void free_miner_stats(struct miner_stats *minstats)
+{
+	free(minstats);
+}
+
 static void gen_hash(unsigned char *data, unsigned char *hash, int len);
 static void calc_diff(struct work *work, double known);
 char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
@@ -6908,6 +6923,42 @@ out:
 	return NULL;
 }
 
+/* Each pool has one stratum monitor thread which waits for statistics from
+ * workers and sends them to stratum socket.
+ */
+
+static void *stratum_mthread(void *userdata)
+{
+	struct pool *pool = (struct pool *)userdata;
+	struct miner_stats *minstats;
+	char threadname[16];
+
+	pthread_detach(pthread_self());
+
+	snprintf(threadname, sizeof(threadname), "%d/MStratum", pool->pool_no);
+	RenameThread(threadname);
+
+	pool->stratum_m = tq_new();
+	if (!pool->stratum_m)
+		quit(1, "Failed to create stratum_m in stratum_sthread");
+
+	for (;;) {
+		if (unlikely(pool->removed))
+			break;
+
+		minstats = tq_pop(pool->stratum_m, NULL);
+		if (unlikely(!minstats))
+			quit(1, "Stratum m returned empty minstats");
+
+		printf("got minstats for %d chips\n", minstats->n_chips);
+
+		free_miner_stats(minstats);
+	}
+
+	tq_freeze(pool->stratum_m);
+}
+
+
 /* Each pool has one stratum send thread for sending shares to avoid many
  * threads being created for submission since all sends need to be serialised
  * anyway. */
@@ -7103,6 +7154,8 @@ static void init_stratum_threads(struct pool *pool)
 {
 	have_longpoll = true;
 
+	if (unlikely(pthread_create(&pool->stratum_mthread, NULL, stratum_mthread, (void *)pool)))
+		quit(1, "Failed to create stratum mthread");
 	if (unlikely(pthread_create(&pool->stratum_sthread, NULL, stratum_sthread, (void *)pool)))
 		quit(1, "Failed to create stratum sthread");
 	if (unlikely(pthread_create(&pool->stratum_rthread, NULL, stratum_rthread, (void *)pool)))

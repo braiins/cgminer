@@ -578,7 +578,7 @@ bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t q
 	{
 		chip->work[chip->last_queued_id] = work;
 		chip->last_queued_id++;
-		chip->last_queued_id &= 3;
+		chip->last_queued_id &= A1_WORK_Q_SIZE - 1;
 	}
 /*
 	if(chip_id == 10)

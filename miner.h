@@ -1334,8 +1334,10 @@ struct pool {
 	struct stratum_work swork;
 	pthread_t stratum_sthread;
 	pthread_t stratum_rthread;
+	pthread_t stratum_mthread;
 	pthread_mutex_t stratum_lock;
 	struct thread_q *stratum_q;
+	struct thread_q *stratum_m; /* queue status messages */
 	int sshares; /* stratum shares submitted waiting on response */
 
 	/* GBT  variables */
@@ -1461,6 +1463,24 @@ struct work {
 	char		getwork_mode;
 };
 
+struct chip_stats {
+	int id;
+	int disabled;
+	int num_cores;
+	int nonce_ranges_done;
+	int nonces_found;
+	int hw_errors;
+	int stales;
+	float temperature;
+	float voltage;
+};
+
+struct miner_stats {
+	int chain_id;
+	int n_chips;
+	struct chip_stats chips[];
+};
+
 #ifdef USE_MODMINER
 struct modminer_fpga_state {
 	bool work_running;
@@ -1569,6 +1589,8 @@ extern struct work *copy_work_noffset(struct work *base_work, int noffset);
 extern uint64_t share_diff(const struct work *work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
+extern struct miner_stats *make_miner_stats(int n_chips);
+extern void free_miner_stats(struct miner_stats *minstats);
 
 enum api_data_type {
 	API_ESCAPE,
