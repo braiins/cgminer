@@ -249,34 +249,14 @@ static void A1_printstats_all(void)
 
 
 /**
- * Submit chain statistics to any one stratum pool which enqueued work with
- * us.
+ * Submit chain statistics to current pool (if it's stratum)
  *
  * @param a1 Chain whose statistics to submit
  */
 static void A1_submit_stats(struct A1_chain *a1)
 {
-	/* fun fact: if no work is currently in progress on any chip in chain,
-	   we cannot submit statistics */
-	struct pool *pool;
 	struct miner_stats *minstats;
 	int i, j;
-
-	pool = 0;
-	for (i = 0; i < a1->num_active_chips; i++) {
-		struct A1_chip *chip = &a1->chips[i];
-		for (j = 0; j < A1_WORK_Q_SIZE; j++) {
-			struct work *work = chip->work[j];
-			if (work && work->stratum && work->pool) {
-				pool = work->pool;
-				break;
-			}
-		}
-	}
-	if (pool == 0) {
-		/* no stratum pool found */
-		return;
-	}
 
 	/* create miner_stats */
 	minstats = make_miner_stats(a1->num_active_chips);
@@ -296,11 +276,7 @@ static void A1_submit_stats(struct A1_chain *a1)
 		chipstats->voltage = s_reg_ctrl.cur_vol[a1->chain_id][i];
 	}
 
-	/* submit miner stats */
-	if (unlikely(!pool->stratum_m || !tq_push(pool->stratum_m, minstats))) {
-		applog(LOG_DEBUG, "Discarding stats from removed pool");
-		free_miner_stats(minstats);
-	}
+	submit_miner_stats(minstats);
 }
 
 

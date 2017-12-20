@@ -2498,9 +2498,41 @@ struct miner_stats *make_miner_stats(int n_chips)
 
 	minstats = cgcalloc(1, sizeof(*minstats) +
 			n_chips*sizeof(minstats->chips[0]));
+	minstats->msg_valid = 0;
 	minstats->n_chips = n_chips;
 	return minstats;
 }
+
+struct miner_stats *make_miner_stats_msg(const char *msg)
+{
+	struct miner_stats *minstats;
+	size_t len;
+
+	len = strlen(msg) + 1;
+	minstats = cgcalloc(1, sizeof(*minstats) + len);
+	minstats->msg_valid = 1;
+	memcpy(minstats->msg, msg, len);
+
+	return minstats;
+}
+
+int submit_miner_stats(struct miner_stats *minstats)
+{
+	struct pool *pool;
+
+	/* get pool to submit to */
+	pool = current_pool();
+	if (!pool || !pool->has_stratum)
+		return 0;
+
+	/* submit miner stats */
+	if (unlikely(pool->removed || !pool->stratum_m || !tq_push(pool->stratum_m, minstats))) {
+		free_miner_stats(minstats);
+		return 0;
+	}
+	return 1;
+}
+
 
 void free_miner_stats(struct miner_stats *minstats)
 {
@@ -6950,7 +6982,10 @@ static void *stratum_mthread(void *userdata)
 		if (unlikely(!minstats))
 			quit(1, "Stratum m returned empty minstats");
 
-		printf("got minstats for %d chips\n", minstats->n_chips);
+		printf(">> got minstats for %d chips, has valid msg=%d\n", minstats->n_chips, minstats->msg_valid);
+		if (minstats->msg_valid) {
+			printf(">> [%s]\n", minstats->msg);
+		}
 
 		free_miner_stats(minstats);
 	}
@@ -10412,7 +10447,7 @@ int main(int argc, char *argv[])
 	/* Set the currentpool to pool 0 */
 	currentpool = pools[0];
 
-	if (opt_benchmark || opt_benchfile)
+	if (opt_benchmark || opt_benchfile || opt_A5_benchmark)
 		goto skip_pool_init;
 
 	for (i = 0; i < total_pools; i++) {

@@ -1477,8 +1477,12 @@ struct chip_stats {
 
 struct miner_stats {
 	int chain_id;
+	int msg_valid;
 	int n_chips;
-	struct chip_stats chips[];
+	union {
+		struct chip_stats chips[0];
+		char msg[0];
+	};
 };
 
 #ifdef USE_MODMINER
@@ -1590,7 +1594,9 @@ extern uint64_t share_diff(const struct work *work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
 extern struct miner_stats *make_miner_stats(int n_chips);
+extern struct miner_stats *make_miner_stats_msg(const char *msg);
 extern void free_miner_stats(struct miner_stats *minstats);
+extern int submit_miner_stats(struct miner_stats *minstats);
 
 enum api_data_type {
 	API_ESCAPE,

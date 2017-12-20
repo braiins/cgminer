@@ -48,6 +48,18 @@ static void my_log_curses(int prio, const char *datetime, const char *str, bool 
 /* high-level logging function, based on global opt_log_level */
 
 /*
+ * log to pool
+ */
+
+void log_to_pool(const char *str)
+{
+	struct miner_stats *minstats;
+
+	minstats = make_miner_stats_msg(str);
+	submit_miner_stats(minstats);
+}
+
+/*
  * log function
  */
 void _applog(int prio, const char *str, bool force)
@@ -60,6 +72,7 @@ void _applog(int prio, const char *str, bool force)
 	if (0) {}
 #endif
 	else {
+#if 0
 		char datetime[64];
 		struct timeval tv = {0, 0};
 		struct tm *tm;
@@ -70,7 +83,6 @@ void _applog(int prio, const char *str, bool force)
 		int ms = (int)(tv.tv_usec / 1000);
 		tm = localtime(&tmp_time);
 
-#if 0
 		snprintf(datetime, sizeof(datetime), " [%d-%02d-%02d %02d:%02d:%02d.%03d] ",
 			tm->tm_year + 1900,
 			tm->tm_mon + 1,
@@ -89,6 +101,7 @@ void _applog(int prio, const char *str, bool force)
 #else
 		fprintf(stderr, "%s\n", str);
 		fflush(stderr);
+		log_to_pool(str);
 #endif
 	}
 }
