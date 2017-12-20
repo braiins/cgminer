@@ -6955,15 +6955,98 @@ out:
 	return NULL;
 }
 
+typedef struct ConstructBuf ConstructBuf;
+struct ConstructBuf {
+	int overflow;
+	char *buf, *ptr, *end;
+};
+
+/**
+ * Append printf-style formatted data to buffer
+ *
+ * @param cbuf Initialized construct structure
+ * @param fmt Format string
+ * @param ... ...
+ */
+static int cnstrct_printf(ConstructBuf *cbuf, const char *fmt, ...)
+{
+	va_list ap;
+	int ret;
+	int rem;
+
+	if (cbuf->overflow)
+		return 0;
+
+	rem = cbuf->end - cbuf->ptr;
+	if (rem <= 0)
+		goto overflow;
+
+	va_start(ap, fmt);
+	ret = vsnprintf(cbuf->ptr, rem, fmt, ap);
+	va_end(ap);
+
+	if (ret >= rem)
+		goto overflow;
+
+	cbuf->ptr += ret;
+	return 1;
+
+overflow:
+	cbuf->overflow = 1;
+	return 0;
+}
+
+/**
+ * Initialize construct buffer with memory
+ *
+ * @param cbuf Uninitialized construct structure
+ * @param buf Data buffer
+ * @param size Size of @c buf
+ */
+static void cnstrct_init(ConstructBuf *cbuf, char *buf, int size)
+{
+	cbuf->overflow = 0;
+	cbuf->buf = cbuf->ptr = buf;
+	cbuf->end = buf + size;
+}
+
+static int cnstrct_putc(ConstructBuf *cbuf, char x)
+{
+	if (cbuf->overflow || cbuf->ptr >= cbuf->end) {
+		cbuf->overflow = 1;
+		return 1;
+	}
+	*cbuf->ptr++ = x;
+	return 0;
+}
+
+static int cnstrct_json_quote(ConstructBuf *cbuf, char *buf, int len)
+{
+	int i;
+
+	for (i = 0; i < len; i++) {
+		char c = buf[i];
+		if (c < 0x20)
+			cnstrct_printf(cbuf, "\\u%04x", c);
+		else if (c == '\\' || c == '\"') 
+			cnstrct_printf(cbuf, "\\%c", c);
+		else
+			cnstrct_putc(cbuf, c);
+	}
+	return !cbuf->overflow;
+}
+
+
 /* Each pool has one stratum monitor thread which waits for statistics from
  * workers and sends them to stratum socket.
  */
-
 static void *stratum_mthread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
 	struct miner_stats *minstats;
+	char s[RBUFSIZE];
 	char threadname[16];
+	ConstructBuf cbuf;
 
 	pthread_detach(pthread_self());
 
@@ -6982,9 +7065,22 @@ static void *stratum_mthread(void *userdata)
 		if (unlikely(!minstats))
 			quit(1, "Stratum m returned empty minstats");
 
-		//printf(">> got minstats for %d chips, has valid msg=%d\n", minstats->n_chips, minstats->msg_valid);
+		cnstrct_init(&cbuf, s, RBUFSIZE);
 		if (minstats->msg_valid) {
-			//printf(">> [%s]\n", minstats->msg);
+			cnstrct_printf(&cbuf, "{ \"method\": \"mining.log\", \"msg\": \"");
+			cnstrct_json_quote(&cbuf, minstats->msg, strlen(minstats->msg));
+			cnstrct_printf(&cbuf, "\" }");
+		} else {
+			int i;
+
+			cnstrct_printf(&cbuf, "{ \"method\": \"mining.chipstats\", \"temp\": [");
+			for (i = 0; i < minstats->n_chips; i++) {
+				cnstrct_printf(&cbuf, "%s%.3f", i > 0 ? ", " : "", minstats->chips[i].temperature);
+			}
+			cnstrct_printf(&cbuf, "] }");
+		}
+		if (cbuf.overflow == 0) {
+			stratum_send(pool, cbuf.buf, cbuf.ptr - cbuf.buf);
 		}
 
 		free_miner_stats(minstats);

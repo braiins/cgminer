@@ -1708,6 +1708,20 @@ enum send_ret {
 	SEND_INACTIVE
 };
 
+static void stratum_send_log(char *s, ssize_t len)
+{
+	static FILE *log = 0;
+
+	if (log == 0) {
+		log = fopen("stratum.log", "wb");
+		if (log == 0)
+			return;
+	}
+	fprintf(log, "msg %d: ", len);
+	fwrite(s, 1, len, log);
+	fflush(log);
+}
+
 /* Send a single command across a socket, appending \n to it. This should all
  * be done under stratum lock except when first establishing the socket */
 static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
@@ -1717,6 +1731,8 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	strcat(s, "\n");
 	len++;
+
+	//stratum_send_log(s, len);
 
 	while (len > 0 ) {
 		struct timeval timeout = {1, 0};
