@@ -6982,9 +6982,9 @@ static void *stratum_mthread(void *userdata)
 		if (unlikely(!minstats))
 			quit(1, "Stratum m returned empty minstats");
 
-		printf(">> got minstats for %d chips, has valid msg=%d\n", minstats->n_chips, minstats->msg_valid);
+		//printf(">> got minstats for %d chips, has valid msg=%d\n", minstats->n_chips, minstats->msg_valid);
 		if (minstats->msg_valid) {
-			printf(">> [%s]\n", minstats->msg);
+			//printf(">> [%s]\n", minstats->msg);
 		}
 
 		free_miner_stats(minstats);
