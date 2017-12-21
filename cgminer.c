@@ -441,6 +441,8 @@ enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses, total_extranonce;
 
+uint8_t unique_hw_id[UNIQUE_HW_ID_LENGTH] = { 0x12, 0x34, 0x56, 0x78, 0xab, 0xcd, 0xef, 0x26 };
+
 static
 #ifndef HAVE_CURSES
 const
@@ -7036,6 +7038,16 @@ static int cnstrct_json_quote(ConstructBuf *cbuf, char *buf, int len)
 	return !cbuf->overflow;
 }
 
+static int cnstrct_print_hex(ConstructBuf *cbuf, void *mem, int len)
+{
+	uint8_t *buf = mem;
+	int i;
+
+	for (i = 0; i < len; i++)
+		cnstrct_printf(cbuf, "%02x", buf[i]);
+
+	return !cbuf->overflow;
+}
 
 /* Each pool has one stratum monitor thread which waits for statistics from
  * workers and sends them to stratum socket.
@@ -7067,20 +7079,28 @@ static void *stratum_mthread(void *userdata)
 
 		cnstrct_init(&cbuf, s, RBUFSIZE);
 		if (minstats->msg_valid) {
-			cnstrct_printf(&cbuf, "{ \"method\": \"mining.log\", \"msg\": \"");
+			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.log\", \"params\": [ [ ", swork_id++);
+			cnstrct_printf(&cbuf, "%d, \"", time(0));
+			cnstrct_print_hex(&cbuf, unique_hw_id, UNIQUE_HW_ID_LENGTH);
+			cnstrct_printf(&cbuf, "\", \"%s\", \"%s\", \"", "type", "source");
 			cnstrct_json_quote(&cbuf, minstats->msg, strlen(minstats->msg));
-			cnstrct_printf(&cbuf, "\" }");
+			cnstrct_printf(&cbuf, "\" ] ] }");
 		} else {
 			int i;
 
-			cnstrct_printf(&cbuf, "{ \"method\": \"mining.chipstats\", \"temp\": [");
+			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
+			cnstrct_printf(&cbuf, "%d, \"", time(0));
+			cnstrct_print_hex(&cbuf, unique_hw_id, UNIQUE_HW_ID_LENGTH);
+			cnstrct_printf(&cbuf, "\", %d, [ \"temp\" ], [ ", minstats->chain_id);
 			for (i = 0; i < minstats->n_chips; i++) {
-				cnstrct_printf(&cbuf, "%s%.3f", i > 0 ? ", " : "", minstats->chips[i].temperature);
+				cnstrct_printf(&cbuf, "%s[ %.3f ]", i > 0 ? ", " : "", minstats->chips[i].temperature);
 			}
 			cnstrct_printf(&cbuf, "] }");
 		}
 		if (cbuf.overflow == 0) {
-			stratum_send(pool, cbuf.buf, cbuf.ptr - cbuf.buf);
+			cnstrct_putc(&cbuf, 0);
+			//stratum_send(pool, cbuf.buf, cbuf.ptr - cbuf.buf);
+			printf("%s\n", cbuf.buf);
 		}
 
 		free_miner_stats(minstats);

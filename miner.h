@@ -1598,6 +1598,9 @@ extern struct miner_stats *make_miner_stats_msg(const char *msg);
 extern void free_miner_stats(struct miner_stats *minstats);
 extern int submit_miner_stats(struct miner_stats *minstats);
 
+#define UNIQUE_HW_ID_LENGTH 8
+extern uint8_t unique_hw_id[UNIQUE_HW_ID_LENGTH];
+
 enum api_data_type {
 	API_ESCAPE,
 	API_STRING,
