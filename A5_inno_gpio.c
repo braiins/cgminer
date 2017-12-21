@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/ioctl.h>
 
 #include "miner.h"
 #include "A5_inno.h"
@@ -263,3 +264,28 @@ int asic_gpio_read(int gpio)
 	}	
 }  
 
+int asic_read_dna(uint8_t *buffer)
+{
+	int fd, ret;
+
+	fd = open("/dev/dna", O_RDONLY);
+	if (fd < 0) {
+		a5_debug("cannot open dna: %m");
+		return -1;
+	}
+
+	ret = read(fd, buffer, DNA_ID_LENGTH);
+	if (ret < 0) {
+		a5_debug("dna read error: %m");
+		goto done;
+	}
+	if (ret < DNA_ID_LENGTH) {
+		a5_debug("dna short read: %d", ret);
+		ret = -1;
+		goto done;
+	}
+	ret = 0;
+done:
+	close(fd);
+	return ret;
+}
