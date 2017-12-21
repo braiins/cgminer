@@ -53,10 +53,10 @@ static void my_log_curses(int prio, const char *datetime, const char *str, bool 
 
 void log_to_pool(const char *str)
 {
-	struct miner_stats *minstats;
+	struct telemetry *tele;
 
-	minstats = make_miner_stats_msg(str);
-	submit_miner_stats(minstats);
+	tele = make_telemetry_log("applog", "", str);
+	submit_telemetry(tele);
 }
 
 /*

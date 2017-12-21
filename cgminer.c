@@ -2494,31 +2494,37 @@ void _free_work(struct work **workptr, const char *file, const char *func, const
 	*workptr = NULL;
 }
 
-struct miner_stats *make_miner_stats(int n_chips)
+struct telemetry *make_telemetry_data(int n_chips, int chain_id)
 {
-	struct miner_stats *minstats;
+	struct telemetry *tele;
 
-	minstats = cgcalloc(1, sizeof(*minstats) +
-			n_chips*sizeof(minstats->chips[0]));
-	minstats->msg_valid = 0;
-	minstats->n_chips = n_chips;
-	return minstats;
+	tele = cgcalloc(1, sizeof(*tele) +
+			n_chips*sizeof(tele->data.chips[0]));
+	tele->type = TELEMETRY_DATA;
+	tele->data.time = time(0);
+	tele->data.n_chips = n_chips;
+	tele->data.chain_id = chain_id;
+
+	return tele;
 }
 
-struct miner_stats *make_miner_stats_msg(const char *msg)
+struct telemetry *make_telemetry_log(const char *type, const char *source, const char *msg)
 {
-	struct miner_stats *minstats;
+	struct telemetry *tele;
 	size_t len;
 
 	len = strlen(msg) + 1;
-	minstats = cgcalloc(1, sizeof(*minstats) + len);
-	minstats->msg_valid = 1;
-	memcpy(minstats->msg, msg, len);
+	tele = cgcalloc(1, sizeof(*tele) + len);
+	tele->type = TELEMETRY_LOG;
+	tele->log.time = time(0);
+	tele->log.type = type;
+	tele->log.source = source;
+	memcpy(tele->log.msg, msg, len);
 
-	return minstats;
+	return tele;
 }
 
-int submit_miner_stats(struct miner_stats *minstats)
+int submit_telemetry(struct telemetry *tele)
 {
 	struct pool *pool;
 
@@ -2528,17 +2534,17 @@ int submit_miner_stats(struct miner_stats *minstats)
 		return 0;
 
 	/* submit miner stats */
-	if (unlikely(pool->removed || !pool->stratum_m || !tq_push(pool->stratum_m, minstats))) {
-		free_miner_stats(minstats);
+	if (unlikely(pool->removed || !pool->stratum_t || !tq_push(pool->stratum_t, tele))) {
+		free_telemetry(tele);
 		return 0;
 	}
 	return 1;
 }
 
 
-void free_miner_stats(struct miner_stats *minstats)
+void free_telemetry(struct telemetry *tele)
 {
-	free(minstats);
+	free(tele);
 }
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len);
@@ -7049,53 +7055,55 @@ static int cnstrct_print_hex(ConstructBuf *cbuf, void *mem, int len)
 	return !cbuf->overflow;
 }
 
-/* Each pool has one stratum monitor thread which waits for statistics from
+/* Each pool has one stratum telemetry thread which waits for statistics from
  * workers and sends them to stratum socket.
  */
-static void *stratum_mthread(void *userdata)
+static void *stratum_tthread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
-	struct miner_stats *minstats;
+	struct telemetry *tele;
 	char s[RBUFSIZE];
 	char threadname[16];
 	ConstructBuf cbuf;
 
 	pthread_detach(pthread_self());
 
-	snprintf(threadname, sizeof(threadname), "%d/MStratum", pool->pool_no);
+	snprintf(threadname, sizeof(threadname), "%d/TStratum", pool->pool_no);
 	RenameThread(threadname);
 
-	pool->stratum_m = tq_new();
-	if (!pool->stratum_m)
-		quit(1, "Failed to create stratum_m in stratum_sthread");
+	pool->stratum_t = tq_new();
+	if (!pool->stratum_t)
+		quit(1, "Failed to create stratum_t in stratum_sthread");
 
 	for (;;) {
 		if (unlikely(pool->removed))
 			break;
 
-		minstats = tq_pop(pool->stratum_m, NULL);
-		if (unlikely(!minstats))
-			quit(1, "Stratum m returned empty minstats");
+		tele = tq_pop(pool->stratum_t, NULL);
+		if (unlikely(!tele))
+			quit(1, "Stratum t returned empty tele");
 
 		cnstrct_init(&cbuf, s, RBUFSIZE);
-		if (minstats->msg_valid) {
+		if (tele->type == TELEMETRY_LOG) {
 			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.log\", \"params\": [ [ ", swork_id++);
-			cnstrct_printf(&cbuf, "%d, \"", time(0));
+			cnstrct_printf(&cbuf, "%d, \"", tele->log.time);
 			cnstrct_print_hex(&cbuf, unique_hw_id, UNIQUE_HW_ID_LENGTH);
-			cnstrct_printf(&cbuf, "\", \"%s\", \"%s\", \"", "type", "source");
-			cnstrct_json_quote(&cbuf, minstats->msg, strlen(minstats->msg));
+			cnstrct_printf(&cbuf, "\", \"%s\", \"%s\", \"", tele->log.type, tele->log.source);
+			cnstrct_json_quote(&cbuf, tele->log.msg, strlen(tele->log.msg));
 			cnstrct_printf(&cbuf, "\" ] ] }");
-		} else {
+		} else if (tele->type == TELEMETRY_DATA) {
 			int i;
 
 			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
-			cnstrct_printf(&cbuf, "%d, \"", time(0));
+			cnstrct_printf(&cbuf, "%d, \"", tele->data.time);
 			cnstrct_print_hex(&cbuf, unique_hw_id, UNIQUE_HW_ID_LENGTH);
-			cnstrct_printf(&cbuf, "\", %d, [ \"temp\" ], [ ", minstats->chain_id);
-			for (i = 0; i < minstats->n_chips; i++) {
-				cnstrct_printf(&cbuf, "%s[ %.3f ]", i > 0 ? ", " : "", minstats->chips[i].temperature);
+			cnstrct_printf(&cbuf, "\", %d, [ \"temp\" ], [ ", tele->data.chain_id);
+			for (i = 0; i < tele->data.n_chips; i++) {
+				cnstrct_printf(&cbuf, "%s[ %.3f ]", i > 0 ? ", " : "", tele->data.chips[i].temperature);
 			}
 			cnstrct_printf(&cbuf, "] }");
+		} else {
+			quit(1, "Stratum t unknown telemetry type %d", tele->type);
 		}
 		if (cbuf.overflow == 0) {
 			cnstrct_putc(&cbuf, 0);
@@ -7103,10 +7111,10 @@ static void *stratum_mthread(void *userdata)
 			printf("%s\n", cbuf.buf);
 		}
 
-		free_miner_stats(minstats);
+		free_telemetry(tele);
 	}
 
-	tq_freeze(pool->stratum_m);
+	tq_freeze(pool->stratum_t);
 }
 
 
@@ -7305,8 +7313,8 @@ static void init_stratum_threads(struct pool *pool)
 {
 	have_longpoll = true;
 
-	if (unlikely(pthread_create(&pool->stratum_mthread, NULL, stratum_mthread, (void *)pool)))
-		quit(1, "Failed to create stratum mthread");
+	if (unlikely(pthread_create(&pool->stratum_tthread, NULL, stratum_tthread, (void *)pool)))
+		quit(1, "Failed to create stratum tthread");
 	if (unlikely(pthread_create(&pool->stratum_sthread, NULL, stratum_sthread, (void *)pool)))
 		quit(1, "Failed to create stratum sthread");
 	if (unlikely(pthread_create(&pool->stratum_rthread, NULL, stratum_rthread, (void *)pool)))

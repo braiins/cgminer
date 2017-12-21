@@ -255,15 +255,14 @@ static void A1_printstats_all(void)
  */
 static void A1_submit_stats(struct A1_chain *a1)
 {
-	struct miner_stats *minstats;
+	struct telemetry *tele;
 	int i, j;
 
 	/* create miner_stats */
-	minstats = make_miner_stats(a1->num_active_chips);
-	minstats->chain_id = a1->chain_id;
+	tele = make_telemetry_data(a1->num_active_chips, a1->chain_id);
 	for (i = 0; i < a1->num_active_chips; i++) {
 		struct A1_chip *chip = &a1->chips[i];
-		struct chip_stats *chipstats = &minstats->chips[i];
+		struct chip_stats *chipstats = &tele->data.chips[i];
 
 		chipstats->id = i + 1;
 		chipstats->disabled = chip->disabled;
@@ -276,7 +275,7 @@ static void A1_submit_stats(struct A1_chain *a1)
 		chipstats->voltage = s_reg_ctrl.cur_vol[a1->chain_id][i];
 	}
 
-	submit_miner_stats(minstats);
+	submit_telemetry(tele);
 }
 
 

@@ -1334,10 +1334,10 @@ struct pool {
 	struct stratum_work swork;
 	pthread_t stratum_sthread;
 	pthread_t stratum_rthread;
-	pthread_t stratum_mthread;
+	pthread_t stratum_tthread;
 	pthread_mutex_t stratum_lock;
 	struct thread_q *stratum_q;
-	struct thread_q *stratum_m; /* queue status messages */
+	struct thread_q *stratum_t; /* queue status messages */
 	int sshares; /* stratum shares submitted waiting on response */
 
 	/* GBT  variables */
@@ -1475,13 +1475,28 @@ struct chip_stats {
 	float voltage;
 };
 
-struct miner_stats {
+struct telemetry_data {
+	time_t time;
 	int chain_id;
-	int msg_valid;
 	int n_chips;
+	struct chip_stats chips[0];
+};
+
+struct telemetry_log {
+	time_t time;
+	const char *type;
+	const char *source;
+	char msg[0];
+};
+
+struct telemetry {
+	enum {
+		TELEMETRY_LOG,
+		TELEMETRY_DATA,
+	} type;
 	union {
-		struct chip_stats chips[0];
-		char msg[0];
+		struct telemetry_data data;
+		struct telemetry_log log;
 	};
 };
 
@@ -1593,10 +1608,11 @@ extern struct work *copy_work_noffset(struct work *base_work, int noffset);
 extern uint64_t share_diff(const struct work *work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
-extern struct miner_stats *make_miner_stats(int n_chips);
-extern struct miner_stats *make_miner_stats_msg(const char *msg);
-extern void free_miner_stats(struct miner_stats *minstats);
-extern int submit_miner_stats(struct miner_stats *minstats);
+extern struct telemetry *make_telemetry_data(int n_chips, int chain_id);
+extern struct telemetry *make_telemetry_log(const char *type, const char *source, const char *msg);
+extern int submit_telemetry(struct telemetry *tele);
+extern void free_telemetry(struct telemetry *tele);
+
 
 #define UNIQUE_HW_ID_LENGTH 8
 extern uint8_t unique_hw_id[UNIQUE_HW_ID_LENGTH];
