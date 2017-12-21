@@ -101,7 +101,9 @@ void _applog(int prio, const char *str, bool force)
 #else
 		fprintf(stderr, "%s\n", str);
 		fflush(stderr);
+#if 0
 		log_to_pool(str);
+#endif
 #endif
 	}
 }

@@ -7097,9 +7097,19 @@ static void *stratum_tthread(void *userdata)
 			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
 			cnstrct_printf(&cbuf, "%d, \"", tele->data.time);
 			cnstrct_print_hex(&cbuf, unique_hw_id, UNIQUE_HW_ID_LENGTH);
-			cnstrct_printf(&cbuf, "\", %d, [ \"temp\" ], [ ", tele->data.chain_id);
+			cnstrct_printf(&cbuf, "\", %d, [ \"disabled\", \"num_cores\", \"nonce_ranges_done\", \"nonces_found\", \"hw_errors\", \"stales\", \"temperature\", \"voltage\" ], [ ", tele->data.chain_id);
 			for (i = 0; i < tele->data.n_chips; i++) {
-				cnstrct_printf(&cbuf, "%s[ %.3f ]", i > 0 ? ", " : "", tele->data.chips[i].temperature);
+				cnstrct_printf(&cbuf, "%s[%d,%d,%d,%d,%d,%d,%.02f,%.02f]",
+						i > 0 ? ", " : "",
+						tele->data.chips[i].disabled,
+						tele->data.chips[i].num_cores,
+						tele->data.chips[i].nonce_ranges_done,
+						tele->data.chips[i].nonces_found,
+						tele->data.chips[i].hw_errors,
+						tele->data.chips[i].stales,
+						tele->data.chips[i].temperature,
+						tele->data.chips[i].voltage
+					);
 			}
 			cnstrct_printf(&cbuf, "] }");
 		} else {
