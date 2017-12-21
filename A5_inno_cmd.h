@@ -149,6 +149,8 @@ extern bool inno_cmd_bist_collect(struct A1_chain *pChain, uint8_t chip_id);
 
 extern bool inno_cmd_bist_fix(struct A1_chain *pChain, uint8_t chip_id);
 
+extern bool inno_cmd_write_sec_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg);
+
 extern bool inno_cmd_write_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg);
 
 extern bool inno_cmd_read_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg);
