@@ -3172,11 +3172,11 @@ static bool configure_stratum_mining(struct pool *pool)
 	 * or pool parameters? */
 	snprintf(s, RBUFSIZE,
 			 "{\"id\": %d, \"method\": \"mining.configure\", \"params\": "
-			 "[[\""STRATUM_VERSION_ROLLING"\"], "
+			 "[[\""STRATUM_VERSION_ROLLING"\", \"sp-telemetry\"], "
 			 "{\""STRATUM_VERSION_ROLLING".bit-count\": %d, "
-			 "\""STRATUM_VERSION_ROLLING".mask\": \"%x\"}]}",
+			 "\""STRATUM_VERSION_ROLLING".mask\": \"%x\", "
+			 "\"sp-telemetry.version\": 1}]}",
 			 swork_id++, 2, 0xffffffff);
-
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send mining.configure");
 		goto out;
