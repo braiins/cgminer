@@ -1,7 +1,7 @@
 #ifndef _A5_INNO_
 #define _A5_INNO_
 
-#define ASIC_CHAIN_NUM                  3
+#define ASIC_CHAIN_NUM                  6
 #define ASIC_CHIP_NUM                   63
 
 #define ASIC_CHIP_A_BUCKET              (ASIC_CHAIN_NUM * ASIC_CHIP_NUM)
@@ -60,7 +60,7 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum);
 uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work, uint8_t *job, unsigned midstate_id);
 void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll);
 
-#define a5_debug(p, q...) ({ if (opt_A5_extra_debug > 0) { fprintf(stderr, "--- " p " ---\n", ##q); } })
+#define a5_debug(p, q...) ({ if (opt_A5_extra_debug > 0) { fprintf(stderr, "a5: " p "\n", ##q); } })
 
 #endif
 

@@ -1147,7 +1147,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			nonce_ranges_processed--;
 			continue;
 		}
-		applog(LOG_INFO, "YEAH: %d: chip %d / job_id %d: nonce 0x%08x", cid, chip_id, job_id, nonce);
+		a5_debug("YEAH: %d: chip %d / job_id %d: nonce 0x%08x", cid, chip_id, job_id, nonce);
 		chip->nonces_found++;
 	}
 
