@@ -1331,6 +1331,7 @@ struct pool {
 	bool stratum_active;
 	bool stratum_init;
 	bool stratum_notify;
+	bool stratum_telemetry;
 	struct stratum_work swork;
 	pthread_t stratum_sthread;
 	pthread_t stratum_rthread;

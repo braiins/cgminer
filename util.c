@@ -3144,6 +3144,9 @@ void suspend_stratum(struct pool *pool)
 #define STRATUM_VERSION_ROLLING "version-rolling"
 #define STRATUM_VERSION_ROLLING_LEN (sizeof(STRATUM_VERSION_ROLLING) - 1)
 
+#define STRATUM_SP_TELEMETRY "sp-telemetry"
+#define STRATUM_SP_TELEMETRY_LEN (sizeof(STRATUM_SP_TELEMETRY) - 1)
+
 /**
  * Configures stratum mining based on connected hardware capabilities
  * (version rolling etc.)
@@ -3172,7 +3175,7 @@ static bool configure_stratum_mining(struct pool *pool)
 	 * or pool parameters? */
 	snprintf(s, RBUFSIZE,
 			 "{\"id\": %d, \"method\": \"mining.configure\", \"params\": "
-			 "[[\""STRATUM_VERSION_ROLLING"\", \"sp-telemetry\"], "
+			 "[[\""STRATUM_VERSION_ROLLING"\", \""STRATUM_SP_TELEMETRY"\"], "
 			 "{\""STRATUM_VERSION_ROLLING".bit-count\": %d, "
 			 "\""STRATUM_VERSION_ROLLING".mask\": \"%x\", "
 			 "\"sp-telemetry.version\": 1}]}",
@@ -3215,6 +3218,10 @@ static bool configure_stratum_mining(struct pool *pool)
 				strlen(key) == STRATUM_VERSION_ROLLING_LEN) {
 			config_status = json_boolean_value(value);
 			continue;
+		}
+		else if (!strcasecmp(key, STRATUM_SP_TELEMETRY) &&
+				 strlen(key) == STRATUM_SP_TELEMETRY_LEN) {
+			pool->stratum_telemetry = json_boolean_value(value);
 		}
 		else {
 			applog(LOG_ERR, "JSON-RPC unexpected mining.configure value: %s", key);

@@ -2530,7 +2530,7 @@ int submit_telemetry(struct telemetry *tele)
 
 	/* get pool to submit to */
 	pool = current_pool();
-	if (!pool || !pool->has_stratum) {
+	if (!pool || !pool->has_stratum || !pool->stratum_telemetry) {
 		goto submit_failed;
 	}
 
