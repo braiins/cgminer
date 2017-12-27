@@ -2530,14 +2530,18 @@ int submit_telemetry(struct telemetry *tele)
 
 	/* get pool to submit to */
 	pool = current_pool();
-	if (!pool || !pool->has_stratum)
-		return 0;
+	if (!pool || !pool->has_stratum) {
+		goto submit_failed;
+	}
 
 	/* submit miner stats */
 	if (unlikely(pool->removed || !pool->stratum_t || !tq_push(pool->stratum_t, tele))) {
-		free_telemetry(tele);
-		return 0;
+		goto submit_failed;
 	}
+	return 0;
+
+submit_failed:
+	free_telemetry(tele);
 	return 1;
 }
 
