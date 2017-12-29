@@ -7120,7 +7120,6 @@ static void *stratum_tthread(void *userdata)
 			quit(1, "Stratum t unknown telemetry type %d", tele->type);
 		}
 		if (cbuf.overflow == 0) {
-			cnstrct_putc(&cbuf, 0);
 			stratum_send(pool, cbuf.buf, cbuf.ptr - cbuf.buf);
 			//printf("%s\n", cbuf.buf);
 		}
