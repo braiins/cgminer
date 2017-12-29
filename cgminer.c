@@ -7115,7 +7115,7 @@ static void *stratum_tthread(void *userdata)
 						tele->data.chips[i].voltage
 					);
 			}
-			cnstrct_printf(&cbuf, "] }");
+			cnstrct_printf(&cbuf, "] ] }");
 		} else {
 			quit(1, "Stratum t unknown telemetry type %d", tele->type);
 		}
