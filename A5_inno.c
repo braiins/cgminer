@@ -395,7 +395,7 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work, uint8_t 
 
 
 /********** disable / re-enable related section (temporary for testing) */
-int get_current_ms(void)
+unsigned long get_current_ms(void)
 {
 	cgtimer_t ct;
 	cgtimer_time(&ct);
@@ -439,7 +439,8 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 		/* do not re-enable fully disabled chips */
 		if (chip->disabled)
 			continue;
-		if (chip->cooldown_begin + COOLDOWN_MS > get_current_ms())
+		/* skip this chip unless cooldown period has elapsed */
+		if ((get_current_ms() - chip->cooldown_begin) < COOLDOWN_MS)
 			continue;
 		
 		if (!inno_cmd_read_reg(a1, chip_id, reg)) 

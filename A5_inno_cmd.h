@@ -76,7 +76,7 @@ struct A1_chip {
 	int nonce_ranges_done;
 
 	/* systime in ms when chip was disabled */
-	int cooldown_begin;
+	unsigned long cooldown_begin;
 	/* number of consecutive failures to access the chip */
 	int fail_count;
 	int fail_reset;
@@ -111,7 +111,9 @@ struct A1_chain {
 	/* mark chain disabled, do not try to re-enable it */
 	bool disabled;
 	uint8_t temp;
-	int last_temp_time;
+	unsigned long last_temp_time;
+	unsigned long last_voltage_time;
+	unsigned long last_telemetry_time;
 
 	struct timeval tvScryptLast;
 	struct timeval tvScryptCurr;

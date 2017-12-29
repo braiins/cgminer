@@ -49,7 +49,7 @@ void prechain_detect(struct A1_chain *a1, int idxpll);
 int chain_detect(struct A1_chain *a1);
 bool abort_work(struct A1_chain *a1);
 
-int get_current_ms(void);
+unsigned long get_current_ms(void);
 bool is_chip_disabled(struct A1_chain *a1, uint8_t chip_id);
 void disable_chip(struct A1_chain *a1, uint8_t chip_id);
 

@@ -978,15 +978,100 @@ void A1_detect(bool hotplug)
 	exit(0);
 }
 
-#define TEMP_UPDATE_INT_MS	180000
+#define TEMP_UPDATE_INT_MS	5000
 #define RESULTS_UPDATE_INT_MS	10000
-#define VOLTAGE_UPDATE_INT  120
+#define VOLTAGE_UPDATE_INT_MS  5000
+#define TELEMETRY_SUBMIT_INT_MS 5000
 #define WRITE_CONFG_TIME  0
 #define CHECK_DISABLE_TIME  0
 
 char szShowLog[ASIC_CHAIN_NUM][ASIC_CHIP_NUM][256] = {0};
 FILE* fd[ASIC_CHAIN_NUM];
 #define  LOG_FILE_PREFIX "/home/www/conf/analys"
+
+/**
+ * Monitors the chain and controls its health.
+ *
+ * This method scans all chips in for temperatures every TEMP_UPDATE_INT_MS and voltages every VOLTAGE_UPDATE_INT_MS.
+ * The health control is responsible for:
+ * - adjusting fan speed
+ * - detecting dangerous temperature - exceeding DANGEROUS_TMP threshold results in complete shutdown and power
+ *   disabling for the affected chain
+ * - enables chips that may have cooled down already
+ *
+ * If any temperature exceeds DANGEROUS_TMP, the power of the chain is disabled and the entire application is shut down.
+ *
+ * @param *chain
+ * @param submit_telemetry - submit telemetry every TELEMETRY_SUBMIT_INT_MS
+ * @note this method should be called with chain already locked!
+ */
+static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit_telemetry)
+{
+	struct A1_chain *chain = cgpu->device_data;
+	unsigned long now_ms = get_current_ms();
+
+	if ((now_ms - chain->last_temp_time) > TEMP_UPDATE_INT_MS) {
+		chain->last_temp_time = now_ms;
+		// TODO jca: to be cleared/removed
+		check_disbale_flag[chain->chain_id]++;
+
+		// Reset the number of cores in the chain as check_chip will sum up all working cores while taking
+		// the temperature measurement
+		chain->num_cores = 0;
+		for (int chip_id = chain->num_active_chips; chip_id > 0; chip_id--) {
+			// NOTE JCA: check_chip takes chip index as parameter!
+			if (!check_chip(chain, chip_id - 1)) {
+				applog(LOG_ERR, "%d: Failed to check chip %d ", chain->chain_id, chip_id);
+				continue;
+			}
+			inno_fan_temp_add(&s_fan_ctrl, chain->chain_id, chain->chips[chip_id - 1].temp, false);
+		}
+		inno_fan_speed_update(&s_fan_ctrl, chain->chain_id, cgpu);
+		if(inno_fan_temp_get_highest(&s_fan_ctrl, chain->chain_id) > DANGEROUS_TMP) {
+			asic_gpio_write(spi[chain->chain_id]->power_en, 0);
+			early_quit(1, "Notice chain %d has some temperature problem, disabling power\n", chain->chain_id);
+		}
+	}
+
+	if ((now_ms - chain->last_voltage_time) > VOLTAGE_UPDATE_INT_MS) {
+		chain->last_voltage_time = now_ms;
+		show_log[chain->chain_id]++;
+
+		// configure ADC for voltage measurement (vsensor)
+		inno_configure_tvsensor(chain, ADDR_BROADCAST, 0);
+
+		for (int chip_id = chain->num_active_chips; chip_id > 0; chip_id--)
+		{
+			inno_check_voltage(chain, chip_id, &s_reg_ctrl);
+			//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",chain->chain_id, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
+			if (is_chip_disabled(chain, chip_id))
+				continue;
+		}
+
+		// switch ADC back to temperature measurement (tsensor)
+		inno_configure_tvsensor(chain, ADDR_BROADCAST, 1);
+	}
+	// TODO jca: consolidate - refactor A1Pll into an array. Btw. looks like the Pll parameter is not being used at all
+	if (check_disbale_flag[chain->chain_id] > CHECK_DISABLE_TIME)
+	{
+		applog(LOG_INFO, "start to check disabled chips");
+		switch(chain->chain_id){
+			case 0:check_disabled_chips(chain, A1Pll1);;break;
+			case 1:check_disabled_chips(chain, A1Pll2);;break;
+			case 2:check_disabled_chips(chain, A1Pll3);;break;
+			case 3:check_disabled_chips(chain, A1Pll4);;break;
+			case 4:check_disabled_chips(chain, A1Pll5);;break;
+			case 5:check_disabled_chips(chain, A1Pll6);;break;
+			default:;
+		}
+		check_disbale_flag[chain->chain_id] = 0;
+	}
+	if (((now_ms - chain->last_telemetry_time) > TELEMETRY_SUBMIT_INT_MS) && submit_telemetry) {
+		chain->last_telemetry_time = now_ms;
+		A1_submit_stats(chain);
+	}
+
+}
 
 static int64_t  A1_scanwork(struct thr_info *thr)
 {
@@ -1011,101 +1096,8 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 	mutex_lock(&a1->lock);
 	int cid = a1->chain_id;
 
-	if (first_flag[cid] != 1)
-	{
-		applog(LOG_ERR, "%d: A1_scanwork first in set all parameter!", a1->chain_id);
-		first_flag[cid]++;
-		for (i = a1->num_active_chips; i > 0; i--) 
-		{		
-			if (!inno_cmd_read_reg(a1, i, reg)) 
-			{
-				applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
-				continue;
-			}
-			/* update temp database */
-            uint32_t temp = 0;
-            float    temp_f = 0.0f;
-
-            temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-            inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-		}    
-
-		inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
-	}
-
-	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
-	{
-		update_cnt[cid]++;
-		show_log[cid]++;
-		write_flag[cid]++;
-		check_disbale_flag[cid]++;
-
-#if 0
-		if (write_flag[cid] > WRITE_CONFG_TIME)
-		{
-			char fileName[128] = {0};
-			sprintf(fileName, "%s%d.log", LOG_FILE_PREFIX, cid);
-			fd[cid] = fopen(fileName, "w+");
-			//fseek(fd[cid],0,SEEK_SET);
-			fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd[cid]);
-			fflush(fd[cid]);
-			fclose(fd[cid]);
-			
-			write_flag[cid] = 0;
-		}
-#endif
-
-		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
-		{
-			//configure for vsensor
-    		inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
-		}
-		
-		for (i = a1->num_active_chips; i > 0; i--) 
-		{		
-			uint8_t c=i;
-			if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
-			{
-				inno_check_voltage(a1, i, &s_reg_ctrl);
-				//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
-			}
-			else
-			{
-				if(is_chip_disabled(a1,c))
-					continue;
-				if (!inno_cmd_read_reg(a1, c, reg)) 
-				{
-					disable_chip(a1,c);
-					applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
-					continue;
-				}
-				/* update temp database */
-                uint32_t temp = 0;
-                float    temp_f = 0.0f;
-
-                temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-                inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-			}    
-		}
-
-		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
-		{
-			//configure for tsensor
-    		inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
-			update_cnt[cid] = 0;
-		}else{
-			inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
-				
-			//a1->temp = board_selector->get_temp(0);
-			a1->last_temp_time = get_current_ms();
-			if(inno_fan_temp_get_highest(&s_fan_ctrl,a1->chain_id) > DANGEROUS_TMP)
-			{
-	   			asic_gpio_write(spi[a1->chain_id]->power_en, 0);
-	   			early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
-			}
-		}
-		A1_submit_stats(a1);
-	}
+	/* perform chain health monitoring and potentially submit telemetry data */
+	monitor_and_control_chain_health(cgpu, true);
 
 	/* poll queued results */
 	while (true) 
@@ -1198,22 +1190,6 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 		}
 
 	}
-	
-	if(check_disbale_flag[cid] > CHECK_DISABLE_TIME)
-	{
-		applog(LOG_INFO, "start to check disable chips");
-		switch(cid){
-			case 0:check_disabled_chips(a1, A1Pll1);;break;
-			case 1:check_disabled_chips(a1, A1Pll2);;break;
-			case 2:check_disabled_chips(a1, A1Pll3);;break;
-			case 3:check_disabled_chips(a1, A1Pll4);;break;
-			case 4:check_disabled_chips(a1, A1Pll5);;break;
-			case 5:check_disabled_chips(a1, A1Pll6);;break;
-			default:;
-		}
-		check_disbale_flag[cid] = 0;
-	}
-
 
 	mutex_unlock(&a1->lock);
 
@@ -1288,111 +1264,8 @@ static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
 	mutex_lock(&a1->lock);
 	int cid = a1->chain_id;
 
-	if (first_flag[cid] != 1)
-	{
-		applog(LOG_ERR, "%d: A1_scanwork first in set all parameter!", a1->chain_id);
-		first_flag[cid]++;
-		for (i = a1->num_active_chips; i > 0; i--)
-		{
-			if (!inno_cmd_read_reg(a1, i, reg))
-			{
-				applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
-				continue;
-			}
-			/* update temp database */
-			uint32_t temp = 0;
-			float    temp_f = 0.0f;
-
-			temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-			inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-		}
-
-		inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
-	}
-
-	if (a1->last_results_update + RESULTS_UPDATE_INT_MS < get_current_ms())
-	{
-		double avg = average_add(&a1->avg_found, a1->nonces_found/10.0);
-
-		applog(LOG_INFO, "mining results: this round: %.2lf found/sec (enqueued %.2lf jobs/sec)", a1->nonces_found/10.0, a1->nonce_ranges_done/10.0);
-		applog(LOG_INFO, "mining speed: %lf GHash/sec (difficulty=%d)", avg*4.295*a1->bench_difficulty, a1->bench_difficulty);
-		a1->nonce_ranges_done = 0;
-		a1->nonces_found = 0;
-		a1->last_results_update = get_current_ms();
-	}
-
-	if (a1->last_temp_time + TEMP_UPDATE_INT_MS < get_current_ms())
-	{
-		update_cnt[cid]++;
-		show_log[cid]++;
-		write_flag[cid]++;
-		check_disbale_flag[cid]++;
-
-#if 0
-		if (write_flag[cid] > WRITE_CONFG_TIME)
-		{
-			char fileName[128] = {0};
-			sprintf(fileName, "%s%d.log", LOG_FILE_PREFIX, cid);
-			fd[cid] = fopen(fileName, "w+");
-			//fseek(fd[cid],0,SEEK_SET);
-			fwrite(szShowLog[cid],sizeof(szShowLog[0]),1,fd[cid]);
-			fflush(fd[cid]);
-			fclose(fd[cid]);
-
-			write_flag[cid] = 0;
-		}
-#endif
-
-		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
-		{
-			//configure for vsensor
-			inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
-		}
-
-		for (i = a1->num_active_chips; i > 0; i--)
-		{
-			uint8_t c=i;
-			if(update_cnt[cid] >= VOLTAGE_UPDATE_INT)
-			{
-				inno_check_voltage(a1, i, &s_reg_ctrl);
-				//applog(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",cid, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
-			}
-			else
-			{
-				if(is_chip_disabled(a1,c))
-					continue;
-				if (!inno_cmd_read_reg(a1, c, reg))
-				{
-					disable_chip(a1,c);
-					applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
-					continue;
-				}
-				/* update temp database */
-				uint32_t temp = 0;
-				float    temp_f = 0.0f;
-
-				temp = 0x000003ff & ((reg[7] << 8) | reg[8]);
-				inno_fan_temp_add(&s_fan_ctrl, cid, temp, false);
-			}
-		}
-
-		if (update_cnt[cid] >= VOLTAGE_UPDATE_INT)
-		{
-			//configure for tsensor
-			inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
-			update_cnt[cid] = 0;
-		}else{
-			inno_fan_speed_update(&s_fan_ctrl, cid, cgpu);
-
-			//a1->temp = board_selector->get_temp(0);
-			a1->last_temp_time = get_current_ms();
-			if(inno_fan_temp_get_highest(&s_fan_ctrl,a1->chain_id) > DANGEROUS_TMP)
-			{
-				asic_gpio_write(spi[a1->chain_id]->power_en, 0);
-				early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
-			}
-		}
-	}
+	/* Perform chain monitoring/health checks, skip statistics submission */
+	monitor_and_control_chain_health(cgpu, false);
 
 	/* poll queued results */
 	while (true)
@@ -1474,21 +1347,6 @@ static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
 			}
 		}
 
-	}
-
-	if(check_disbale_flag[cid] > CHECK_DISABLE_TIME)
-	{
-		applog(LOG_INFO, "start to check disable chips");
-		switch(cid){
-			case 0:check_disabled_chips(a1, A1Pll1);;break;
-			case 1:check_disabled_chips(a1, A1Pll2);;break;
-			case 2:check_disabled_chips(a1, A1Pll3);;break;
-			case 3:check_disabled_chips(a1, A1Pll4);;break;
-			case 4:check_disabled_chips(a1, A1Pll5);;break;
-			case 5:check_disabled_chips(a1, A1Pll6);;break;
-			default:;
-		}
-		check_disbale_flag[cid] = 0;
 	}
 
 
