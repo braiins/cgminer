@@ -6967,6 +6967,22 @@ out:
 	return NULL;
 }
 
+/**
+ * Motivation for Construct Buffer
+ *
+ * Construct Buffer is a little handy structure that serves as an aid in
+ * incremental string creation.  It's main feature is that it looks like a
+ * "output" handle, into which you can write/printf to, and that it handles
+ * overflows gracefully.
+ *
+ * The buffer where construction happens is allocated statically by caller
+ * (cnstrct_init). When you overflow the buffer, an "overflow" flag is set and
+ * all subsequent operation are "NO-OPs", until this flag is cleared (which is
+ * _handy_, because you don't have to check return values/error until the end).
+ *
+ * A buffer can be extracted at the end of construction.
+ */
+
 typedef struct construct_buf_t construct_buf_t;
 struct construct_buf_t {
 	int overflow;
