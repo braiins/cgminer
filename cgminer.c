@@ -7075,6 +7075,13 @@ static int cnstrct_print_hex(construct_buf_t *cbuf, void *mem, int len)
 	return !cbuf->overflow;
 }
 
+static inline size_t cnstrct_get_len(construct_buf_t *cbuf)
+{
+	if (cbuf->overflow)
+		return 0;
+	return cbuf->ptr - cbuf->buf;
+}
+
 /* Each pool has one stratum telemetry thread which waits for statistics from
  * workers and sends them to stratum socket.
  */
@@ -7136,7 +7143,7 @@ static void *stratum_tthread(void *userdata)
 			quit(1, "Stratum t unknown telemetry type %d", tele->type);
 		}
 		if (cbuf.overflow == 0) {
-			stratum_send(pool, cbuf.buf, cbuf.ptr - cbuf.buf);
+			stratum_send(pool, cbuf.buf, cnstrct_get_len(&cbuf));
 		}
 
 		free_telemetry(tele);
