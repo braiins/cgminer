@@ -1480,14 +1480,14 @@ struct telemetry_data {
 	time_t time;
 	int chain_id;
 	int n_chips;
-	struct chip_stats chips[0];
+	struct chip_stats chips[];
 };
 
 struct telemetry_log {
 	time_t time;
 	const char *type;
 	const char *source;
-	char msg[0];
+	char msg[];
 };
 
 struct telemetry {
