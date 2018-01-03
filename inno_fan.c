@@ -111,21 +111,21 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 
 	for(j = 100; j > 0; j -= 10)
 	{
-        applog(LOG_ERR, "set test duty:%d", j);
+        applog_hw(LOG_ERR, "set test duty:%d", j);
         inno_fan_pwm_set(fan_ctrl, j);
         sleep(5);
 	}
 
 	for(j = 0; j < 100; j += 10)
     {
-        applog(LOG_ERR, "down test duty.");
+        applog_hw(LOG_ERR, "down test duty.");
         inno_fan_speed_down(fan_ctrl);
         sleep(1);
     }
 
 	for(j = 0; j < 100; j += 10)
     {
-        applog(LOG_ERR, "up test duty.");
+        applog_hw(LOG_ERR, "up test duty.");
         inno_fan_speed_up(fan_ctrl);
         sleep(1);
     }
@@ -148,21 +148,21 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
     fan_ctrl->temp_f_min = -40.0f;
     fan_ctrl->temp_f_max = fan_ctrl->temp_f_min + fan_ctrl->temp_f_step * (fan_ctrl->temp_nums - 1);
 
-	applog(LOG_ERR, "chip nums:%d.", ASIC_CHIP_A_BUCKET);
-	applog(LOG_ERR, "pwm  name:%s.", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
-	applog(LOG_ERR, "pwm  step:%d.", ASIC_INNO_FAN_PWM_STEP);
-	applog(LOG_ERR, "duty max: %d.", ASIC_INNO_FAN_PWM_DUTY_MAX);
-	applog(LOG_ERR, "targ freq:%d.", ASIC_INNO_FAN_PWM_FREQ_TARGET);
-	applog(LOG_ERR, "freq rate:%d.", ASIC_INNO_FAN_PWM_FREQ);
-	applog(LOG_ERR, "max  thrd:%5.2f.", ASIC_INNO_FAN_TEMP_MAX_THRESHOLD);
-	applog(LOG_ERR, "up   thrd:%5.2f.", ASIC_INNO_FAN_TEMP_UP_THRESHOLD);
-	applog(LOG_ERR, "down thrd:%5.2f.", ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD);
-	applog(LOG_ERR, "temp nums:%d.", fan_ctrl->temp_nums);
-	applog(LOG_ERR, "temp vmin:%d.", fan_ctrl->temp_v_min);
-	applog(LOG_ERR, "temp vmax:%d.", fan_ctrl->temp_v_max);
-	applog(LOG_ERR, "temp fstp:%5.2f.", fan_ctrl->temp_f_step);
-	applog(LOG_ERR, "temp fmin:%5.2f.", fan_ctrl->temp_f_min);
-	applog(LOG_ERR, "temp fmax:%5.2f.", fan_ctrl->temp_f_max);
+	applog_hw(LOG_ERR, "chip nums:%d.", ASIC_CHIP_A_BUCKET);
+	applog_hw(LOG_ERR, "pwm  name:%s.", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
+	applog_hw(LOG_ERR, "pwm  step:%d.", ASIC_INNO_FAN_PWM_STEP);
+	applog_hw(LOG_ERR, "duty max: %d.", ASIC_INNO_FAN_PWM_DUTY_MAX);
+	applog_hw(LOG_ERR, "targ freq:%d.", ASIC_INNO_FAN_PWM_FREQ_TARGET);
+	applog_hw(LOG_ERR, "freq rate:%d.", ASIC_INNO_FAN_PWM_FREQ);
+	applog_hw(LOG_ERR, "max  thrd:%5.2f.", ASIC_INNO_FAN_TEMP_MAX_THRESHOLD);
+	applog_hw(LOG_ERR, "up   thrd:%5.2f.", ASIC_INNO_FAN_TEMP_UP_THRESHOLD);
+	applog_hw(LOG_ERR, "down thrd:%5.2f.", ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD);
+	applog_hw(LOG_ERR, "temp nums:%d.", fan_ctrl->temp_nums);
+	applog_hw(LOG_ERR, "temp vmin:%d.", fan_ctrl->temp_v_min);
+	applog_hw(LOG_ERR, "temp vmax:%d.", fan_ctrl->temp_v_max);
+	applog_hw(LOG_ERR, "temp fstp:%5.2f.", fan_ctrl->temp_f_step);
+	applog_hw(LOG_ERR, "temp fmin:%5.2f.", fan_ctrl->temp_f_min);
+	applog_hw(LOG_ERR, "temp fmax:%5.2f.", fan_ctrl->temp_f_max);
 }
 
 void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on)
@@ -172,7 +172,7 @@ void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool w
 
     index = fan_ctrl->index[chain_id];
 
-    applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d)", chain_id, index, inno_fan_temp_to_float(fan_ctrl, temp), temp);
+    applog_hw(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d)", chain_id, index, inno_fan_temp_to_float(fan_ctrl, temp), temp);
     fan_ctrl->temp[chain_id][index] = temp;
     index++;
     fan_ctrl->index[chain_id] = index; 
@@ -184,11 +184,11 @@ void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool w
     }
 
     /* 有芯片温度过高,输出告警打印 */
-    /* applog(LOG_ERR, "inno_fan_temp_add: temp warn_on(init):%d", warn_on); */
+    /* applog_hw(LOG_ERR, "inno_fan_temp_add: temp warn_on(init):%d", warn_on); */
     temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
     if(temp_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
     { 
-        applog(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!", chain_id, index, temp_f, temp);
+        applog_hw(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!", chain_id, index, temp_f, temp);
     }
 }
 
@@ -199,18 +199,18 @@ static void inno_fan_temp_sort(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
 
     temp_nums = fan_ctrl->index[chain_id];
 
-    applog(LOG_DEBUG, "not sort:");
+    applog_hw(LOG_DEBUG, "not sort:");
     for(i = 0; i < temp_nums; i++)
     {
-        applog(LOG_DEBUG, "chip_%d:%08x(%d)", i, fan_ctrl->temp[chain_id][i], fan_ctrl->temp[chain_id][i]);
+        applog_hw(LOG_DEBUG, "chip_%d:%08x(%d)", i, fan_ctrl->temp[chain_id][i], fan_ctrl->temp[chain_id][i]);
     }
-    applog(LOG_DEBUG, "sorted:");
+    applog_hw(LOG_DEBUG, "sorted:");
     qsort(fan_ctrl->temp[chain_id], temp_nums, sizeof(fan_ctrl->temp[chain_id][0]), inno_fan_temp_compare);
     for(i = 0; i < temp_nums; i++)
     {
-        applog(LOG_DEBUG, "chip_%d:%08x(%d)", i, fan_ctrl->temp[chain_id][i], fan_ctrl->temp[chain_id][i]);
+        applog_hw(LOG_DEBUG, "chip_%d:%08x(%d)", i, fan_ctrl->temp[chain_id][i], fan_ctrl->temp[chain_id][i]);
     }
-    applog(LOG_DEBUG, "sort end.");
+    applog_hw(LOG_DEBUG, "sort end.");
 }
 
 static int inno_fan_temp_get_arvarge(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
@@ -244,7 +244,7 @@ static int inno_fan_temp_get_arvarge(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
 
     float temp_f = 0.0f;
     temp_f = inno_fan_temp_to_float(fan_ctrl, (int)arvarge_temp);
-	applog(LOG_DEBUG, "inno_fan_temp_get_arvarge, chain_id:%d, temp nums:%d, valid index[%d,%d], reseult:%7.4f(%d).",
+	applog_hw(LOG_DEBUG, "inno_fan_temp_get_arvarge, chain_id:%d, temp nums:%d, valid index[%d,%d], reseult:%7.4f(%d).",
             chain_id, temp_nums, head_index, tail_index, inno_fan_temp_to_float(fan_ctrl, (int)arvarge_temp), (int)arvarge_temp); 
 
     return (int)arvarge_temp;
@@ -316,19 +316,19 @@ void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
     fd = open(ASIC_INNO_FAN_PWM0_DEVICE_NAME, O_RDWR);
     if(fd < 0)
     {
-        applog(LOG_ERR, "open %s fail", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
+        applog_hw(LOG_ERR, "open %s fail", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
         mutex_unlock(&fan_ctrl->lock);
         return;
     }
     if(ioctl(fd, IOCTL_SET_FREQ_0, ASIC_INNO_FAN_PWM_FREQ) < 0)
     {
-        applog(LOG_ERR, "set fan0 frequency fail");
+        applog_hw(LOG_ERR, "set fan0 frequency fail");
         mutex_unlock(&fan_ctrl->lock);
         return;
     }
     if(ioctl(fd, IOCTL_SET_DUTY_0, duty_driver) < 0)
     {
-        applog(LOG_ERR, "set duty fail");
+        applog_hw(LOG_ERR, "set duty fail");
         mutex_unlock(&fan_ctrl->lock);
         return;
     }
@@ -355,7 +355,7 @@ void inno_fan_speed_up(INNO_FAN_CTRL_T *fan_ctrl)
     {
         duty = 0;
     } 
-    applog(LOG_DEBUG, "speed+(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
+    applog_hw(LOG_DEBUG, "speed+(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
 
     inno_fan_pwm_set(fan_ctrl, duty);
 }
@@ -376,7 +376,7 @@ void inno_fan_speed_down(INNO_FAN_CTRL_T *fan_ctrl)
     {
         duty = ASIC_INNO_FAN_PWM_DUTY_MAX;
     }
-    applog(LOG_DEBUG, "speed-(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
+    applog_hw(LOG_DEBUG, "speed-(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
 
     inno_fan_pwm_set(fan_ctrl, duty);
 }
@@ -421,12 +421,12 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
     if(fan_ctrl->temp_now[chain_id] > fan_ctrl->temp_init[chain_id])
     {
         //inno_fan_speed_down();
-        applog(LOG_ERR, "- to %d" , fan_ctrl->duty);
+        applog_hw(LOG_ERR, "- to %d" , fan_ctrl->duty);
     }
     else
     {
         //inno_fan_speed_up();
-        applog(LOG_ERR, "+ to %d" , fan_ctrl->duty);
+        applog_hw(LOG_ERR, "+ to %d" , fan_ctrl->duty);
     }
 #endif
 
@@ -455,7 +455,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
     /* 加入整条链Power Down */
     if(highest_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
     {
-        applog(LOG_ERR, "%s z:arv:%5.2f, lest:%5.2f, hest:%5.2f, power down", __func__, arvarge_f, lowest_f, highest_f);
+        applog_hw(LOG_ERR, "%s z:arv:%5.2f, lest:%5.2f, hest:%5.2f, power down", __func__, arvarge_f, lowest_f, highest_f);
     }
 
     /* 温度过高 */
@@ -464,7 +464,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
         if(0 != fan_ctrl->duty)
         {
             inno_fan_pwm_set(fan_ctrl, 0);
-            applog(LOG_ERR, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
+            applog_hw(LOG_ERR, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         } 
     }
 
@@ -474,7 +474,7 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
         if(40 != fan_ctrl->duty) 
         {
             inno_fan_pwm_set(fan_ctrl, 40);
-            applog(LOG_ERR, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
+            applog_hw(LOG_ERR, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         }
     } 
 
@@ -499,10 +499,10 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
     //{
     //    return;
     //}
-    /* applog(LOG_DEBUG, "inno_fan_speed_updat times:%d" , times); */
+    /* applog_hw(LOG_DEBUG, "inno_fan_speed_updat times:%d" , times); */
     //times = 0;
 
-    //applog(LOG_ERR, "%s n:arv:%5.2f, lest:%5.2f, hest:%5.2f", __func__, arvarge_f, lowest_f, highest_f);
+    //applog_hw(LOG_ERR, "%s n:arv:%5.2f, lest:%5.2f, hest:%5.2f", __func__, arvarge_f, lowest_f, highest_f);
 #endif
 
 }
@@ -567,9 +567,9 @@ float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp)
 
     temp_f = temp_f_start + temp_f_step * (temp - temp_v_start) / (temp_v_end - temp_v_start);
 
-    applog(LOG_DEBUG, "inno_fan_temp_to_float: temp:%d,%d,%d, %7.4f,%7.4f" , temp,
+    applog_hw(LOG_DEBUG, "inno_fan_temp_to_float: temp:%d,%d,%d, %7.4f,%7.4f" , temp,
             temp_v_start, temp_v_end, temp_f_start, temp_f_end);
-    applog(LOG_DEBUG, "inno_fan_temp_to_float: :%7.4f,%7.4f,%d,%d",
+    applog_hw(LOG_DEBUG, "inno_fan_temp_to_float: :%7.4f,%7.4f,%d,%d",
             temp_f_start, temp_f_step,
             temp - temp_v_start, temp_v_end - temp_v_start);
 
@@ -597,7 +597,7 @@ void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_
 		{	
 			if (!inno_cmd_read_reg(a1, i, reg)) 
 			{
-				applog(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
+				applog_hw(LOG_ERR, "%d: Failed to read temperature sensor register for chip %d ", a1->chain_id, i);
 				continue;
 			}
 			/* update temp database */
@@ -610,14 +610,14 @@ void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_
 
 		inno_fan_temp_init(fan_ctrl, a1->chain_id);
 		arvarge_f = inno_fan_temp_to_float(fan_ctrl, fan_ctrl->temp_arvarge[a1->chain_id]);
-		applog(LOG_WARNING, "%s +:arv:%7.4f. \t", __func__, arvarge_f);
+		applog_hw(LOG_WARNING, "%s +:arv:%7.4f. \t", __func__, arvarge_f);
 		inno_fan_pwm_set(fan_ctrl, 100);
 		sleep(1);
 	}
 	
 	if(!inno_cmd_resetbist(a1, ADDR_BROADCAST))
 	{
-		applog(LOG_WARNING, "reset bist failed!");
+		applog_hw(LOG_WARNING, "reset bist failed!");
 		return;
 	}
 	sleep(1);
@@ -628,7 +628,7 @@ void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_
 	memset(buffer, 0, sizeof(buffer));
 	if(!inno_cmd_bist_start(a1, 0, buffer))
 	{
-		applog(LOG_WARNING, "Reset bist but bist start fail");
+		applog_hw(LOG_WARNING, "Reset bist but bist start fail");
 	}
 
 	if(buffer[3] != 0)
@@ -636,13 +636,13 @@ void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_
 		a1->num_chips = buffer[3];
 	}
 	
-	applog(LOG_WARNING, "%d: detected %d chips", chain_id, a1->num_chips);
+	applog_hw(LOG_WARNING, "%d: detected %d chips", chain_id, a1->num_chips);
 	
 	usleep(10000);
 
 	if (!inno_cmd_bist_fix(a1, ADDR_BROADCAST))
 	{
-		applog(LOG_WARNING, "Reset bist but inno_cmd_bist_fix failed!");
+		applog_hw(LOG_WARNING, "Reset bist but inno_cmd_bist_fix failed!");
 	}
 
 	usleep(200);

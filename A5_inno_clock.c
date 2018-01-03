@@ -183,8 +183,8 @@ int A1_ConfigA1PLLClock(int optPll)
 			}
 		}
 
-		//applog(LOG_NOTICE, "A1 = %d,%d",optPll,A1Pll);
-		//applog(LOG_NOTICE, "A1 PLL Clock = %dMHz",PLL_Clk_12Mhz[A1Pll].speedMHz);
+		//applog_hw(LOG_NOTICE, "A1 = %d,%d",optPll,A1Pll);
+		//applog_hw(LOG_NOTICE, "A1 PLL Clock = %dMHz",PLL_Clk_12Mhz[A1Pll].speedMHz);
 	}
 
 	return A1Pll;
@@ -217,7 +217,7 @@ void A1_SetA1PLLClock(struct A1_chain *a1,int pllClkIdx)
 	//chip->reg[7] = asic_vol_set&0x00ff;
 	//chip->reg[8] = pllClkIdx;
 	//chip->reg[9] = pllClkIdx;
-	//applog(LOG_INFO,"pllClkIdx is %d %d", chip->reg[8],chip->reg[9]);	
+	//applog_hw(LOG_INFO,"pllClkIdx is %d %d", chip->reg[8],chip->reg[9]);	
 
 	inno_cmd_write_reg(a1, ADDR_BROADCAST, chip->reg);
 	usleep(100000);

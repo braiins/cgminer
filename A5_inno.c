@@ -415,11 +415,11 @@ void disable_chip(struct A1_chain *a1, uint8_t chip_id)
 	struct A1_chip *chip = &a1->chips[chip_id - 1];
 	int cid = a1->chain_id;
 	if (is_chip_disabled(a1, chip_id)) {
-		applog(LOG_WARNING, "%d: chip %d already disabled",
+		applog_hw(LOG_WARNING, "%d: chip %d already disabled",
 		       cid, chip_id);
 		return;
 	}
-	applog(LOG_WARNING, "%d: temporary disabling chip %d", cid, chip_id);
+	applog_hw(LOG_WARNING, "%d: temporary disabling chip %d", cid, chip_id);
 	chip->cooldown_begin = get_current_ms();
 }
 
@@ -446,11 +446,11 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 		if (!inno_cmd_read_reg(a1, chip_id, reg)) 
 		{
 			chip->fail_count++;
-			applog(LOG_WARNING, "%d: chip %d not yet working - %d",
+			applog_hw(LOG_WARNING, "%d: chip %d not yet working - %d",
 			       cid, chip_id, chip->fail_count);
 			if (chip->fail_count > DISABLE_CHIP_FAIL_THRESHOLD) 
 			{
-				applog(LOG_WARNING, "%d: completely disabling chip %d at %d",
+				applog_hw(LOG_WARNING, "%d: completely disabling chip %d at %d",
 				       cid, chip_id, chip->fail_count);
 				chip->disabled = true;
 				a1->num_cores -= chip->num_cores;
@@ -460,7 +460,7 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 			chip->cooldown_begin = get_current_ms();
 			continue;
 		}
-		applog(LOG_WARNING, "%d: chip %d is working again", cid, chip_id);
+		applog_hw(LOG_WARNING, "%d: chip %d is working again", cid, chip_id);
 		chip->cooldown_begin = 0;
 		chip->fail_count = 0;
 		chip->fail_reset = 0;
@@ -469,9 +469,9 @@ void check_disabled_chips(struct A1_chain *a1, int pllnum)
 	//if the core in chain least than 600, reinit this chain 	
 	if(a1->num_cores <= LEAST_CORE_ONE_CHAIN)
 	{
-		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
-		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
-		applog(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		applog_hw(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		applog_hw(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
+		applog_hw(LOG_WARNING, "****core:%d*start to reset the chain:%d******************", a1->num_cores, cid);
 		
 		asic_gpio_write(ctx->power_en, 0);
 		sleep(3);
@@ -515,10 +515,10 @@ bool set_work_benchmark(struct A1_chain *a1, uint8_t chip_id, uint8_t queue_stat
 	uint8_t job[JOB_LENGTH];
 
 #if 0
-	//applog(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x", cid, chip_id, job_id, queue_states);
+	//applog_hw(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x", cid, chip_id, job_id, queue_states);
 	if (job_id == (queue_states & 0x0f) || job_id == (queue_states >> 4))
 	{
-		applog(LOG_WARNING, "%d: job overlap: %d, 0x%02x", cid, job_id, queue_states);
+		applog_hw(LOG_WARNING, "%d: job overlap: %d, 0x%02x", cid, job_id, queue_states);
 	}
 
 	if (chip->work[chip->last_queued_id] != NULL)
@@ -533,7 +533,7 @@ bool set_work_benchmark(struct A1_chain *a1, uint8_t chip_id, uint8_t queue_stat
 	if (!inno_cmd_write_job(a1, chip_id, jobdata))
 	{
 		/* give back work */
-		applog(LOG_ERR, "%d: failed to set work for chip %d.%d", cid, chip_id, job_id);
+		applog_hw(LOG_ERR, "%d: failed to set work for chip %d.%d", cid, chip_id, job_id);
 		disable_chip(a1, chip_id);
 	}
 	else
@@ -554,10 +554,10 @@ bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t q
 
 	int job_id = chip->last_queued_id + 1;
 
-	//applog(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x", cid, chip_id, job_id, queue_states);
+	//applog_hw(LOG_INFO, "%d: queuing chip %d with job_id %d, state=0x%02x", cid, chip_id, job_id, queue_states);
 	if (job_id == (queue_states & 0x0f) || job_id == (queue_states >> 4))
 	{
-		applog(LOG_WARNING, "%d: job overlap: %d, 0x%02x", cid, job_id, queue_states);
+		applog_hw(LOG_WARNING, "%d: job overlap: %d, 0x%02x", cid, job_id, queue_states);
 	}
 
 	if (chip->work[chip->last_queued_id] != NULL) 
@@ -572,7 +572,7 @@ bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t q
 	{
 		/* give back work */
 		work_completed(a1->cgpu, work);
-		applog(LOG_ERR, "%d: failed to set work for chip %d.%d", cid, chip_id, job_id);
+		applog_hw(LOG_ERR, "%d: failed to set work for chip %d.%d", cid, chip_id, job_id);
 		disable_chip(a1, chip_id);
 	} 
 	else 
@@ -605,7 +605,7 @@ bool get_nonce(struct A1_chain *a1, uint8_t *nonce, uint8_t *chip_id, uint8_t *j
 		*(uint16_t *)micro_job_id = buffer[3];		
 		memcpy(nonce, buffer + 4, 4);
 
-		//applog(LOG_INFO, "Got nonce for chip %d / job_id %d / micro_job_id:%d / nonce 0x%08x",
+		//applog_hw(LOG_INFO, "Got nonce for chip %d / job_id %d / micro_job_id:%d / nonce 0x%08x",
 		//	   *chip_id, *job_id, buffer[3], *(uint32_t *)nonce);
 		
 		return true;
@@ -617,7 +617,7 @@ bool get_nonce(struct A1_chain *a1, uint8_t *nonce, uint8_t *chip_id, uint8_t *j
 bool abort_work(struct A1_chain *a1)
 {
 
-	applog(LOG_INFO,"Start to reset ");
+	applog_hw(LOG_INFO,"Start to reset ");
 
 	return true;
 }
@@ -631,7 +631,7 @@ bool check_chip(struct A1_chain *a1, int i)
 	memset(buffer, 0, sizeof(buffer));
 	if (!inno_cmd_read_reg(a1, chip_id, buffer)) 
 	{
-		applog(LOG_WARNING, "%d: Failed to read register for "
+		applog_hw(LOG_WARNING, "%d: Failed to read register for "
 			"chip %d -> disabling", cid, chip_id);
 		a1->chips[i].num_cores = 0;
 		a1->chips[i].disabled = 1;
@@ -644,7 +644,7 @@ bool check_chip(struct A1_chain *a1, int i)
 
 	a1->chips[i].num_cores = buffer[11];
 	a1->num_cores += a1->chips[i].num_cores;
-	//applog(LOG_WARNING, "%d: Found chip %d with %d active cores",
+	//applog_hw(LOG_WARNING, "%d: Found chip %d with %d active cores",
 	 //      cid, chip_id, a1->chips[i].num_cores);
 
 	//keep ASIC register value
@@ -653,7 +653,7 @@ bool check_chip(struct A1_chain *a1, int i)
 
 	if (a1->chips[i].num_cores < BROKEN_CHIP_THRESHOLD) 
 	{
-		applog(LOG_WARNING, "%d: broken chip %d with %d active "
+		applog_hw(LOG_WARNING, "%d: broken chip %d with %d active "
 		       "cores (threshold = %d)", cid, chip_id,
 		       a1->chips[i].num_cores, BROKEN_CHIP_THRESHOLD);
 
@@ -669,7 +669,7 @@ bool check_chip(struct A1_chain *a1, int i)
 
 	if (a1->chips[i].num_cores < WEAK_CHIP_THRESHOLD) 
 	{
-		applog(LOG_WARNING, "%d: weak chip %d with %d active "
+		applog_hw(LOG_WARNING, "%d: weak chip %d with %d active "
 		       "cores (threshold = %d)", cid,
 		       chip_id, a1->chips[i].num_cores, WEAK_CHIP_THRESHOLD);
 
@@ -702,10 +702,10 @@ void prechain_detect(struct A1_chain *a1, int idxpll)
 	memcpy(temp_reg, default_reg[idxpll], REG_LENGTH-2);
 	if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
 	{
-		applog(LOG_WARNING, "set default PLL fail");
+		applog_hw(LOG_WARNING, "set default PLL fail");
 		return -1;
 	}
-	applog(LOG_WARNING, "set default %d PLL success", i);
+	applog_hw(LOG_WARNING, "set default %d PLL success", i);
 
 	usleep(100000);
 */
@@ -715,10 +715,10 @@ void prechain_detect(struct A1_chain *a1, int idxpll)
 		memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
 		if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
 		{
-			applog(LOG_WARNING, "set default PLL fail");
+			applog_hw(LOG_WARNING, "set default PLL fail");
 			return;
 		}
-		//applog(LOG_WARNING, "set default %d PLL success", i);
+		//applog_hw(LOG_WARNING, "set default %d PLL success", i);
 
 		usleep(120000);
 	}
@@ -743,23 +743,23 @@ int chain_detect(struct A1_chain *a1)
 	memset(buffer, 0, sizeof(buffer));
 	if(!inno_cmd_bist_start(a1, 0, buffer))
 	{
-		applog(LOG_WARNING, "bist start fail");
+		applog_hw(LOG_WARNING, "bist start fail");
 		return -1;
 	}
 	a1->num_chips = buffer[3]; 
-	applog(LOG_WARNING, "%d: detected %d chips", cid, a1->num_chips);
+	applog_hw(LOG_WARNING, "%d: detected %d chips", cid, a1->num_chips);
 
 	usleep(10000);
 /*	
 	if(!inno_cmd_bist_collect(a1, ADDR_BROADCAST))
 	{
-		applog(LOG_WARNING, "bist collect fail");
+		applog_hw(LOG_WARNING, "bist collect fail");
 		return -1;
 	}
 */
 
-	applog(LOG_WARNING, "collect core success");
-	applog(LOG_WARNING, "%d: no A1 chip-chain detected", cid);
+	applog_hw(LOG_WARNING, "collect core success");
+	applog_hw(LOG_WARNING, "%d: no A1 chip-chain detected", cid);
 	return a1->num_chips;
 
 }
@@ -804,10 +804,10 @@ void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll)
 			memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
 			if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
 			{
-				applog(LOG_WARNING, "set default PLL fail");
+				applog_hw(LOG_WARNING, "set default PLL fail");
 				return;
 			}
-			applog(LOG_WARNING, "set default %d PLL success", i);
+			applog_hw(LOG_WARNING, "set default %d PLL success", i);
 
 			usleep(200000);
 		}
@@ -820,10 +820,10 @@ void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll)
 			memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
 			if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
 			{
-				applog(LOG_WARNING, "set default PLL fail");
+				applog_hw(LOG_WARNING, "set default PLL fail");
 				return;
 			}
-			applog(LOG_WARNING, "set default %d PLL success", i);
+			applog_hw(LOG_WARNING, "set default %d PLL success", i);
 
 			usleep(200000);
 		}
@@ -835,10 +835,10 @@ void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll)
 		memcpy(temp_reg, default_reg[i], REG_LENGTH-2);
 		if(!inno_cmd_write_reg(a1, ADDR_BROADCAST, temp_reg))
 		{
-			applog(LOG_WARNING, "set default PLL fail");
+			applog_hw(LOG_WARNING, "set default PLL fail");
 			return;
 		}
-		//applog(LOG_WARNING, "set default %d PLL success", i);
+		//applog_hw(LOG_WARNING, "set default %d PLL success", i);
 
 		usleep(120000);
 	}
@@ -999,7 +999,7 @@ bool inno_check_voltage(struct A1_chain *a1, int chip_id, inno_reg_ctrl_t *s_reg
     memset(reg, 0, 128);
   
 	if (!inno_cmd_read_reg(a1, chip_id, reg)) {
-		applog(LOG_NOTICE, "%d: Failed to read register for ""chip %d -> disabling", a1->chain_id, chip_id);
+		applog_hw(LOG_NOTICE, "%d: Failed to read register for ""chip %d -> disabling", a1->chain_id, chip_id);
 		a1->chips[chip_id].num_cores = 0;
 		a1->chips[chip_id].disabled = 1;
 		return false;
@@ -1036,7 +1036,7 @@ bool inno_check_voltage(struct A1_chain *a1, int chip_id, inno_reg_ctrl_t *s_reg
 		
 			//if read valtage higher than standard 8% or less than 8%,we think the chain has some problem
 			if((tmp_v > (1.08 * inno_vsadc_table[opt_voltage])) || (tmp_v < (0.92 * inno_vsadc_table[opt_voltage]))){ 
-				applog(LOG_ERR,"Notice chain %d maybe has some promble in voltage",a1->chain_id);
+				applog_hw(LOG_ERR,"Notice chain %d maybe has some promble in voltage",a1->chain_id);
 				//asic_gpio_write(a1->spi_ctx->power_en, 0);
 				//asic_gpio_write(GPIO_RED, 1);
 	 			//early_quit(1,"Notice chain %d maybe has some promble in voltage\n",a1->chain_id);

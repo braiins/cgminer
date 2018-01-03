@@ -2185,11 +2185,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 			pool->swork.merkle_bin[i] = cgmalloc(32);
 			if (opt_protocol)
-				applog(LOG_DEBUG, "merkle %d: %s", i, merkle);
+				applog_pool(LOG_DEBUG, "merkle %d: %s", i, merkle);
 			ret = hex2bin(pool->swork.merkle_bin[i], merkle, 32);
 			free(merkle);
 			if (unlikely(!ret)) {
-				applog(LOG_ERR, "Failed to convert merkle to merkle_bin in parse_notify");
+				applog_pool(LOG_ERR, "Failed to convert merkle to merkle_bin in parse_notify");
 				goto out_unlock;
 			}
 		}
@@ -2220,20 +2220,20 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 	ret = hex2bin(pool->header_bin, header, 128);
 	if (unlikely(!ret)) {
-		applog(LOG_ERR, "Failed to convert header to header_bin in parse_notify");
+		applog_pool(LOG_ERR, "Failed to convert header to header_bin in parse_notify");
 		goto out_unlock;
 	}
 
 	cb1 = alloca(cb1_len);
 	ret = hex2bin(cb1, coinbase1, cb1_len);
 	if (unlikely(!ret)) {
-		applog(LOG_ERR, "Failed to convert cb1 to cb1_bin in parse_notify");
+		applog_pool(LOG_ERR, "Failed to convert cb1 to cb1_bin in parse_notify");
 		goto out_unlock;
 	}
 	cb2 = alloca(cb2_len);
 	ret = hex2bin(cb2, coinbase2, cb2_len);
 	if (unlikely(!ret)) {
-		applog(LOG_ERR, "Failed to convert cb2 to cb2_bin in parse_notify");
+		applog_pool(LOG_ERR, "Failed to convert cb2 to cb2_bin in parse_notify");
 		goto out_unlock;
 	}
 	free(pool->coinbase);
@@ -2247,21 +2247,21 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 		if (opt_decode)
 			decode_exit(pool, cb);
-		applog(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
+		applog_pool(LOG_DEBUG, "Pool %d coinbase %s", pool->pool_no, cb);
 		free(cb);
 	}
 out_unlock:
 	cg_wunlock(&pool->data_lock);
 
 	if (opt_protocol) {
-		applog(LOG_DEBUG, "job_id: %s", job_id);
-		applog(LOG_DEBUG, "prev_hash: %s", prev_hash);
-		applog(LOG_DEBUG, "coinbase1: %s", coinbase1);
-		applog(LOG_DEBUG, "coinbase2: %s", coinbase2);
-		applog(LOG_DEBUG, "bbversion: %s", bbversion);
-		applog(LOG_DEBUG, "nbit: %s", nbit);
-		applog(LOG_DEBUG, "ntime: %s", ntime);
-		applog(LOG_DEBUG, "clean: %s", clean ? "yes" : "no");
+		applog_pool(LOG_DEBUG, "job_id: %s", job_id);
+		applog_pool(LOG_DEBUG, "prev_hash: %s", prev_hash);
+		applog_pool(LOG_DEBUG, "coinbase1: %s", coinbase1);
+		applog_pool(LOG_DEBUG, "coinbase2: %s", coinbase2);
+		applog_pool(LOG_DEBUG, "bbversion: %s", bbversion);
+		applog_pool(LOG_DEBUG, "nbit: %s", nbit);
+		applog_pool(LOG_DEBUG, "ntime: %s", ntime);
+		applog_pool(LOG_DEBUG, "clean: %s", clean ? "yes" : "no");
 	}
 	free(coinbase1);
 	free(coinbase2);
@@ -2297,13 +2297,13 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		int idiff = diff;
 
 		if ((double)idiff == diff)
-			applog(LOG_NOTICE, "Pool %d difficulty changed to %d",
+			applog_pool(LOG_NOTICE, "Pool %d difficulty changed to %d",
 			       pool->pool_no, idiff);
 		else
-			applog(LOG_NOTICE, "Pool %d difficulty changed to %.1f",
+			applog_pool(LOG_NOTICE, "Pool %d difficulty changed to %.1f",
 			       pool->pool_no, diff);
 	} else
-		applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no,
+		applog_pool(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no,
 		       diff);
 
 	return true;
@@ -2377,18 +2377,18 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 		char *dot_pool, *dot_reconnect;
 		dot_pool = strchr(pool->sockaddr_url, '.');
 		if (!dot_pool) {
-			applog(LOG_ERR, "Denied stratum reconnect request for pool without domain '%s'",
+			applog_pool(LOG_ERR, "Denied stratum reconnect request for pool without domain '%s'",
 			       pool->sockaddr_url);
 			return false;
 		}
 		dot_reconnect = strchr(url, '.');
 		if (!dot_reconnect) {
-			applog(LOG_ERR, "Denied stratum reconnect request to url without domain '%s'",
+			applog_pool(LOG_ERR, "Denied stratum reconnect request to url without domain '%s'",
 			       url);
 			return false;
 		}
 		if (strcmp(dot_pool, dot_reconnect)) {
-			applog(LOG_ERR, "Denied stratum reconnect request to non-matching domain url '%s'",
+			applog_pool(LOG_ERR, "Denied stratum reconnect request to non-matching domain url '%s'",
 				pool->sockaddr_url);
 			return false;
 		}
@@ -2409,7 +2409,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	if (!extract_sockaddr(address, &sockaddr_url, &stratum_port))
 		return false;
 
-	applog(LOG_WARNING, "Stratum reconnect requested from pool %d to %s", pool->pool_no, address);
+	applog_pool(LOG_WARNING, "Stratum reconnect requested from pool %d to %s", pool->pool_no, address);
 
 	clear_pool_work(pool);
 
@@ -2470,7 +2470,7 @@ static bool show_message(struct pool *pool, json_t *val)
 	msg = (char *)json_string_value(json_array_get(val, 0));
 	if (!msg)
 		return false;
-	applog(LOG_NOTICE, "Pool %d message: %s", pool->pool_no, msg);
+	applog_pool(LOG_NOTICE, "Pool %d message: %s", pool->pool_no, msg);
 	return true;
 }
 
@@ -2481,12 +2481,12 @@ static bool parse_extranonce(struct pool *pool, json_t *val)
 
 	nonce1 = json_array_string(val, 0);
 	if (!valid_hex(nonce1)) {
-		applog(LOG_INFO, "Failed to get valid nonce1 in parse_extranonce");
+		applog_pool(LOG_INFO, "Failed to get valid nonce1 in parse_extranonce");
 		return false;
 	}
 	n2size = json_integer_value(json_array_get(val, 1));
 	if (!n2size) {
-		applog(LOG_INFO, "Failed to get valid n2size in parse_extranonce");
+		applog_pool(LOG_INFO, "Failed to get valid n2size in parse_extranonce");
 		free(nonce1);
 		return false;
 	}
@@ -2503,7 +2503,7 @@ static bool parse_extranonce(struct pool *pool, json_t *val)
 	pool->n2size = n2size;
 	cg_wunlock(&pool->data_lock);
 
-	applog(LOG_NOTICE, "Pool %d extranonce change requested", pool->pool_no);
+	applog_pool(LOG_NOTICE, "Pool %d extranonce change requested", pool->pool_no);
 
 	return true;
 }
@@ -2521,7 +2521,7 @@ bool parse_method(struct pool *pool, char *s)
 
 	val = JSON_LOADS(s, &err);
 	if (!val) {
-		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
+		applog_pool(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
 		goto out;
 	}
 
@@ -2539,7 +2539,7 @@ bool parse_method(struct pool *pool, char *s)
 		else
 			ss = strdup("(unknown reason)");
 
-		applog(LOG_INFO, "JSON-RPC method decode failed: %s", ss);
+		applog_pool(LOG_INFO, "JSON-RPC method decode failed: %s", ss);
 		free(ss);
 		goto out_decref;
 	}
@@ -2588,7 +2588,7 @@ bool parse_method(struct pool *pool, char *s)
 	}
 
 	if (!strncasecmp(buf, "mining.ping", 11)) {
-		applog(LOG_INFO, "Pool %d ping", pool->pool_no);
+		applog_pool(LOG_INFO, "Pool %d ping", pool->pool_no);
 		ret = send_pong(pool, val);
 		goto out_decref;
 	}
@@ -2614,7 +2614,7 @@ bool subscribe_extranonce(struct pool *pool)
 	/* Parse all data in the queue and anything left should be the response */
 	while (42) {
 		if (!socket_full(pool, DEFAULT_SOCKWAIT / 30)) {
-			applog(LOG_DEBUG, "Timed out waiting for response extranonce.subscribe");
+			applog_pool(LOG_DEBUG, "Timed out waiting for response extranonce.subscribe");
 			/* some pool doesnt send anything, so this is normal */
 			ret = true;
 			goto out;
@@ -2642,12 +2642,12 @@ bool subscribe_extranonce(struct pool *pool)
 			if (!ss)
 				ss = (char *)json_string_value(err_val);
 			if (ss && (strcmp(ss, "Method 'subscribe' not found for service 'mining.extranonce'") == 0)) {
-				applog(LOG_INFO, "Cannot subscribe to mining.extranonce for pool %d", pool->pool_no);
+				applog_pool(LOG_INFO, "Cannot subscribe to mining.extranonce for pool %d", pool->pool_no);
 				ret = true;
 				goto out;
 			}
 			if (ss && (strcmp(ss, "Unrecognized request provided") == 0)) {
-				applog(LOG_INFO, "Cannot subscribe to mining.extranonce for pool %d", pool->pool_no);
+				applog_pool(LOG_INFO, "Cannot subscribe to mining.extranonce for pool %d", pool->pool_no);
 				ret = true;
 				goto out;
 			}
@@ -2655,14 +2655,14 @@ bool subscribe_extranonce(struct pool *pool)
 		}
 		else
 			ss = strdup("(unknown reason)");
-		applog(LOG_INFO, "Pool %d JSON extranonce subscribe failed: %s", pool->pool_no, ss);
+		applog_pool(LOG_INFO, "Pool %d JSON extranonce subscribe failed: %s", pool->pool_no, ss);
 		free(ss);
 
 		goto out;
 	}
 
 	ret = true;
-	applog(LOG_INFO, "Stratum extranonce subscribe for pool %d", pool->pool_no);
+	applog_pool(LOG_INFO, "Stratum extranonce subscribe for pool %d", pool->pool_no);
 
 out:
 	json_decref(val);
@@ -2705,7 +2705,7 @@ bool auth_stratum(struct pool *pool)
 			ss = json_dumps(err_val, JSON_INDENT(3));
 		else
 			ss = strdup("(unknown reason)");
-		applog(LOG_INFO, "pool %d JSON stratum auth failed: %s", pool->pool_no, ss);
+		applog_pool(LOG_INFO, "pool %d JSON stratum auth failed: %s", pool->pool_no, ss);
 		free(ss);
 
 		suspend_stratum(pool);
@@ -2714,7 +2714,7 @@ bool auth_stratum(struct pool *pool)
 	}
 
 	ret = true;
-	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
+	applog_pool(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
 	successful_connect = true;
 
