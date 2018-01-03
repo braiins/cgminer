@@ -7121,7 +7121,6 @@ static void *stratum_tthread(void *userdata)
 		}
 		if (cbuf.overflow == 0) {
 			stratum_send(pool, cbuf.buf, cbuf.ptr - cbuf.buf);
-			//printf("%s\n", cbuf.buf);
 		}
 
 		free_telemetry(tele);

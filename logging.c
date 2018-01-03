@@ -55,9 +55,46 @@ void log_to_pool(const char *str)
 {
 	struct telemetry *tele;
 
-	tele = make_telemetry_log("applog", "", str);
+	tele = make_telemetry_log("applog", "undef", str);
 	submit_telemetry(tele);
 }
+
+/**
+ * recur_enter - increment recursion counter
+ * @param count pointer to variable counting things in
+ * @returns 1 if entrace was successful, 0 if entrace was blocked
+ */
+
+static int recur_enter(int *count)
+{
+	if (*count != 0)
+		return 0;
+	*count = 1;
+	return 1;
+}
+
+/**
+ * recur_leave - decrement recursion counter
+ *
+ * @param count pointer to variable counting things in
+ */
+
+static void recur_leave(int *count)
+{
+	*count = 0;
+}
+
+/**
+ * We need to protect log_to_pool against double entry: if something bad
+ * happened while trying to print to pool (we have been disconnected from pool
+ * or similar), it's likely another applog will be called causing (probably)
+ * infinite recursion.
+ *
+ * We use applog_entry_count to protect against doubnle entry to log_to_pool.
+ * We are not concerned about other threads, this lock is per-thread (and
+ * stored in TLS), so we don't have to bother with mutexes or atomic writes.
+ */
+static __thread int applog_entry_count;
 
 /*
  * log function
@@ -101,9 +138,13 @@ void _applog(int prio, const char *str, bool force)
 #else
 		fprintf(stderr, "%s\n", str);
 		fflush(stderr);
-#if 0
-		log_to_pool(str);
-#endif
+
+		if (recur_enter(&applog_entry_count)) {
+			log_to_pool(str);
+			recur_leave(&applog_entry_count);
+		} else {
+			printf("Recursion!\n");
+		}
 #endif
 	}
 }
