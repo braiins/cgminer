@@ -605,7 +605,7 @@ static void applog_and_exit(const char *fmt, ...)
 	va_start(ap, fmt);
 	vsnprintf(exit_buf, sizeof(exit_buf), fmt, ap);
 	va_end(ap);
-	_applog(LOG_ERR, exit_buf, true);
+	_applog(LOG_ERR, SOURCE_UNDEFINED, exit_buf, true);
 	exit(1);
 }
 

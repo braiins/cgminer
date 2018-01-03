@@ -21,6 +21,38 @@ bool opt_log_output = true;
 /* per default priorities higher than LOG_NOTICE are logged */
 int opt_log_level = LOG_WARNING;
 
+/**
+ * Names of sources. Must match enum in logging.h
+ */
+static char *source_name[] = {
+	"undef",
+	"mining",
+	"pool",
+	"system",
+	"hw",
+	"fatal",
+	"?",
+};
+
+/* Names of log levels */
+static const char *log_level_name(int level)
+{
+	switch (level) {
+		case LOG_ERR:
+			return "error";
+		case LOG_WARNING:
+			return "warning";
+		case LOG_NOTICE:
+			return "notice";
+		case LOG_INFO:
+			return "info";
+		case LOG_DEBUG:
+			return "debug";
+		default:
+			return "unknown";
+	}
+}
+
 static void my_log_curses(int prio, const char *datetime, const char *str, bool force)
 {
 	if (opt_quiet && prio != LOG_ERR)
@@ -51,11 +83,11 @@ static void my_log_curses(int prio, const char *datetime, const char *str, bool 
  * log to pool
  */
 
-void log_to_pool(const char *str)
+void log_to_pool(int prio, int source, const char *str)
 {
 	struct telemetry *tele;
 
-	tele = make_telemetry_log("applog", "undef", str);
+	tele = make_telemetry_log(log_level_name(prio), source_name[source], str);
 	submit_telemetry(tele);
 }
 
@@ -96,10 +128,28 @@ static void recur_leave(int *count)
  */
 static __thread int applog_entry_count;
 
+/**
+ * Decide whether to log remote
+ *
+ * @param prio priority of message
+ * @param source source of message
+ * @returns 1 if this message should be logged remote, 0 otherwise
+ */
+static int decide_to_log_remote(int prio, int source)
+{
+	if (source == SOURCE_POOL)
+		return 0;
+	if (source == SOURCE_FATAL || source == SOURCE_HW)
+		return 1;
+	if (prio == LOG_ERR || prio == LOG_WARNING)
+		return 1;
+	return 0;
+}
+
 /*
  * log function
  */
-void _applog(int prio, const char *str, bool force)
+void _applog(int prio, int source, const char *str, bool force)
 {
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog) {
@@ -139,11 +189,13 @@ void _applog(int prio, const char *str, bool force)
 		fprintf(stderr, "%s\n", str);
 		fflush(stderr);
 
-		if (recur_enter(&applog_entry_count)) {
-			log_to_pool(str);
-			recur_leave(&applog_entry_count);
-		} else {
-			printf("Recursion!\n");
+		if (decide_to_log_remote(prio, source)) {
+			if (recur_enter(&applog_entry_count)) {
+				log_to_pool(prio, source, str);
+				recur_leave(&applog_entry_count);
+			} else {
+				printf("Recursion!\n");
+			}
 		}
 #endif
 	}

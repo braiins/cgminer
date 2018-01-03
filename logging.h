@@ -17,6 +17,17 @@ enum {
 };
 #endif
 
+enum {
+	SOURCE_UNDEFINED,
+	SOURCE_MINING,
+	SOURCE_POOL,
+	SOURCE_SYSTEM,
+	SOURCE_HW,
+	SOURCE_FATAL,
+	SOURCE_UNKNOWN,
+};
+
+
 /* debug flags */
 extern bool opt_debug;
 extern bool opt_decode;
@@ -29,17 +40,28 @@ extern int opt_log_level;
 
 #define LOGBUFSIZ 256
 
-extern void _applog(int prio, const char *str, bool force);
+extern void _applog(int prio, int source, const char *str, bool force);
 extern void _simplelog(int prio, const char *str, bool force);
 
 #define IN_FMT_FFL " in %s %s():%d"
+
+#define applog_source(prio, source, fmt, ...) do { \
+	if (opt_debug || prio != LOG_DEBUG) { \
+		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
+			char tmp42[LOGBUFSIZ]; \
+			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+			_applog(prio, source, tmp42, false); \
+		} \
+	} \
+} while (0)
+
 
 #define applog(prio, fmt, ...) do { \
 	if (opt_debug || prio != LOG_DEBUG) { \
 		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
 			char tmp42[LOGBUFSIZ]; \
 			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-			_applog(prio, tmp42, false); \
+			_applog(prio, SOURCE_UNDEFINED, tmp42, false); \
 		} \
 	} \
 } while (0)
@@ -59,7 +81,7 @@ extern void _simplelog(int prio, const char *str, bool force);
 		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
 			char tmp42[_SIZ]; \
 			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-			_applog(prio, tmp42, false); \
+			_applog(prio, SOURCE_UNDEFINED, tmp42, false); \
 		} \
 	} \
 } while (0)
@@ -69,7 +91,7 @@ extern void _simplelog(int prio, const char *str, bool force);
 		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
 			char tmp42[LOGBUFSIZ]; \
 			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-			_applog(prio, tmp42, true); \
+			_applog(prio, SOURCE_UNDEFINED, tmp42, true); \
 		} \
 	} \
 } while (0)
@@ -78,7 +100,7 @@ extern void _simplelog(int prio, const char *str, bool force);
 	if (fmt) { \
 		char tmp42[LOGBUFSIZ]; \
 		snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-		_applog(LOG_ERR, tmp42, true); \
+		_applog(LOG_ERR, SOURCE_FATAL, tmp42, true); \
 	} \
 	_quit(status); \
 } while (0)
@@ -87,7 +109,7 @@ extern void _simplelog(int prio, const char *str, bool force);
 	if (fmt) { \
 		char tmp42[LOGBUFSIZ]; \
 		snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-		_applog(LOG_ERR, tmp42, true); \
+		_applog(LOG_ERR, SOURCE_FATAL, tmp42, true); \
 	} \
 	__quit(status, false); \
 } while (0)
@@ -97,7 +119,7 @@ extern void _simplelog(int prio, const char *str, bool force);
 		char tmp42[LOGBUFSIZ]; \
 		snprintf(tmp42, sizeof(tmp42), fmt IN_FMT_FFL, \
 				##__VA_ARGS__, __FILE__, __func__, __LINE__); \
-		_applog(LOG_ERR, tmp42, true); \
+		_applog(LOG_ERR, SOURCE_FATAL, tmp42, true); \
 	} \
 	_quit(status); \
 } while (0)
@@ -107,7 +129,7 @@ extern void _simplelog(int prio, const char *str, bool force);
 		char tmp42[LOGBUFSIZ]; \
 		snprintf(tmp42, sizeof(tmp42), fmt IN_FMT_FFL, \
 				##__VA_ARGS__, _file, _func, _line); \
-		_applog(LOG_ERR, tmp42, true); \
+		_applog(LOG_ERR, SOURCE_FATAL, tmp42, true); \
 	} \
 	_quit(status); \
 } while (0)
@@ -127,5 +149,10 @@ extern void _simplelog(int prio, const char *str, bool force);
 } while (0)
 
 #endif
+
+#define applog_pool(prio, fmt, ...) applog_source(prio, SOURCE_POOL, fmt, ##__VA_ARGS__)
+#define applog_mining(prio, fmt, ...) applog_source(prio, SOURCE_MINING, fmt, ##__VA_ARGS__)
+#define applog_hw(prio, fmt, ...) applog_source(prio, SOURCE_HW, fmt, ##__VA_ARGS__)
+#define applog_system(prio, fmt, ...) applog_source(prio, SOURCE_SYSTEM, fmt, ##__VA_ARGS__)
 
 #endif /* __LOGGING_H__ */
