@@ -6983,8 +6983,7 @@ out:
  * A buffer can be extracted at the end of construction.
  */
 
-typedef struct construct_buf_t construct_buf_t;
-struct construct_buf_t {
+struct construct_buf {
 	int overflow;
 	char *buf, *ptr, *end;
 };
@@ -6996,7 +6995,7 @@ struct construct_buf_t {
  * @param fmt Format string
  * @param ... ...
  */
-static int cnstrct_printf(construct_buf_t *cbuf, const char *fmt, ...)
+static int cnstrct_printf(struct construct_buf *cbuf, const char *fmt, ...)
 {
 	va_list ap;
 	int ret;
@@ -7031,14 +7030,14 @@ overflow:
  * @param buf Data buffer
  * @param size Size of @c buf
  */
-static void cnstrct_init(construct_buf_t *cbuf, char *buf, int size)
+static void cnstrct_init(struct construct_buf *cbuf, char *buf, int size)
 {
 	cbuf->overflow = 0;
 	cbuf->buf = cbuf->ptr = buf;
 	cbuf->end = buf + size;
 }
 
-static int cnstrct_putc(construct_buf_t *cbuf, char x)
+static int cnstrct_putc(struct construct_buf *cbuf, char x)
 {
 	if (cbuf->overflow || cbuf->ptr >= cbuf->end) {
 		cbuf->overflow = 1;
@@ -7048,7 +7047,7 @@ static int cnstrct_putc(construct_buf_t *cbuf, char x)
 	return 0;
 }
 
-static int cnstrct_json_quote(construct_buf_t *cbuf, char *buf, int len)
+static int cnstrct_json_quote(struct construct_buf *cbuf, char *buf, int len)
 {
 	int i;
 
@@ -7064,7 +7063,7 @@ static int cnstrct_json_quote(construct_buf_t *cbuf, char *buf, int len)
 	return !cbuf->overflow;
 }
 
-static int cnstrct_print_hex(construct_buf_t *cbuf, void *mem, int len)
+static int cnstrct_print_hex(struct construct_buf *cbuf, void *mem, int len)
 {
 	uint8_t *buf = mem;
 	int i;
@@ -7075,7 +7074,7 @@ static int cnstrct_print_hex(construct_buf_t *cbuf, void *mem, int len)
 	return !cbuf->overflow;
 }
 
-static inline size_t cnstrct_get_len(construct_buf_t *cbuf)
+static inline size_t cnstrct_get_len(struct construct_buf *cbuf)
 {
 	if (cbuf->overflow)
 		return 0;
@@ -7091,7 +7090,7 @@ static void *stratum_tthread(void *userdata)
 	struct telemetry *tele;
 	char s[RBUFSIZE];
 	char threadname[16];
-	construct_buf_t cbuf;
+	struct construct_buf cbuf;
 
 	pthread_detach(pthread_self());
 
