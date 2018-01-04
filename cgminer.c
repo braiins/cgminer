@@ -4922,6 +4922,8 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 	}
 	if (base_work->coinbase)
 		work->coinbase = strdup(base_work->coinbase);
+	work->chain_id = base_work->chain_id;
+	work->chip_id = base_work->chip_id;
 }
 
 void set_work_ntime(struct work *work, int ntime)
@@ -7274,8 +7276,9 @@ static void *stratum_sthread(void *userdata)
 			pool->rpc_user, work->job_id, nonce2hex, work->ntime, noncehex, maskstr[work->micro_job_id], sshare->id);
 
 		//applog(LOG_INFO, "rpc_request: %s", s);
-		applog_pool(LOG_INFO, "Submitting share %08lx with magic id %d to pool %d",
-					(long unsigned int)htole32(hash32[6]), work->micro_job_id, pool->pool_no);
+		applog_pool(LOG_INFO, "Submitting share %08lx with magic id %d to pool %d (chain_id=%d, chip_id=%d)",
+					(long unsigned int)htole32(hash32[6]), work->micro_job_id, pool->pool_no,
+					work->chain_id, work->chip_id);
 #endif
 		/* Try resubmitting for up to 2 minutes if we fail to submit
 		 * once and the stratum pool nonce1 still matches suggesting
@@ -8210,10 +8213,13 @@ static void submit_work_async(struct work *work)
 	}
 }
 
-void inc_hw_errors(struct thr_info *thr)
+void inc_hw_errors(struct thr_info *thr, struct work *work)
 {
-	applog_hw(LOG_INFO, "%s %d: invalid nonce - HW error", thr->cgpu->drv->name,
-	       thr->cgpu->device_id);
+	applog_hw(LOG_INFO, "%s %d: invalid nonce - HW error (chain=%d, chip=%d)",
+		thr->cgpu->drv->name,
+		thr->cgpu->device_id,
+		work->chain_id,
+		work->chip_id);
 
 	mutex_lock(&stats_lock);
 	hw_errors++;
@@ -8345,7 +8351,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	if (new_nonce(thr, nonce) && test_nonce(work, nonce))
 		submit_tested_work(thr, work);
 	else {
-		inc_hw_errors(thr);
+		inc_hw_errors(thr, work);
 		return false;
 	}
 
@@ -8367,8 +8373,8 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 
 	_copy_work(work, work_in, noffset);
 	if (!test_nonce(work, nonce)) {
+		inc_hw_errors(thr, work_in);
 		free_work(work);
-		inc_hw_errors(thr);
 		goto out;
 	}
 	update_work_stats(thr, work);

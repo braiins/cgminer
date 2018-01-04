@@ -1132,6 +1132,8 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			continue;
 		}
 		work->micro_job_id = micro_job_id;
+		work->chain_id = cid;
+		work->chip_id = chip_id;
 		memcpy(work->data, &(magicNum[micro_job_id]), 4);
 		
 		if (!submit_nonce(thr, work, nonce)) 

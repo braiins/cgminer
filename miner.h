@@ -1462,6 +1462,9 @@ struct work {
 	struct timeval	tv_work_start;
 	struct timeval	tv_work_found;
 	char		getwork_mode;
+
+	int		chip_id;
+	int		chain_id;
 };
 
 struct chip_stats {
@@ -1542,7 +1545,7 @@ struct modminer_fpga_state {
 } while (0)
 
 extern void get_datestamp(char *, size_t, struct timeval *);
-extern void inc_hw_errors(struct thr_info *thr);
+extern void inc_hw_errors(struct thr_info *thr, struct work *work);
 extern bool test_nonce(struct work *work, uint32_t nonce);
 extern bool test_nonce_diff(struct work *work, uint32_t nonce, double diff);
 extern bool submit_tested_work(struct thr_info *thr, struct work *work);
