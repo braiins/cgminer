@@ -517,6 +517,15 @@ static int inno_fan_temp_compare(const void *a, const void *b)
     return *(int *)a - *(int *)b;
 }
 
+/**
+ * Converts raw ADC value via inno_tsadc_table to actual temperature (float)
+ *
+ * The conversion uses a lookup table and interpolates a precise value once start/end points are found
+ *
+ * @param fan_ctrl
+ * @param temp - raw ADC value
+ * @return temperature in degrees of Celcius
+ */
 float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp)
 {
     int i = 0;
