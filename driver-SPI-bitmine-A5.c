@@ -1449,6 +1449,25 @@ static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu
 		    a1->temp == 0 ? "   " : temp);
 }
 
+static void chain_power_shutdown(int chain_id)
+{
+	applog_hw_chain(LOG_ERR, chain_id, "shutting down");
+
+	asic_gpio_write(spi[chain_id]->reset, 0);
+	usleep(200000);
+	asic_gpio_write(spi[chain_id]->start_en, 0);
+	usleep(200000);
+	asic_gpio_write(spi[chain_id]->power_en, 0);
+}
+
+static void A1_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct A1_chain *a1 = cgpu->device_data;
+
+	chain_power_shutdown(a1->chain_id);
+}
+
 struct device_drv bitmineA1_drv = {
 	.drv_id = DRIVER_bitmineA1,
 	.dname = "BitmineA1",
@@ -1459,5 +1478,6 @@ struct device_drv bitmineA1_drv = {
 	.scanwork = A1_scanwork,
 	.queue_full = A1_queue_full,
 	.flush_work = A1_flush_work,
+	.thread_shutdown = A1_shutdown,
 	.get_statline_before = A1_get_statline_before,
 };
