@@ -893,13 +893,15 @@ bool detect_coincraft_rig_v3(void)
 static void A1_read_dna(void)
 {
 	uint8_t dna_buf[DNA_ID_LENGTH];
-	int ret;
+	int ret, len;
 
 	ret = asic_read_dna(dna_buf);
 	if (ret < 0)
 		return;
 
-	memcpy(unique_hw_id, dna_buf, UNIQUE_HW_ID_LENGTH);
+	memset(unique_hw_id, 0, sizeof(unique_hw_id));
+	len = MIN(UNIQUE_HW_ID_LENGTH, DNA_ID_LENGTH);
+	memcpy(unique_hw_id, dna_buf, len);
 }
 
 

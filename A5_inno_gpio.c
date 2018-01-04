@@ -268,7 +268,7 @@ int asic_read_dna(uint8_t *buffer)
 {
 	int fd, ret;
 
-	fd = open("/dev/dna", O_RDONLY);
+	fd = open(DNA_ID_PATH, O_RDONLY);
 	if (fd < 0) {
 		a5_debug("cannot open dna: %m");
 		return -1;
