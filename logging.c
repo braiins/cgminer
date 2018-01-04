@@ -186,7 +186,7 @@ void _applog(int prio, int source, const char *str, bool force)
 
 		my_log_curses(prio, datetime, str, force);
 #else
-		fprintf(stderr, "%s\n", str);
+		fprintf(stderr, "[%s,%s] %s\n", log_level_name(prio), source_name[source], str);
 		fflush(stderr);
 
 		if (decide_to_log_remote(prio, source)) {

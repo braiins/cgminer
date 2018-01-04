@@ -153,6 +153,10 @@ extern void _simplelog(int prio, const char *str, bool force);
 #define applog_pool(prio, fmt, ...) applog_source(prio, SOURCE_POOL, fmt, ##__VA_ARGS__)
 #define applog_mining(prio, fmt, ...) applog_source(prio, SOURCE_MINING, fmt, ##__VA_ARGS__)
 #define applog_hw(prio, fmt, ...) applog_source(prio, SOURCE_HW, fmt, ##__VA_ARGS__)
+#define applog_hw_chip(prio, chain_id, chip_id, fmt, ...) \
+	applog_source(prio, SOURCE_HW, "CHIP[%d,%d]: " fmt, chain_id, chip_id, ##__VA_ARGS__)
+#define applog_hw_chain(prio, chain_id, fmt, ...) \
+	applog_source(prio, SOURCE_HW, "CHAIN[%d]: " fmt, chain_id, ##__VA_ARGS__)
 #define applog_system(prio, fmt, ...) applog_source(prio, SOURCE_SYSTEM, fmt, ##__VA_ARGS__)
 
 #endif /* __LOGGING_H__ */
