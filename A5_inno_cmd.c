@@ -191,7 +191,7 @@ bool spi_send_command(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uin
 	}
 	else
 	{
-		applog_hw(LOG_WARNING, "send command fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "send command fail !");
 		return false;
 	}
 
@@ -218,7 +218,7 @@ bool spi_poll_result(struct A1_chain *pChain, uint8_t cmd, uint8_t chip_id, uint
 		if(!spi_read_data(ctx, spi_rx, 2))
 		//if(!spi_transfer(ctx, spi_tx, spi_rx, 2))
 		{
-			applog_hw(LOG_WARNING, "poll result: transfer fail !");
+			applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "poll result: transfer fail !");
 			return false;
 		}
 		//hexdump("poll: RX", spi_rx, 2);
@@ -248,19 +248,19 @@ bool inno_cmd_reset(struct A1_chain *pChain, uint8_t chip_id)
 	uint8_t spi_tx[MAX_CMD_LENGTH];
 	uint8_t spi_rx[MAX_CMD_LENGTH];
 	
-	printf("send command [reset] \n");
+	applog_hw_chip(LOG_DEBUG, pChain->chain_id, chip_id, "send command [reset]");
 
 	memset(spi_tx, 0, sizeof(spi_tx));
 	if(!spi_send_command(pChain, CMD_RESET, chip_id, spi_tx, 2))
 	{
-		applog_hw(LOG_WARNING, "cmd reset: send fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd reset: send fail !");
 		return false;
 	}
 
 	memset(spi_rx, 0, sizeof(spi_rx));
 	if(!spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4))
 	{
-		applog_hw(LOG_WARNING, "cmd reset: poll fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd reset: poll fail !");
 		return false;
 	}
 
@@ -287,7 +287,7 @@ bool inno_cmd_resetjob(struct A1_chain *pChain, uint8_t chip_id)
 
 	if(!spi_write_data(pChain->spi_ctx, spi_tx, 6))
 	{
-		applog_hw(LOG_WARNING, "send command fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "send command fail !");
 		return false;
 	}
 
@@ -295,7 +295,7 @@ bool inno_cmd_resetjob(struct A1_chain *pChain, uint8_t chip_id)
 /*
 	if(!spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4))
 	{
-		applog_hw(LOG_WARNING, "cmd reset: poll fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd reset: poll fail !");
 		return false;
 	}
 */
@@ -326,7 +326,7 @@ bool inno_cmd_resetbist(struct A1_chain *pChain, uint8_t chip_id)
 
 	if(!spi_write_data(pChain->spi_ctx, spi_tx, 6))
 	{
-		applog_hw(LOG_WARNING, "send command fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "send command fail !");
 		return false;
 	}
 
@@ -334,7 +334,7 @@ bool inno_cmd_resetbist(struct A1_chain *pChain, uint8_t chip_id)
 	
 	if(!spi_poll_result(pChain, CMD_RESET, chip_id, spi_rx, 4))
 	{
-		applog_hw(LOG_WARNING, "cmd reset: poll fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd reset: poll fail !");
 		return false;
 	}
 
@@ -347,19 +347,19 @@ bool inno_cmd_bist_start(struct A1_chain *pChain, uint8_t chip_id, uint8_t *num)
 	uint8_t spi_tx[MAX_CMD_LENGTH];
 	uint8_t spi_rx[MAX_CMD_LENGTH];
 	
-	printf("send command [bist_start] \n");
+	applog_hw_chip(LOG_DEBUG, pChain->chain_id, chip_id, "send command [bist_start]");
 
 	memset(spi_tx, 0, sizeof(spi_tx));
 	if(!spi_send_command(pChain, CMD_BIST_START, chip_id, spi_tx, 2))
 	{
-		applog_hw(LOG_WARNING, "cmd bist start: send fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd bist start: send fail !");
 		return false;
 	}
 
 	memset(spi_rx, 0, sizeof(spi_rx));
 	if(!spi_poll_result(pChain, CMD_BIST_START, chip_id, num, 4))
 	{
-		applog_hw(LOG_WARNING, "cmd bist start: poll fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd bist start: poll fail !");
 		return false;
 	}
 
@@ -371,7 +371,7 @@ bool inno_cmd_bist_collect(struct A1_chain *pChain, uint8_t chip_id)
 	uint8_t spi_tx[MAX_CMD_LENGTH];
 	uint8_t spi_rx[MAX_CMD_LENGTH];
 	
-	printf("send command [bist_collect] \n");
+	applog_hw_chip(LOG_DEBUG, pChain->chain_id, chip_id, "send command [bist_collect]");
 
 	memset(spi_tx, 0, sizeof(spi_tx));
 	if(!spi_send_command(pChain, CMD_BIST_COLLECT, chip_id, spi_tx, 2))
@@ -394,7 +394,7 @@ bool inno_cmd_bist_fix(struct A1_chain *pChain, uint8_t chip_id)
 	uint8_t spi_tx[MAX_CMD_LENGTH];
 	uint8_t spi_rx[MAX_CMD_LENGTH];
 	
-	printf("send command [bist_fix] \n");
+	applog_hw_chip(LOG_DEBUG, pChain->chain_id, chip_id, "send command [bist_fix]");
 
 	memset(spi_tx, 0, sizeof(spi_tx));
 	if(!spi_send_command(pChain, CMD_BIST_FIX, chip_id, spi_tx, 2))
@@ -421,7 +421,7 @@ bool inno_cmd_write_sec_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *r
 	uint16_t clc_crc;
 	uint8_t j;
 		
-	applog_hw(LOG_INFO,"send command [write_reg]");
+	applog_hw_chip(LOG_DEBUG, pChain->chain_id, chip_id, "send command [write_reg]");
 	assert(reg != NULL);
 	
 	memset(spi_tx, 0, sizeof(spi_tx));
@@ -439,14 +439,14 @@ bool inno_cmd_write_sec_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *r
 	//hexdump("write reg", spi_tx, REG_LENGTH+2);
 	if(!spi_write_data(pChain->spi_ctx, spi_tx, 16))
 	{
-		applog_hw(LOG_WARNING, "send command fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "send command fail !");
 		return false;
 	}
 	//printf("reg:0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x,0x%x\n",spi_tx[0],spi_tx[1],spi_tx[2],spi_tx[3],spi_tx[4],spi_tx[5],spi_tx[6],spi_tx[7],spi_tx[8],spi_tx[9],spi_tx[10],spi_tx[11],spi_tx[12],spi_tx[13],spi_tx[14],spi_tx[15],spi_tx[16],spi_tx[17]);
 	memset(spi_rx, 0, sizeof(spi_rx));
 	if(!spi_poll_result(pChain, CMD_READ_SEC_REG, chip_id, spi_rx, REG_LENGTH+4))
 	{
-		applog_hw(LOG_WARNING, "cmd write reg: poll fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd write reg: poll fail !");
 		return false;
 	}
 	
@@ -462,7 +462,7 @@ bool inno_cmd_write_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 	uint16_t clc_crc;
 	uint8_t j;
 	
-	//printf("send command [write_reg] \n");
+	//applog_hw_chip(LOG_DEBUG, pChain->chain_id, chip_id, "send command [write_reg]");
 	assert(reg != NULL);
 
 	memset(spi_tx, 0, sizeof(spi_tx));
@@ -485,14 +485,14 @@ bool inno_cmd_write_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 	//hexdump("write reg", spi_tx, REG_LENGTH+2);
 	if(!spi_write_data(pChain->spi_ctx, spi_tx, 16))
 	{
-		applog_hw(LOG_WARNING, "send command fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "send command fail !");
 		return false;
 	}
 
 	memset(spi_rx, 0, sizeof(spi_rx));
 	if(!spi_poll_result(pChain, CMD_WRITE_REG, chip_id, spi_rx, REG_LENGTH))
 	{
-		applog_hw(LOG_WARNING, "cmd write reg: poll fail !");
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "cmd write reg: poll fail !");
 		return false;
 	}
 
@@ -527,7 +527,7 @@ bool inno_cmd_read_reg(struct A1_chain *pChain, uint8_t chip_id, uint8_t *reg)
 	{
 		if(!spi_read_data(ctx, spi_rx, 2))
 		{
-			applog_hw(LOG_WARNING, "poll result: transfer fail !");
+			applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "poll result: transfer fail !");
 			return false;
 		}
 		//hexdump("poll: RX", spi_rx, 2);
@@ -588,7 +588,7 @@ bool inno_cmd_read_result(struct A1_chain *pChain, uint8_t chip_id, uint8_t *res
 
 		if(((spi_rx[0] & 0x0f) == CMD_READ_RESULT) && (spi_rx[1] != 0))
 		{
-			//applog_hw(LOG_INFO, "GET GOOD RESULT");
+			//applog_hw_chip(LOG_INFO, pChain->chain_id, chip_id, "GET GOOD RESULT");
 			index = 0;	
 			do{
 				ret = spi_read_data(ctx, spi_rx + 2 + index, 2);
@@ -616,7 +616,7 @@ bool inno_cmd_read_result(struct A1_chain *pChain, uint8_t chip_id, uint8_t *res
 			}
 			else
 			{
-				applog_hw(LOG_INFO, "crc error clc=0x%4x, res=0x%4x \r", clc_crc, res_crc);
+				applog_hw_chip(LOG_INFO, pChain->chain_id, chip_id, "crc error clc=0x%4x, res=0x%4x \r", clc_crc, res_crc);
 				return false;
 			}				
 		}
@@ -632,7 +632,7 @@ uint8_t inno_cmd_isBusy(struct A1_chain *pChain, uint8_t chip_id)
 	  
 	if(!inno_cmd_read_reg(pChain, chip_id, buffer))
 	{
-		applog_hw(LOG_WARNING, "read chip %d busy status error", chip_id);
+		applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "read chip %d busy status error", chip_id);
 		return -1;
 	}
 	//printf("[check busy] \r\n");
@@ -640,12 +640,12 @@ uint8_t inno_cmd_isBusy(struct A1_chain *pChain, uint8_t chip_id)
 
 	if((buffer[9] & 0x01) == 1)
 	{
-		//applog_hw(LOG_WARNING, "chip %d is busy now", chip_id);
+		//applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "chip %d is busy now", chip_id);
 		return WORK_BUSY;
 	}
 	else
 	{
-		//applog_hw(LOG_WARNING, "chip %d is free now", chip_id);
+		//applog_hw_chip(LOG_WARNING, pChain->chain_id, chip_id, "chip %d is free now", chip_id);
 		return WORK_FREE;
 	}
 
@@ -790,7 +790,7 @@ static int inno_queue_active(struct A1_chain *pChain, uint8_t chip_id)
 {
 	uint8_t reg[REG_LENGTH];
 	if(!inno_cmd_read_reg(pChain, chip_id, reg)) {
-		applog_hw(LOG_ERR, "failed to read registers of chip %d.", chip_id);
+		applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "failed to read registers of chip %d.", chip_id);
 		return -1;
 	}
 	return reg[9] & 3;
@@ -840,7 +840,7 @@ double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job
 			while (used_slots[slot]) {
 				slot = (slot + 1) % N_SLOTS;
 				if (slot == first_slot) {
-					applog_hw(LOG_ERR, "bite me");
+					applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "bite me");
 					return -1;
 				}
 			}
@@ -851,7 +851,7 @@ double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job
 			do {
 				clock_gettime(0, &now);
 				if (time_diff_ms(spinstart, now) > 3000) {
-					applog_hw(LOG_ERR, "timeout when waiting for queue to clear");
+					applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "timeout when waiting for queue to clear");
 					return -1;
 				}
 				qstatus = inno_queue_active(pChain, chip_id);
@@ -861,7 +861,7 @@ double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job
 			xprintf("queueing one, job_id=%d, qstatus=%d\n", job_id, qstatus);
 			job_instance(tmp_buf, job->data, chip_id, job_id);
 			if (!inno_cmd_write_job(pChain, chip_id, tmp_buf)) {
-				applog_hw(LOG_ERR, "failed to write job for chip %d.", chip_id);
+				applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "failed to write job for chip %d.", chip_id);
 				return -1;
 			}
 			issued_jobs++;
@@ -881,11 +881,11 @@ double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job
 			while (!get_nonce(pChain, (uint8_t*)&nonce, &res_chip_id, &job_id, (uint8_t*)&micro_job_id)) {
 				clock_gettime(0, &now);
 				if (time_diff_ms(lastdeq, now) > 3000) {
-					applog_hw(LOG_ERR, "timeout, queue=%d", inno_queue_active(pChain, chip_id));
+					applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "timeout, queue=%d", inno_queue_active(pChain, chip_id));
 					int i;
 					for (i = 0; i < N_SLOTS; i++) {
 						if (used_slots[i])
-							applog_hw(LOG_ERR, "job_id %d not done", i + 1);
+							applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "job_id %d not done", i + 1);
 					}
 					return -1;
 				}
@@ -894,19 +894,19 @@ double inno_cmd_xtest_one(struct A1_chain *pChain, uint8_t chip_id, TestJob *job
 
 			xprintf("got result job_id=%d\n", job_id);
 			if (res_chip_id != chip_id) {
-				applog_hw(LOG_ERR, "bad chip responded (%d)", res_chip_id);
+				applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "bad chip responded (%d)", res_chip_id);
 				continue;
 			}
 
 			int slot = job_id - 1;
 			if (!used_slots[slot]) {
-				applog_hw(LOG_ERR, "microjob from unused job_id (%d)", job_id);
+				applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "microjob from unused job_id (%d)", job_id);
 				return -1;
 			}
 			used_slots[slot] = 0;
 			nonce = bswap_32(nonce);
 			if (nonce != job->right_nonce) {
-				applog_hw(LOG_ERR, "bad computed nonce (got %08x, correct %08x)", nonce, job->right_nonce);
+				applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "bad computed nonce (got %08x, correct %08x)", nonce, job->right_nonce);
 				return -1;
 			}
 			in_queue_jobs--;
@@ -925,11 +925,11 @@ void inno_cmd_xtest(struct A1_chain *pChain, int good)
 	int i;
 	TestJob *job = &test_jobs[good + 1];
 
-	applog_hw(LOG_INFO, "running xtest on job that has%s solution on chain %d", job->has_solution ? "" : " no", pChain->chain_id);
+	applog_hw_chain(LOG_INFO, pChain->chain_id, "running xtest on job that has%s solution", job->has_solution ? "" : " no");
 	for (i = 1; i <= pChain->num_active_chips; i++) {
 		t = inno_cmd_xtest_one(pChain, i, job, 11);
 		if (t >= 0) {
-			applog_hw(LOG_INFO, "chip %d finished in %lfms", i, t);
+			applog_hw_chip(LOG_INFO, pChain->chain_id, i, "chip finished in %lfms", t);
 		} else {
 			reap_dead_solutions(pChain);
 		}
@@ -951,7 +951,7 @@ void inno_cmd_test_chip_round(struct A1_chain *pChain, TestJob *job, uint32_t *c
 		job_instance(tmp_buf, job->data, cid, 0);
 
 		if (!inno_cmd_write_job(pChain, cid, tmp_buf)) {
-			applog_hw(LOG_ERR, "failed to write job for chip %d.", cid);
+			applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "failed to write job for chip %d.", cid);
 		}
 	}
 
@@ -969,7 +969,7 @@ void inno_cmd_test_chip_round(struct A1_chain *pChain, TestJob *job, uint32_t *c
 		if (nonce == job->right_nonce) {
 			chip_valid[chip_id - 1]++;
 		} else {
-			applog_hw(LOG_ERR, "bad nonce error, chip_id:%d, nonce:0x%x.", chip_id, nonce);
+			applog_hw_chip(LOG_ERR, pChain->chain_id, chip_id, "bad nonce error, chip_id:%d, nonce:0x%x.", chip_id, nonce);
 		}
 	}
 }
@@ -982,7 +982,7 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 	uint32_t uiScore = 0;
 	uint32_t chip_valid[ASIC_CHIP_NUM] = {0};
 	
-	applog_hw(LOG_INFO, "Testing chain %d, ChipNum:%d.", pChain->chain_id, pChain->num_active_chips);
+	applog_hw_chain(LOG_INFO, pChain->chain_id, "Testing chain, ChipNum:%d.", pChain->num_active_chips);
 
 	for (round = 0; round < 3; round++) {
 		inno_cmd_test_chip_round(pChain, &test_jobs[0], chip_valid);
@@ -997,6 +997,6 @@ uint32_t inno_cmd_test_chip(struct A1_chain *pChain)
 		}
 	} 
 
-	applog_hw(LOG_ERR, "inno_cmd_test_chip bad chip num is %d.", bad_chip_num);
+	applog_hw_chain(LOG_ERR, pChain->chain_id, "inno_cmd_test_chip bad chip num is %d.", bad_chip_num);
 	return uiScore;
 }
