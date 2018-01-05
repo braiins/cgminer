@@ -1330,9 +1330,9 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 	spec_nscheck(a);
 }
 
-static int __maybe_unused timespec_to_ms(struct timespec *ts)
+static unsigned long __maybe_unused timespec_to_ms(struct timespec *ts)
 {
-	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
+	return (unsigned long)ts->tv_sec * 1000 + (unsigned long)ts->tv_nsec / 1000000;
 }
 
 /* Subtract b from a */
@@ -1426,7 +1426,7 @@ void cgtime(struct timeval *tv)
 	gettimeofday(tv, NULL);
 }
 
-int cgtimer_to_ms(cgtimer_t *cgt)
+unsigned long cgtimer_to_ms(cgtimer_t *cgt)
 {
 	return timespec_to_ms(cgt);
 }

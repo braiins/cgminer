@@ -122,7 +122,7 @@ struct A1_chain {
 
 	/* for benchmarking purposes */
 	unsigned nonces_found;
-	unsigned last_results_update;
+	unsigned long last_results_update;
 	unsigned nonce_ranges_done;
 	unsigned midstate_counter;
 	uint32_t bench_difficulty;
