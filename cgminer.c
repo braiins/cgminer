@@ -4588,7 +4588,7 @@ static void __kill_work(void)
 /* This should be the common exit path */
 void kill_work(void)
 {
-	cg_completion_timeout(&__kill_work, NULL, 5000);
+	cg_completion_timeout(&__kill_work, NULL, 10000);
 
 	quit(0, "Shutdown signal received.");
 }
