@@ -1451,7 +1451,7 @@ static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu
 
 static void chain_power_shutdown(int chain_id)
 {
-	applog_hw_chain(LOG_ERR, chain_id, "shutting down");
+	applog_hw_chain(LOG_INFO, chain_id, "power shutdown for chain %d", chain_id);
 
 	asic_gpio_write(spi[chain_id]->reset, 0);
 	usleep(200000);
@@ -1460,7 +1460,7 @@ static void chain_power_shutdown(int chain_id)
 	asic_gpio_write(spi[chain_id]->power_en, 0);
 }
 
-static void A1_shutdown(struct thr_info *thr)
+static void A1_power_off(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct A1_chain *a1 = cgpu->device_data;
@@ -1478,6 +1478,6 @@ struct device_drv bitmineA1_drv = {
 	.scanwork = A1_scanwork,
 	.queue_full = A1_queue_full,
 	.flush_work = A1_flush_work,
-	.thread_shutdown = A1_shutdown,
+	.hw_power_off = A1_power_off,
 	.get_statline_before = A1_get_statline_before,
 };

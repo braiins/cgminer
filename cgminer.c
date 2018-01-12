@@ -4551,6 +4551,22 @@ static void __kill_work(void)
 
 	cg_completion_timeout(&kill_mining, NULL, 3000);
 
+	for (i = 0; i < mining_threads; i++) {
+		struct cgpu_info *cgpu;
+		struct device_drv *drv;
+
+		thr = get_thread(i);
+		if (!thr)
+			continue;
+		cgpu = thr->cgpu;
+		if (!cgpu)
+			continue;
+		drv = cgpu->drv;
+		if (!drv)
+			continue;
+		drv->hw_power_off(thr);
+	}
+
 	/* Stop the others */
 	forcelog(LOG_DEBUG, "Killing off API thread");
 	thr = &control_thr[api_thr_id];
