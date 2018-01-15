@@ -984,61 +984,49 @@ void inno_configure_tvsensor(struct A1_chain *a1, int chip_id,bool is_tsensor)
 	free(src_reg);
 }
 
-
-
-bool inno_check_voltage(struct A1_chain *a1, int chip_id, inno_reg_ctrl_t *s_reg_ctrl)
+static float
+regs_to_voltage(uint8_t *reg)
 {
-    int cid = a1->chain_id;
-    uint8_t reg[128];
-    memset(reg, 0, 128);
-  
-	if (!inno_cmd_read_reg(a1, chip_id, reg)) {
-		applog_hw_chip(LOG_WARNING, cid, chip_id, "failed to read register -> disabling");
-		a1->chips[chip_id].num_cores = 0;
-		a1->chips[chip_id].disabled = 1;
-		return false;
-	}else{
-		//hexdump("check chip:", reg, REG_LENGTH);
-	
-		usleep(2000);
-		//printf("after set tvsensor\n");
-			/* update temp database */
-			uint32_t rd_v = 0;
-			rd_v = 0x000003ff & ((reg[7] << 8) | reg[8]);
-			float tmp_v = (float)(rd_v * MUL_COEF)/1024;
-			//printf("[Read VOL %s:%d]rd_v = %d, tmp_v = %f\n",__FUNCTION__,__LINE__,rd_v,tmp_v);
-			
-			s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1]++;
-			
-             s_reg_ctrl->cur_vol[a1->chain_id][chip_id-1] = tmp_v;
-           if(s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1] == 1)
-           {
-             s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1] = tmp_v;
-             s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1] = tmp_v;
-             s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1] = tmp_v;
-           }else{
-	         if(s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1] < tmp_v){
-	        	s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1] = tmp_v;
-	           }
-            if(s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1] > tmp_v){
-	        	s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1] = tmp_v;
-	           }
-	    	s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1] = (s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1] * (s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1] - 1) + tmp_v)/s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1];
-	       }
-       
-			a5_debug("read tmp %f/%d form chain %d,chip %d h:%f,l:%f,av:%f,cnt:%d",tmp_v,rd_v,a1->chain_id, chip_id,s_reg_ctrl->highest_vol[a1->chain_id][chip_id-1],s_reg_ctrl->lowest_vol[a1->chain_id][chip_id-1],s_reg_ctrl->avarge_vol[a1->chain_id][chip_id-1],s_reg_ctrl->stat_cnt[a1->chain_id][chip_id-1]);
-		
-			//if read valtage higher than standard 8% or less than 8%,we think the chain has some problem
-			if((tmp_v > (1.08 * inno_vsadc_table[opt_voltage])) || (tmp_v < (0.92 * inno_vsadc_table[opt_voltage]))){ 
-				applog_hw_chip(LOG_ERR, cid, chip_id,
-					"maybe has some problem in voltage (temperature=%.4f, expected=%.4f)",
-					tmp_v,
-					inno_vsadc_table[opt_voltage]);
-				//asic_gpio_write(a1->spi_ctx->power_en, 0);
-				//asic_gpio_write(GPIO_RED, 1);
-	 			//early_quit(1,"Notice chain %d maybe has some promble in voltage\n",a1->chain_id);
-
-			}			
-   }
+	uint32_t rd_v = 0;
+	rd_v = 0x000003ff & ((reg[7] << 8) | reg[8]);
+	return (float)(rd_v * MUL_COEF)/1024;
 }
 
+bool inno_check_voltage(struct A1_chain *a1, int chip_id)
+{
+	int cid = a1->chain_id;
+	struct A1_chip *chip = &a1->chips[chip_id - 1];
+	uint8_t reg[128] = {};
+	float cur_v, avg_v;
+	double target_v;
+
+	/* read out voltage */
+	if (!inno_cmd_read_reg(a1, chip_id, reg)) {
+		applog_hw_chip(LOG_WARNING, cid, chip_id, "failed to read register -> disabling");
+		chip->num_cores = 0;
+		chip->disabled = 1;
+		goto error;
+	}
+	usleep(2000);
+
+	/* add voltage to history of measurements */
+	cur_v = regs_to_voltage(reg);
+	measurement_add(&chip->voltage, cur_v);
+	avg_v = measurement_get_avg(&chip->voltage);
+
+	a5_debug("read voltage %f from chain %d, chip %d: max:%f, min:%f, avg:%f",
+		cur_v, a1->chain_id, chip_id,
+		chip->voltage.max, chip->voltage.min, avg_v);
+
+	/* check if voltage is withing allowed range */
+	target_v = inno_vsadc_table[opt_voltage];
+	if (cur_v < 0.92*target_v || cur_v > 1.08*target_v) {
+		applog_hw_chip(LOG_ERR, cid, chip_id,
+				"maybe has some problem in voltage (voltage=%.4f, expected=%.4f)",
+				cur_v,
+				target_v);
+	}
+	return true;
+error:
+	return false;
+}

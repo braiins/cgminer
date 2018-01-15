@@ -41,7 +41,7 @@ typedef struct{
    int stat_cnt[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];
 }inno_reg_ctrl_t;
 
-bool inno_check_voltage(struct A1_chain *a1, int chip_id, inno_reg_ctrl_t *s_reg_ctrl);
+bool inno_check_voltage(struct A1_chain *a1, int chip_id);
 void inno_configure_tvsensor(struct A1_chain *a1, int chip_id,bool is_tsensor);
 
 bool check_chip(struct A1_chain *a1, int i);

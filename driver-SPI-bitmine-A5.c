@@ -186,7 +186,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 
 	for (i = 0; i < a1->num_active_chips; i++)
     {
-		inno_check_voltage(a1, i+1, &s_reg_ctrl);
+		inno_check_voltage(a1, i+1);
     }
 	
 	//configure for tsensor
@@ -272,7 +272,7 @@ static void A1_submit_stats(struct A1_chain *a1)
 		chipstats->hw_errors = chip->hw_errors;
 		chipstats->stales = chip->stales;
 		chipstats->temperature = inno_fan_temp_to_float(&s_fan_ctrl,chip->temp);
-		chipstats->voltage = s_reg_ctrl.cur_vol[a1->chain_id][i];
+		chipstats->voltage = measurement_get_avg(&chip->voltage);
 	}
 
 	submit_telemetry(tele);
@@ -1046,7 +1046,7 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 
 		for (int chip_id = chain->num_active_chips; chip_id > 0; chip_id--)
 		{
-			inno_check_voltage(chain, chip_id, &s_reg_ctrl);
+			inno_check_voltage(chain, chip_id);
 			//applog_hw(LOG_NOTICE, "%d: chip %d: stat:%f/%f/%f/%d\n",chain->chain_id, c, s_reg_ctrl.highest_vol[0][i],s_reg_ctrl.lowest_vol[0][i],s_reg_ctrl.avarge_vol[0][i],s_reg_ctrl.stat_cnt[0][i]);
 			if (is_chip_disabled(chain, chip_id))
 				continue;
