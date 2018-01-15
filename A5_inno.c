@@ -423,7 +423,7 @@ void disable_chip(struct A1_chain *a1, uint8_t chip_id)
 }
 
 /* check if disabled chips can be re-enabled */
-void check_disabled_chips(struct A1_chain *a1, int pllnum)
+void check_disabled_chips(struct A1_chain *a1)
 {
 	int i;
 	int cid = a1->chain_id;

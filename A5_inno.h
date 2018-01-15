@@ -56,7 +56,7 @@ void disable_chip(struct A1_chain *a1, uint8_t chip_id);
 bool get_nonce(struct A1_chain *a1, uint8_t *nonce, uint8_t *chip_id, uint8_t *job_id, uint8_t *micro_job_id);
 bool set_work(struct A1_chain *a1, uint8_t chip_id, struct work *work, uint8_t queue_states);
 bool set_work_benchmark(struct A1_chain *a1, uint8_t chip_id, uint8_t queue_states);
-void check_disabled_chips(struct A1_chain *a1, int pllnum);
+void check_disabled_chips(struct A1_chain *a1);
 uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work, uint8_t *job, unsigned midstate_id);
 void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll);
 

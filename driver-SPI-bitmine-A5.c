@@ -1059,15 +1059,7 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 	if (check_disbale_flag[chain->chain_id] > CHECK_DISABLE_TIME)
 	{
 		applog_hw_chain(LOG_DEBUG, chain->chain_id, "start to check disabled chips");
-		switch(chain->chain_id){
-			case 0:check_disabled_chips(chain, A1Pll1);;break;
-			case 1:check_disabled_chips(chain, A1Pll2);;break;
-			case 2:check_disabled_chips(chain, A1Pll3);;break;
-			case 3:check_disabled_chips(chain, A1Pll4);;break;
-			case 4:check_disabled_chips(chain, A1Pll5);;break;
-			case 5:check_disabled_chips(chain, A1Pll6);;break;
-			default:;
-		}
+		check_disabled_chips(chain);
 		check_disbale_flag[chain->chain_id] = 0;
 	}
 	if (((now_ms - chain->last_telemetry_time) > TELEMETRY_SUBMIT_INT_MS) && submit_telemetry) {
