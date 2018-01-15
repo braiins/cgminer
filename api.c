@@ -2044,9 +2044,9 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		char mhsname[27];
 		sprintf(mhsname, "MHS %ds", opt_log_interval);
 		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
-		//root = api_add_mhs(root, "MHS 1m", &cgpu->rolling1, false);
-		//root = api_add_mhs(root, "MHS 5m", &cgpu->rolling5, false);
-		//root = api_add_mhs(root, "MHS 15m", &cgpu->rolling15, false);
+		root = api_add_mhs(root, "MHS 1m", &cgpu->rolling1, false);
+		root = api_add_mhs(root, "MHS 5m", &cgpu->rolling5, false);
+		root = api_add_mhs(root, "MHS 15m", &cgpu->rolling15, false);
 		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
 		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
 		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
