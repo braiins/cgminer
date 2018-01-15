@@ -1458,6 +1458,8 @@ static void chain_power_shutdown(int chain_id)
 	asic_gpio_write(spi[chain_id]->start_en, 0);
 	usleep(200000);
 	asic_gpio_write(spi[chain_id]->power_en, 0);
+	/* turn off led */
+	asic_gpio_init(spi[chain_id]->led, 1);
 }
 
 static void A1_power_off(struct thr_info *thr)
