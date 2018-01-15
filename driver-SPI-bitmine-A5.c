@@ -1226,33 +1226,6 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 	//return (int64_t)(( A1Pll * 2 * a1->num_cores) * (a1->tvScryptDiff.tv_usec / 1000000.0));
 	return (int64_t)nonce_ranges_processed << 34;
 }
-/**
- * Add measurement to history and return moving average of 
- * last @c HISTORY_SIZE elements.
- *
- * @param mavg Moving average structure
- * @param x Element to add to the history
- */
-static double average_add(struct moving_average *mavg, double x)
-{
-	unsigned i, n;
-	double sum;
-
-	if (mavg->ptr >= HISTORY_SIZE)
-		mavg->ptr = 0;
-	mavg->data[mavg->ptr++] = x;
-	mavg->n++;
-
-	n = mavg->n;
-	if (n > HISTORY_SIZE)
-		n = HISTORY_SIZE;
-
-	sum = 0;
-	for (i = 0; i < HISTORY_SIZE; i++)
-		sum += mavg->data[i];
-
-	return sum / n;
-}
 
 static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
 {

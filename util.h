@@ -176,4 +176,15 @@ void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, c
 #define cgsem_mswait(_sem, _timeout) _cgsem_mswait(_sem, _timeout, __FILE__, __func__, __LINE__)
 #define cg_memcpy(dest, src, n) _cg_memcpy(dest, src, n, __FILE__, __func__, __LINE__)
 
+#define HISTORY_SIZE 16
+struct measurement {
+	unsigned n, ptr;
+	double min, max;
+	double data[HISTORY_SIZE];
+};
+
+void measurement_add(struct measurement *mt, double x);
+double measurement_get_avg(struct measurement *mt);
+void measurement_reset(struct measurement *mt);
+
 #endif /* __UTIL_H__ */

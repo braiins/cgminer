@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <sys/time.h>
 #include "elist.h"
+#include "util.h"
 
 
 #define CMD_BIST_START		0x01
@@ -84,12 +85,8 @@ struct A1_chip {
 	bool disabled;
 
 	int temp;
-};
 
-#define HISTORY_SIZE 16
-struct moving_average {
-	unsigned n, ptr;
-	double data[HISTORY_SIZE];
+	struct measurement voltage;
 };
 
 struct A1_chain {
@@ -126,7 +123,7 @@ struct A1_chain {
 	unsigned nonce_ranges_done;
 	unsigned midstate_counter;
 	uint32_t bench_difficulty;
-	struct moving_average avg_found;
+	struct measurement avg_found;
 };
 
 struct Test_bench {
