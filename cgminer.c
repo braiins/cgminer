@@ -10161,20 +10161,23 @@ bool icarus_get_device_id(struct cgpu_info *cgpu)
 }
 #endif
 
-bool add_cgpu(struct cgpu_info *cgpu)
+bool add_cgpu(struct cgpu_info *cgpu, int device_id)
 {
 	static struct _cgpu_devid_counter *devids = NULL;
 	struct _cgpu_devid_counter *d;
 
 	HASH_FIND_STR(devids, cgpu->drv->name, d);
-	if (d)
-		cgpu->device_id = ++d->lastid;
-	else {
+	if (!d) {
 		d = cgmalloc(sizeof(*d));
 		cg_memcpy(d->name, cgpu->drv->name, sizeof(d->name));
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
+	if (device_id >= 0)
+		cgpu->device_id = device_id;
+	else
+		cgpu->device_id = d->lastid + 1;
+	d->lastid = cgpu->device_id;
 
 	wr_lock(&devices_lock);
 	devices = cgrealloc(devices, sizeof(struct cgpu_info *) * (total_devices + new_devices + 2));

@@ -556,7 +556,7 @@ struct cgpu_info {
 	int direction;
 };
 
-extern bool add_cgpu(struct cgpu_info*);
+extern bool add_cgpu(struct cgpu_info*, int);
 
 struct thread_q {
 	struct list_head	q;

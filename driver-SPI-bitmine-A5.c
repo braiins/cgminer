@@ -604,7 +604,7 @@ static bool detect_A1_chain(void)
 		cgpu->device_data = chain[i];
 
 		chain[i]->cgpu = cgpu;
-		add_cgpu(cgpu);
+		add_cgpu(cgpu, i);
 
 		asic_gpio_write(chain[i]->spi_ctx->led, 0);
 
