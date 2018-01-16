@@ -1416,7 +1416,7 @@ static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu
 
 static void chain_power_shutdown(int chain_id)
 {
-	applog_hw_chain(LOG_INFO, chain_id, "power shutdown for chain %d", chain_id);
+	applog_hw_chain(LOG_INFO, chain_id, "power shutdown for chain");
 
 	asic_gpio_write(spi[chain_id]->reset, 0);
 	usleep(200000);

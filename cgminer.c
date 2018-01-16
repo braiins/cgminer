@@ -8217,11 +8217,10 @@ static void submit_work_async(struct work *work)
 
 void inc_hw_errors(struct thr_info *thr, struct work *work)
 {
-	applog_hw(LOG_INFO, "%s %d: invalid nonce - HW error (chain=%d, chip=%d)",
+	applog_hw_chip(LOG_INFO, work->chain_id, work->chip_id,
+		"%s %d: invalid nonce - HW error",
 		thr->cgpu->drv->name,
-		thr->cgpu->device_id,
-		work->chain_id,
-		work->chip_id);
+		thr->cgpu->device_id);
 
 	mutex_lock(&stats_lock);
 	hw_errors++;
