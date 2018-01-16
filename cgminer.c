@@ -3348,7 +3348,6 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	char displayed_hashes[16], displayed_rolling[16];
 	double dev_runtime, wu;
 	uint64_t dh64, dr64;
-	int i, n, chain_id;
 
 	dev_runtime = cgpu_runtime(cgpu);
 
@@ -3357,22 +3356,9 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull * 6ull;
 #else	
-	/* find device_id-th present chain */
-	n = cgpu->device_id;
-	chain_id = -1;
-	for (i = 0; i < ARRAY_SIZE(chain); i++) {
-		if (chain[i] != NULL) {
-			if (n == 0) {
-				chain_id = i;
-				break;
-			}
-			n--;
-		}
-	}
-	if (chain_id < 0)
-		return;
-	dh64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[chain_id]->num_cores);
-	dr64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (chain[chain_id]->num_cores);
+	struct A1_chain *a1 = cgpu->device_data;
+	dh64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (a1->num_cores);
+	dr64 = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2 * 1000000ull * (a1->num_cores);
 #endif
 	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
 	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
