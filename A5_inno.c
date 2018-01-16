@@ -984,8 +984,7 @@ void inno_configure_tvsensor(struct A1_chain *a1, int chip_id,bool is_tsensor)
 	free(src_reg);
 }
 
-static float
-regs_to_voltage(uint8_t *reg)
+static float regs_to_voltage(uint8_t *reg)
 {
 	uint32_t rd_v = 0;
 	rd_v = 0x000003ff & ((reg[7] << 8) | reg[8]);
