@@ -482,6 +482,31 @@ static inline int is_chain_enabled(int i)
 	return opt_enabled_chains < 0 || (opt_enabled_chains & (1 << i));
 }
 
+static void chain_power_shutdown(int chain_id)
+{
+	applog_hw_chain(LOG_INFO, chain_id, "power shutdown for chain");
+
+	asic_gpio_write(spi[chain_id]->reset, 0);
+	usleep(200000);
+	asic_gpio_write(spi[chain_id]->start_en, 0);
+	usleep(200000);
+	asic_gpio_write(spi[chain_id]->power_en, 0);
+	/* turn off led */
+	asic_gpio_init(spi[chain_id]->led, 1);
+}
+
+static void shutdown_all_chains(void)
+{
+	int i;
+	for(i = 0; i < ASIC_CHAIN_NUM; i++) {
+		if (is_chain_enabled(i)) {
+			chain_power_shutdown(i);
+		}
+	}
+}
+
+
+static int chip_power_enabled = 0;
 int chain_flag[ASIC_CHAIN_NUM] = {0};
 static bool detect_A1_chain(void)
 {
@@ -527,6 +552,7 @@ static bool detect_A1_chain(void)
 		check_disbale_flag[i] = 0;
 	}
 
+	chip_power_enabled = 1;
 	for(i = 0; i < ASIC_CHAIN_NUM; i++)
 	{
 		if (!is_chain_enabled(i))
@@ -1414,25 +1440,10 @@ static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu
 		    a1->temp == 0 ? "   " : temp);
 }
 
-static void chain_power_shutdown(int chain_id)
+static void A1_power_off(void)
 {
-	applog_hw_chain(LOG_INFO, chain_id, "power shutdown for chain");
-
-	asic_gpio_write(spi[chain_id]->reset, 0);
-	usleep(200000);
-	asic_gpio_write(spi[chain_id]->start_en, 0);
-	usleep(200000);
-	asic_gpio_write(spi[chain_id]->power_en, 0);
-	/* turn off led */
-	asic_gpio_init(spi[chain_id]->led, 1);
-}
-
-static void A1_power_off(struct thr_info *thr)
-{
-	struct cgpu_info *cgpu = thr->cgpu;
-	struct A1_chain *a1 = cgpu->device_data;
-
-	chain_power_shutdown(a1->chain_id);
+	if (chip_power_enabled)
+		shutdown_all_chains();
 }
 
 struct device_drv bitmineA1_drv = {

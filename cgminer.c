@@ -4491,6 +4491,8 @@ static void kill_mining(void)
 	}
 }
 
+#define DRIVER_HW_POWER_OFF(X) if (X##_drv.hw_power_off) X##_drv.hw_power_off();
+
 static void __kill_work(void)
 {
 	struct thr_info *thr;
@@ -4550,8 +4552,10 @@ static void __kill_work(void)
 		drv = cgpu->drv;
 		if (!drv)
 			continue;
-		drv->hw_power_off(thr);
 	}
+	/* At this point mining threads are not necessarily created -
+	 * so let's just call shutdown function directly */
+	DRIVER_PARSE_COMMANDS(DRIVER_HW_POWER_OFF)
 
 	/* Stop the others */
 	forcelog(LOG_DEBUG, "Killing off API thread");
