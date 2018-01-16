@@ -30,6 +30,7 @@
 #define BROKEN_CHIP_THRESHOLD 5
 #define WEAK_CHIP_SYS_CLK	(600 * 1000)
 #define BROKEN_CHIP_SYS_CLK	(400 * 1000)
+#define A5_CHAIN_SHUTDOWN_MS	(1200)
 
 #include "A5_inno_cmd.h"
 

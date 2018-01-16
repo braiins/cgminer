@@ -4574,7 +4574,7 @@ static void __kill_work(void)
 /* This should be the common exit path */
 void kill_work(void)
 {
-	cg_completion_timeout(&__kill_work, NULL, 10000);
+	cg_completion_timeout(&__kill_work, NULL, A5_CHAIN_SHUTDOWN_MS*ASIC_CHAIN_NUM);
 
 	quit(0, "Shutdown signal received.");
 }
