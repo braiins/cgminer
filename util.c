@@ -3193,6 +3193,8 @@ static bool configure_stratum_mining(struct pool *pool)
 	char s[RBUFSIZE];
 	char *response_str = NULL;
 	bool config_status = false;
+	bool version_rolling_status = false;
+	bool version_mask_valid = false;
 	const char *key;
 	json_t *response, *value, *res_val, *err_val;
 	json_error_t err;
@@ -3202,10 +3204,9 @@ static bool configure_stratum_mining(struct pool *pool)
 	snprintf(s, RBUFSIZE,
 			 "{\"id\": %d, \"method\": \"mining.configure\", \"params\": "
 			 "[[\""STRATUM_VERSION_ROLLING"\", \""STRATUM_SP_TELEMETRY"\"], "
-			 "{\""STRATUM_VERSION_ROLLING".bit-count\": %d, "
-			 "\""STRATUM_VERSION_ROLLING".mask\": \"%x\", "
+			 "{\""STRATUM_VERSION_ROLLING".mask\": \"%x\", "
 			 "\"sp-telemetry.version\": 1}]}",
-			 swork_id++, 2, 0xffffffff);
+			 swork_id++, 0xffffffff);
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send mining.configure");
 		goto out;
@@ -3242,8 +3243,10 @@ static bool configure_stratum_mining(struct pool *pool)
 	json_object_foreach(res_val, key, value) {
 		if (!strcasecmp(key, STRATUM_VERSION_ROLLING) &&
 				strlen(key) == STRATUM_VERSION_ROLLING_LEN) {
-			config_status = json_boolean_value(value);
-			continue;
+			version_rolling_status = json_boolean_value(value);
+		}
+		else if (!strcasecmp(key, STRATUM_VERSION_ROLLING ".mask")) {
+			version_mask_valid = decode_version_mask(pool, value);
 		}
 		else if (!strcasecmp(key, STRATUM_SP_TELEMETRY) &&
 				 strlen(key) == STRATUM_SP_TELEMETRY_LEN) {
@@ -3253,6 +3256,8 @@ static bool configure_stratum_mining(struct pool *pool)
 			applog(LOG_ERR, "JSON-RPC unexpected mining.configure value: %s", key);
 		}
 	}
+	/* Valid configuration for now only requires enabled version rolling and valid bit mask */
+	config_status = version_rolling_status && version_mask_valid;
 
 json_response_error:
 	json_decref(response);
