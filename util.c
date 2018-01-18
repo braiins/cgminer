@@ -2029,7 +2029,8 @@ static int calculate_num_bits(int num)
 #endif
 
 uint32_t magicNum[16] = {0};
-int pre_version_mask[4] = {0};
+#define VERSION_BITS_NUM 2
+int pre_version_mask[1 << VERSION_BITS_NUM] = {0};
 char maskstr[16][9] = {0}; 
 
 #ifndef CHIP_A6
@@ -2309,49 +2310,74 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	return true;
 }
 
-static bool parse_set_version_mask(struct pool *pool, json_t *val)
+/**
+ * Decodes version mask from json string
+ *
+ * @param pool
+ * @param version_mask_json
+ * @return true when the decoded mask is valid and supported by the hardware
+ */
+static bool decode_version_mask(struct pool *pool, json_t *version_mask_json)
 {
-	char *version_mask;
-	int mask;
-	int tmpMask;
-	int cnt = 0;
-	int i;
+	const char *version_mask_str;
+	unsigned long version_mask;
+	unsigned int i, j, bit_idx, component_idx;
+	unsigned long version_bit_components[VERSION_BITS_NUM];
+	unsigned long detect_bit_mask;
+	bool retval = true;
 
-	version_mask = __json_array_string(val, 0);
-	//printf("version_mask:%s. \n", version_mask);
-
-	mask = strtol(version_mask, NULL, 16);
-	//mask = 0x30000;
-	//printf("mask:0x%x. \n", mask);
-
-	pre_version_mask[0] = mask;
-
-	while(mask%16 == 0){
-		cnt++;
-		mask /= 16;
+	if (!version_mask_json) {
+		applog_hw(LOG_ERR, "Received empty version mask!");
+		retval = false;
+		goto invalid_version_mask;
 	}
 
-	if(mask/16 != 0){
-		tmpMask = mask%16;
-	}else if(mask/8 != 0){
-		tmpMask = mask%8;
-	}else if(mask/4 != 0){
-		tmpMask = mask%4;
-	}else if(mask/2 != 0){
-		tmpMask = mask%2;
+	version_mask_str = json_string_value(version_mask_json);
+
+	version_mask = strtol(version_mask_str, NULL, 16);
+	detect_bit_mask = 1;
+	bit_idx = 0;
+	component_idx = 0;
+
+	/* Scan the version mask and extract masks for individual bits to satisfy the number of version bits */
+	while ((bit_idx < (sizeof(version_mask) * 8)) && (component_idx < VERSION_BITS_NUM)) {
+		if (version_mask & detect_bit_mask) {
+			version_bit_components[component_idx++] = detect_bit_mask;
+		}
+		detect_bit_mask = detect_bit_mask << 1;
+		bit_idx++;
 	}
 
-	for(i=0; i<cnt; i++){
-		tmpMask *= 16;
+	if (component_idx != VERSION_BITS_NUM) {
+		applog_hw(LOG_ERR, "Received version mask (0x%08lx) doesn't satisfy hardware requirement (detected %d bits, "
+				  "required %d bits)", version_mask, component_idx, VERSION_BITS_NUM);
+		retval = false;
+		goto invalid_version_mask;
 	}
-	pre_version_mask[2] = tmpMask;
-	pre_version_mask[1] = pre_version_mask[0] - tmpMask;
-	/*
-	for(i=0;i<4;i++){
-		printf("pre_version_mask[%d]:0x%x. \n", i, pre_version_mask[i]);
+
+	/* Pre-generate all permutations of version bits */
+	for (i = 0; i < (1UL << VERSION_BITS_NUM); i++) {
+		for (bit_idx = 0; bit_idx < (sizeof(i) * 8); bit_idx++)
+			if (i & (1UL << bit_idx)) {
+				pre_version_mask[i] |= version_bit_components[bit_idx];
+			}
 	}
-	*/	
-	return true;
+
+invalid_version_mask:
+	return retval;
+}
+
+/**
+ * Parses mining.set_version_mask message
+ *
+ * @param pool
+ * @param params - array of JSON parameters of mining.set_version_mask
+ * @return true when a valid mask has been parsed
+ */
+static bool parse_set_version_mask(struct pool *pool, json_t *params)
+{
+	/* Extract the first parameter and delegate further */
+	return decode_version_mask(pool, json_array_get(params, 0));
 }
 
 static void __suspend_stratum(struct pool *pool)
