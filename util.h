@@ -178,9 +178,9 @@ void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, c
 
 #define HISTORY_SIZE 16
 struct measurement {
-	unsigned n, ptr;
 	double min, max;
-	double data[HISTORY_SIZE];
+	double a, b;
+	unsigned an, bn;
 };
 
 void measurement_add(struct measurement *mt, double x);

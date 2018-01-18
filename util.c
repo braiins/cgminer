@@ -3738,7 +3738,7 @@ void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, c
 void measurement_add(struct measurement *mt, double x)
 {
 	/* update min/max */
-	if (mt->n == 0) {
+	if (mt->an == 0 && mt->bn == 0) {
 		mt->min = mt->max = x;
 	} else {
 		if (x < mt->min)
@@ -3747,14 +3747,15 @@ void measurement_add(struct measurement *mt, double x)
 			mt->max = x;
 	}
 
-	/* add measurement to history */
-	if (mt->ptr >= HISTORY_SIZE)
-		mt->ptr = 0;
-	mt->data[mt->ptr++] = x;
-	mt->n++;
-
-	if (mt->n > HISTORY_SIZE)
-		mt->n = HISTORY_SIZE;
+	/* insert fake average */
+	if (mt->bn >= HISTORY_SIZE) {
+		mt->a = mt->b;
+		mt->an = mt->bn;
+		mt->b = 0;
+		mt->bn = 0;
+	}
+	mt->b += x;
+	mt->bn++;
 }
 
 /**
@@ -3765,18 +3766,14 @@ void measurement_add(struct measurement *mt, double x)
  */
 double measurement_get_avg(struct measurement *mt)
 {
-	unsigned i;
-	double sum;
-
-	if (mt->n == 0)
-		return 0;
-
-	sum = 0;
-	/* we assume that uninitialized history is 0 */
-	for (i = 0; i < HISTORY_SIZE; i++)
-		sum += mt->data[i];
-
-	return sum / mt->n;
+	if (mt->an == 0) {
+		if (mt->bn == 0)
+			return 0;
+		return mt->b / mt->bn;
+	}
+	double ax = mt->a / mt->an * (HISTORY_SIZE - mt->bn);
+	double bx = mt->b;
+	return (ax + bx) / HISTORY_SIZE;
 }
 
 /**
