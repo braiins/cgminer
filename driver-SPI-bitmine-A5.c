@@ -1081,7 +1081,6 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 		// switch ADC back to temperature measurement (tsensor)
 		inno_configure_tvsensor(chain, ADDR_BROADCAST, 1);
 	}
-	// TODO jca: consolidate - refactor A1Pll into an array. Btw. looks like the Pll parameter is not being used at all
 	if (check_disbale_flag[chain->chain_id] > CHECK_DISABLE_TIME)
 	{
 		applog_hw_chain(LOG_DEBUG, chain->chain_id, "start to check disabled chips");
