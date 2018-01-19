@@ -2356,6 +2356,7 @@ static bool decode_version_mask(struct pool *pool, json_t *version_mask_json)
 	}
 
 	/* Pre-generate all permutations of version bits */
+	memset(pre_version_mask, 0, sizeof(pre_version_mask));
 	for (i = 0; i < (1UL << VERSION_BITS_NUM); i++) {
 		for (bit_idx = 0; bit_idx < (sizeof(i) * 8); bit_idx++)
 			if (i & (1UL << bit_idx)) {
