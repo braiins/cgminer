@@ -441,7 +441,7 @@ enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses, total_extranonce;
 
-uint8_t cgminer_hwid[CGMINER_HWID_LENGTH] = "undef\xff\xff\xff";
+uint8_t miner_hwid[MINER_HWID_LENGTH] = "undef\xff\xff\xff";
 
 static
 #ifndef HAVE_CURSES
@@ -7093,7 +7093,7 @@ static void *stratum_tthread(void *userdata)
 		if (tele->type == TELEMETRY_LOG) {
 			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.log\", \"params\": [ [ ", swork_id++);
 			cnstrct_printf(&cbuf, "%d, \"", tele->log.time);
-			cnstrct_json_quote(&cbuf, cgminer_hwid, CGMINER_HWID_LENGTH);
+			cnstrct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
 			cnstrct_printf(&cbuf, "\", \"%s\", \"%s\", \"", tele->log.type, tele->log.source);
 			cnstrct_json_quote(&cbuf, tele->log.msg, strlen(tele->log.msg));
 			cnstrct_printf(&cbuf, "\" ] ] }");
@@ -7102,7 +7102,7 @@ static void *stratum_tthread(void *userdata)
 
 			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
 			cnstrct_printf(&cbuf, "%d, \"", tele->data.time);
-			cnstrct_json_quote(&cbuf, cgminer_hwid, CGMINER_HWID_LENGTH);
+			cnstrct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
 			cnstrct_printf(&cbuf, "\", %d, [ \"disabled\", \"num_cores\", \"nonce_ranges_done\", \"nonces_found\", \"hw_errors\", \"stales\", \"temperature\", \"voltage\" ], [ ", tele->data.chain_id);
 			for (i = 0; i < tele->data.n_chips; i++) {
 				cnstrct_printf(&cbuf, "%s[%d,%d,%d,%d,%d,%d,%.02f,%.04f]",

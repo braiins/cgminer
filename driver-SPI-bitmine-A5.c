@@ -924,15 +924,15 @@ static int A1_read_hwid(void)
 	size_t nr;
 	int ret = 0;
 
-	fp = fopen(CGMINER_HWID_PATH, "rb");
+	fp = fopen(MINER_HWID_PATH, "rb");
 	if (fp == 0) {
 		applog_system(LOG_WARNING, "cannot open dna: %m");
 		goto done;
 	}
 
-	nr = fread(cgminer_hwid, CGMINER_HWID_LENGTH, 1, fp);
+	nr = fread(miner_hwid, MINER_HWID_LENGTH, 1, fp);
 	if (nr != 1) {
-		applog_system(LOG_WARNING, "failed to read %d bytes from hwid", CGMINER_HWID_LENGTH);
+		applog_system(LOG_WARNING, "failed to read %d bytes from hwid", MINER_HWID_LENGTH);
 		goto done_close;
 	}
 	ret = 1;

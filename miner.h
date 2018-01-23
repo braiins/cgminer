@@ -1640,9 +1640,9 @@ extern int submit_telemetry(struct telemetry *tele);
 extern void free_telemetry(struct telemetry *tele);
 
 
-#define CGMINER_HWID_LENGTH 16
-#define CGMINER_HWID_PATH "/etc/cgminer_hwid"
-extern uint8_t cgminer_hwid[CGMINER_HWID_LENGTH];
+#define MINER_HWID_LENGTH 16
+#define MINER_HWID_PATH "/etc/miner_hwid"
+extern uint8_t miner_hwid[MINER_HWID_LENGTH];
 
 enum api_data_type {
 	API_ESCAPE,
