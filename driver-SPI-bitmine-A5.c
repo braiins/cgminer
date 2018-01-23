@@ -918,18 +918,28 @@ bool detect_coincraft_rig_v3(void)
 }
 #endif
 
-static void A1_read_dna(void)
+static int A1_read_hwid(void)
 {
-	uint8_t dna_buf[DNA_ID_LENGTH];
-	int ret, len;
+	FILE *fp;
+	size_t nr;
+	int ret = 0;
 
-	ret = asic_read_dna(dna_buf);
-	if (ret < 0)
-		return;
+	fp = fopen(CGMINER_HWID_PATH, "rb");
+	if (fp == 0) {
+		applog_system(LOG_WARNING, "cannot open dna: %m");
+		goto done;
+	}
 
-	memset(unique_hw_id, 0, sizeof(unique_hw_id));
-	len = MIN(UNIQUE_HW_ID_LENGTH, DNA_ID_LENGTH);
-	memcpy(unique_hw_id, dna_buf, len);
+	nr = fread(cgminer_hwid, CGMINER_HWID_LENGTH, 1, fp);
+	if (nr != 1) {
+		applog_system(LOG_WARNING, "failed to read %d bytes from hwid", CGMINER_HWID_LENGTH);
+		goto done_close;
+	}
+	ret = 1;
+done_close:
+	fclose(fp);
+done:
+	return ret;
 }
 
 
@@ -940,8 +950,8 @@ void A1_detect(bool hotplug)
 	if (hotplug)
 		return;
 
-	/* read DNA */
-	A1_read_dna();
+	/* read HWID */
+	A1_read_hwid();
 
 	/* parse bimine-a1-options */
 	if (opt_bitmine_a1_options != NULL && parsed_config_options == NULL) {

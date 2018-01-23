@@ -27,9 +27,6 @@
 #define SYSFS_GPIO_VAL_LOW	"0"
 #define SYSFS_GPIO_VAL_HIGH	"1"
 
-#define DNA_ID_PATH		"/sys/firmware/devicetree/base/amba/ethernet@e000b000/local-mac-address"
-#define DNA_ID_LENGTH		6
-
 extern int SPI_PIN_POWER_EN[];
 extern int SPI_PIN_START_EN[];
 extern int SPI_PIN_RESET[];
@@ -52,7 +49,5 @@ uint32_t set_spi_speed(uint32_t speed);
 uint32_t get_spi_speed(void);
 
 void set_vid_value(int level);
-
-int asic_read_dna(uint8_t *buffer);
 
 #endif

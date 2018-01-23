@@ -1640,8 +1640,9 @@ extern int submit_telemetry(struct telemetry *tele);
 extern void free_telemetry(struct telemetry *tele);
 
 
-#define UNIQUE_HW_ID_LENGTH 8
-extern uint8_t unique_hw_id[UNIQUE_HW_ID_LENGTH];
+#define CGMINER_HWID_LENGTH 16
+#define CGMINER_HWID_PATH "/etc/cgminer_hwid"
+extern uint8_t cgminer_hwid[CGMINER_HWID_LENGTH];
 
 enum api_data_type {
 	API_ESCAPE,
