@@ -15,6 +15,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "spi-context.h"
 #include "logging.h"
@@ -69,7 +70,6 @@ static uint32_t update_cnt[ASIC_CHAIN_NUM];
 static uint32_t write_flag[ASIC_CHAIN_NUM];
 static uint32_t check_disbale_flag[ASIC_CHAIN_NUM];
 static uint32_t first_flag[ASIC_CHAIN_NUM] = {0};
-extern const uint32_t magicNum[16];
 static inno_reg_ctrl_t s_reg_ctrl;
 #define DANGEROUS_TMP  110
 #define STD_V          0.84
@@ -1149,9 +1149,18 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			continue;
 		}
 		work->micro_job_id = micro_job_id;
+		work->midstate_idx = ffs(micro_job_id) - 1;
 		work->chain_id = cid;
 		work->chip_id = chip_id;
-		memcpy(work->data, &(magicNum[micro_job_id]), 4);
+		/* Index of the midstate used for calculating this results is indicated by a corresponding bit set */
+		if ((work->midstate_idx < 0) || (work->midstate_idx >= MIDSTATE_NUM)) {
+			applog_hw_chip(LOG_ERR, cid, chip_id, "Invalid midstate index encoded in micro job ID (%d)",
+						   micro_job_id);
+			chip->hw_errors++;
+			continue;
+
+		}
+		memcpy(work->data, &n_version[work->midstate_idx].value_big_endian, 4);
 		
 		if (!submit_nonce(thr, work, nonce)) 
 		{

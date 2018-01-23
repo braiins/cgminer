@@ -2392,22 +2392,13 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_ENDTABLE
 };
 
-/*
-uint32_t magicNum[16]= {
-	0x00000020, 0x00000020, 0x02000020, 0x00000020,
-	0x10000020, 0x00000020, 0x00000020, 0x00000020, 
-	0x12000020, 0x00000020, 0x00000020, 0x00000020,
-	0x00000020, 0x00000020, 0x00000020, 0x00000020};
-*/
-#ifndef CHIP_A6
-extern uint32_t magicNum[16];
-#endif
-
 static void calc_midstate(struct work *work)
 {
 	unsigned char data[64];
 	uint32_t *data32 = (uint32_t *)data;
 	sha256_ctx ctx;
+	int i;
+
 #ifdef CHIP_A6
 	flip64(data32, work->data);
 	sha256_init(&ctx);
@@ -2415,33 +2406,14 @@ static void calc_midstate(struct work *work)
 	cg_memcpy(work->midstate, ctx.h, 32);
 	endian_flip32(work->midstate, work->midstate);
 #else
-	memcpy(work->data, &(magicNum[0]), 4);
-	flip64(data32, work->data);
-	sha256_init(&ctx);
-	sha256_update(&ctx, data, 64);
-	cg_memcpy(work->midstate, ctx.h, 32);
-	endian_flip32(work->midstate, work->midstate);
-
-	memcpy(work->data, &(magicNum[2]), 4);
-	flip64(data32, work->data);
-	sha256_init(&ctx);
-	sha256_update(&ctx, data, 64);
-	cg_memcpy(work->midstate1, ctx.h, 32);
-	endian_flip32(work->midstate1, work->midstate1);
-
-	memcpy(work->data, &(magicNum[4]), 4);
-	flip64(data32, work->data);
-	sha256_init(&ctx);
-	sha256_update(&ctx, data, 64);
-	cg_memcpy(work->midstate2, ctx.h, 32);
-	endian_flip32(work->midstate2, work->midstate2);
-	
-	memcpy(work->data, &(magicNum[8]), 4);
-	flip64(data32, work->data);
-	sha256_init(&ctx);
-	sha256_update(&ctx, data, 64);
-	cg_memcpy(work->midstate3, ctx.h, 32);
-	endian_flip32(work->midstate3, work->midstate3);
+	for (i = 0; i < MIDSTATE_NUM; i++) {
+		memcpy(work->data, &n_version[i].value_big_endian, sizeof(n_version[i].value_big_endian));
+		flip64(data32, work->data);
+		sha256_init(&ctx);
+		sha256_update(&ctx, data, 64);
+		cg_memcpy(work->midstate[i].data, ctx.h, 32);
+		endian_flip32(work->midstate[i].data, work->midstate[i].data);
+	}
 #endif
 }
 
@@ -7279,7 +7251,7 @@ static void *stratum_sthread(void *userdata)
 #else
 		snprintf(s, sizeof(s),
 			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, nonce2hex, work->ntime, noncehex, maskstr[work->micro_job_id], sshare->id);
+			pool->rpc_user, work->job_id, nonce2hex, work->ntime, noncehex, n_version[work->midstate_idx].bits_str, sshare->id);
 
 		//applog(LOG_INFO, "rpc_request: %s", s);
 		applog_pool(LOG_INFO, "Submitting share %08lx with magic id %d to pool %d (chain_id=%d, chip_id=%d)",

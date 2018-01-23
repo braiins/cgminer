@@ -1216,6 +1216,20 @@ extern uint64_t best_diff;
 extern struct timeval block_timeval;
 extern char *workpadding;
 
+#define MIDSTATE_NUM 4
+
+/** Stores version data for a particular midstate */
+struct block_version {
+	/** Full version field in big endian to be submitted as part of the job */
+	uint32_t value_big_endian;
+	/** Version bits */
+	uint32_t bits;
+	/** Precalculated representation of */
+	char bits_str[9];
+};
+
+extern struct block_version n_version[MIDSTATE_NUM];
+
 struct curl_ent {
 	CURL *curl;
 	struct list_head node;
@@ -1396,14 +1410,20 @@ struct pool {
 #define GETWORK_MODE_GBT 'G'
 #define GETWORK_MODE_SOLO 'C'
 
+
+/**
+ * Midstate calculated from the first 64 bytes of block header data
+ */
+struct midstate {
+	uint8_t data[32];
+};
 struct work {
 	unsigned char	data[128];
-	unsigned char	midstate[32];
-#ifndef CHIP_A6	
-	unsigned char	midstate1[32];
-	unsigned char	midstate2[32];
-	unsigned char	midstate3[32];
+	struct midstate midstate[MIDSTATE_NUM];
+#ifndef CHIP_A6
 	uint16_t 		micro_job_id;
+	/** Resulting midstate index */
+	int             midstate_idx;
 #endif
 	unsigned char	target[32];
 	unsigned char	hash[32];

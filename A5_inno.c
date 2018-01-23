@@ -326,10 +326,10 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work, uint8_t 
 			store_u32_le(&job[2 + i*32], midstate_id*4 + i);
 		}
 	} else {
-		swab256(job + 2, work->midstate3);
-		swab256(job + 34, work->midstate2);
-		swab256(job + 66, work->midstate1);
-		swab256(job + 98, work->midstate);
+		/* Note, that ASIC expects midstates to be placed in reverse order (3-0) */
+		for (i = 0; i < MIDSTATE_NUM; i++) {
+			swab256(job + 2 + (MIDSTATE_NUM - i - 1) * sizeof(work->midstate[i]), work->midstate[i].data);
+		}
 	}
 
 	p1 = (uint32_t *) &job[130];

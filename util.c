@@ -2028,90 +2028,25 @@ static int calculate_num_bits(int num)
 }
 #endif
 
-uint32_t magicNum[16] = {0};
 #define VERSION_BITS_NUM 2
-int pre_version_mask[1 << VERSION_BITS_NUM] = {0};
-char maskstr[16][9] = {0}; 
+#if MIDSTATE_NUM != (1UL << VERSION_BITS_NUM)
+#error Incompatible number of midstates and version bits to roll!
+#endif
+
+struct block_version n_version[MIDSTATE_NUM];
 
 #ifndef CHIP_A6
 static void generate_magic_num_str(char *bbversion)
 {
-	int bversion;
-	bversion = strtol(bbversion, NULL, 16);
-	//printf("bversion:%d. \n", bversion);
-	uint32_t uiMagicNum;
+	unsigned long bversion;
 	int i;
-	uint8_t buffer[4];
-	char *tmpstr;
-	int num_bits;
-	int j;
-	char defaultStr[9]= "00000000"; 
 
-	memset(buffer, 0, sizeof(buffer));
-	uint32_t *p1 = (uint32_t *)buffer;
+	bversion = strtol(bbversion, NULL, 16);
 
-	for(i = 0; i < 4; i++)
-	{
-		uiMagicNum = bversion | pre_version_mask[i];
-		//printf("[ccx]uiMagicNum:0x%x. \n", uiMagicNum);
-		*p1 = bswap_32(uiMagicNum);
-		
-		//printf("[ccx]*p1:0x%x. \n", *p1);
-		switch(i){
-			case 0:magicNum[8] = *p1;break;
-			case 1:magicNum[4] = *p1;break;
-			case 2:magicNum[2] = *p1;break;
-			case 3:magicNum[0] = *p1;break;
-			default:;
-		}
+	for(i = 0; i < MIDSTATE_NUM; i++) {
+		n_version[i].value_big_endian = bswap_32(bversion | n_version[i].bits);
 	}
 
-	for(i = 0; i < 16; i++)
-	{
-		if((i!= 2) && (i!=4) && (i!=8))
-		{
-			magicNum[i] = magicNum[0];
-		}
-	}
-	/*
-	for(i=0;i<16;i++)
-	{
-		printf("[ccx]magicNum[%d]:0x%x. \n", i, magicNum[i]);
-	}
-	*/
-	for(i = 0; i < 16; i++)
-	{
-		memcpy(maskstr[i], defaultStr, 9);
-	}
-
-	for(i = 0; i < 3; i++)
-	{
-		char cMask[8];
-		tmpstr = (char *)malloc(9);
-		memset(tmpstr, 0, sizeof(tmpstr));
-		num_bits = calculate_num_bits(pre_version_mask[i]);
-		for(j=0; j<(8-num_bits); j++){
-			tmpstr[j] = '0';
-		}
-
-		sprintf(cMask, "%x", pre_version_mask[i]);
-		memcpy(tmpstr+8-num_bits, cMask, num_bits);
-		tmpstr[8] = '\0';
-
-		//printf("[ccx]tmpstr:%s. \n", tmpstr);
-		switch(i){
-			case 0:memcpy(maskstr[8], tmpstr, 9);break;
-			case 1:memcpy(maskstr[4], tmpstr, 9);break;
-			case 2:memcpy(maskstr[2], tmpstr, 9);break;
-			default:;
-		}
-		free(tmpstr);
-	}
-	/*
-	for(i=0;i<16;i++)
-	{
-		printf("[ccx]maskstr[%d]:%s. \n", i, maskstr[i]);
-	} */
 }
 #endif
 
@@ -2356,13 +2291,15 @@ static bool decode_version_mask(struct pool *pool, json_t *version_mask_json)
 	}
 
 	/* Pre-generate all permutations of version bits */
-	memset(pre_version_mask, 0, sizeof(pre_version_mask));
 	for (i = 0; i < (1UL << VERSION_BITS_NUM); i++) {
+		n_version[i].bits = 0;
 		for (bit_idx = 0; bit_idx < (sizeof(i) * 8); bit_idx++) {
 			if (i & (1UL << bit_idx)) {
-				pre_version_mask[i] |= version_bit_components[bit_idx];
+				n_version[i].bits |= version_bit_components[bit_idx];
 			}
 		}
+		/* Update mask string used for mining.submit version_bits parameter */
+		sprintf(n_version[i].bits_str, "%08x", n_version[i].bits);
 	}
 
 invalid_version_mask:
