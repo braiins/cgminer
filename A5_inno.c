@@ -255,6 +255,7 @@ static void store_u32_le(uint8_t *ptr, unsigned x)
 	*ptr++ = x >> 24;
 }
 
+// TODO jca: rewrite job to a structure
 static uint8_t job_template[JOB_LENGTH] = {
 	/* command */
 	0x00, 0x00,
