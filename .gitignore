@@ -1,6 +1,8 @@
 nbproject
 ccan/opt/.dirstamp
 compat/jansson-2.9/jansson.pc
+compat/jansson-2.9/jansson_private_config.h
+compat/jansson-2.9/jansson_private_config.h.in
 compat/jansson-2.9/libtool
 compat/jansson-2.9/ltmain.sh
 compat/jansson-2.9/m4/libtool.m4
@@ -12,6 +14,7 @@ compat/jansson-2.9/src/.libs/
 compat/jansson-2.9/src/dump.lo
 compat/jansson-2.9/src/error.lo
 compat/jansson-2.9/src/hashtable.lo
+compat/jansson-2.9/src/hashtable_seed.lo
 compat/jansson-2.9/src/jansson_config.h
 compat/jansson-2.9/src/libjansson.la
 compat/jansson-2.9/src/load.lo
@@ -21,6 +24,7 @@ compat/jansson-2.9/src/strbuffer.lo
 compat/jansson-2.9/src/strconv.lo
 compat/jansson-2.9/src/utf.lo
 compat/jansson-2.9/src/value.lo
+compat/jansson-2.9/test-driver
 libtool
 ltmain.sh
 m4/libtool.m4
@@ -78,3 +82,11 @@ lib/warn-on-use.h
 mkinstalldirs
 
 *.swp
+
+.built
+.configured_yyyyyyy
+.prepared
+.quilt_checked
+.source_dir
+
+/ipkg-install/
