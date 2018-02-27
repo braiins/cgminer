@@ -7008,7 +7008,7 @@ static void *stratum_tthread(void *userdata)
 		} else {
 			quit(1, "Stratum t unknown telemetry type %d", tele->type);
 		}
-		if (cbuf.overflow == 0) {
+		if (!cnstrct_has_overflown(&cbuf)) {
 			stratum_send(pool, cbuf.buf, cnstrct_get_len(&cbuf));
 		}
 
