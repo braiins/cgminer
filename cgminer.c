@@ -66,6 +66,7 @@ char *curly = ":D";
 #include "compat.h"
 #include "miner.h"
 #include "bench_block.h"
+#include "construct.h"
 
 #ifdef USE_USBUTILS
 #include "usbutils.h"
@@ -6945,120 +6946,6 @@ static void *stratum_rthread(void *userdata)
 
 out:
 	return NULL;
-}
-
-/**
- * Motivation for Construct Buffer
- *
- * Construct Buffer is a little handy structure that serves as an aid in
- * incremental string creation.  It's main feature is that it looks like a
- * "output" handle, into which you can write/printf to, and that it handles
- * overflows gracefully.
- *
- * The buffer where construction happens is allocated statically by caller
- * (cnstrct_init). When you overflow the buffer, an "overflow" flag is set and
- * all subsequent operation are "NO-OPs", until this flag is cleared (which is
- * _handy_, because you don't have to check return values/error until the end).
- *
- * A buffer can be extracted at the end of construction.
- */
-
-struct construct_buf {
-	int overflow;
-	char *buf, *ptr, *end;
-};
-
-/**
- * Append printf-style formatted data to buffer
- *
- * @param cbuf Initialized construct structure
- * @param fmt Format string
- * @param ... ...
- */
-static int cnstrct_printf(struct construct_buf *cbuf, const char *fmt, ...)
-{
-	va_list ap;
-	int ret;
-	int rem;
-
-	if (cbuf->overflow)
-		return 0;
-
-	rem = cbuf->end - cbuf->ptr;
-	if (rem <= 0)
-		goto overflow;
-
-	va_start(ap, fmt);
-	ret = vsnprintf(cbuf->ptr, rem, fmt, ap);
-	va_end(ap);
-
-	if (ret >= rem)
-		goto overflow;
-
-	cbuf->ptr += ret;
-	return 1;
-
-overflow:
-	cbuf->overflow = 1;
-	return 0;
-}
-
-/**
- * Initialize construct buffer with memory
- *
- * @param cbuf Uninitialized construct structure
- * @param buf Data buffer
- * @param size Size of @c buf
- */
-static void cnstrct_init(struct construct_buf *cbuf, char *buf, int size)
-{
-	cbuf->overflow = 0;
-	cbuf->buf = cbuf->ptr = buf;
-	cbuf->end = buf + size;
-}
-
-static int cnstrct_putc(struct construct_buf *cbuf, char x)
-{
-	if (cbuf->overflow || cbuf->ptr >= cbuf->end) {
-		cbuf->overflow = 1;
-		return 1;
-	}
-	*cbuf->ptr++ = x;
-	return 0;
-}
-
-static int cnstrct_json_quote(struct construct_buf *cbuf, char *buf, int len)
-{
-	int i;
-
-	for (i = 0; i < len; i++) {
-		char c = buf[i];
-		if (c < 0x20)
-			cnstrct_printf(cbuf, "\\u%04x", c);
-		else if (c == '\\' || c == '\"') 
-			cnstrct_printf(cbuf, "\\%c", c);
-		else
-			cnstrct_putc(cbuf, c);
-	}
-	return !cbuf->overflow;
-}
-
-static int cnstrct_print_hex(struct construct_buf *cbuf, void *mem, int len)
-{
-	uint8_t *buf = mem;
-	int i;
-
-	for (i = 0; i < len; i++)
-		cnstrct_printf(cbuf, "%02x", buf[i]);
-
-	return !cbuf->overflow;
-}
-
-static inline size_t cnstrct_get_len(struct construct_buf *cbuf)
-{
-	if (cbuf->overflow)
-		return 0;
-	return cbuf->ptr - cbuf->buf;
 }
 
 /* Each pool has one stratum telemetry thread which waits for statistics from

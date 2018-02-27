@@ -53,6 +53,8 @@ cgminer_SOURCES	+= klist.h klist.c
 
 cgminer_SOURCES	+= noncedup.c
 
+cgminer_SOURCES	+= construct.c
+
 if NEED_FPGAUTILS
 cgminer_SOURCES += fpgautils.c fpgautils.h
 endif
