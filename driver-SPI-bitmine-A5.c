@@ -918,7 +918,7 @@ bool detect_coincraft_rig_v3(void)
 }
 #endif
 
-static int A1_read_hwid(void)
+int A1_read_hwid(void)
 {
 	FILE *fp;
 	size_t nr;
@@ -949,9 +949,6 @@ void A1_detect(bool hotplug)
 	/* no hotplug support for SPI */
 	if (hotplug)
 		return;
-
-	/* read HWID */
-	A1_read_hwid();
 
 	/* parse bimine-a1-options */
 	if (opt_bitmine_a1_options != NULL && parsed_config_options == NULL) {

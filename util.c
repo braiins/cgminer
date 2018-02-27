@@ -44,6 +44,7 @@
 #include "elist.h"
 #include "compat.h"
 #include "util.h"
+#include "construct.h"
 
 #define DEFAULT_SOCKWAIT 60
 #ifndef STRATUM_USER_AGENT
@@ -3135,18 +3136,35 @@ static bool configure_stratum_mining(struct pool *pool)
 	bool version_rolling_status = false;
 	bool version_mask_valid = false;
 	const char *key;
+	struct construct_buf cbuf;
 	json_t *response, *value, *res_val, *err_val;
 	json_error_t err;
 
 	/* TODO JCA: read version rolling bits and mask from the hardware driver
 	 * or pool parameters? */
-	snprintf(s, RBUFSIZE,
-			 "{\"id\": %d, \"method\": \"mining.configure\", \"params\": "
-			 "[[\""STRATUM_VERSION_ROLLING"\", \""STRATUM_SP_TELEMETRY"\"], "
-			 "{\""STRATUM_VERSION_ROLLING".mask\": \"%x\", "
-			 "\"sp-telemetry.version\": 1}]}",
-			 swork_id++, 0xffffffff);
-	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
+	cnstrct_init(&cbuf, s, sizeof(s));
+	cnstrct_printf(&cbuf,
+			 "{\"id\": %d, \"method\": \"mining.configure\", \"params\": ",
+			 swork_id++);
+	cnstrct_printf(&cbuf,
+			 "[[\""STRATUM_VERSION_ROLLING"\", \""STRATUM_SP_TELEMETRY"\", \"info\"], {");
+	cnstrct_printf(&cbuf, "\""STRATUM_VERSION_ROLLING".mask\": \"%x\", ", 0xffffffff);
+	cnstrct_printf(&cbuf, "\"sp-telemetry.version\": 1, ");
+	cnstrct_printf(&cbuf, "\"info.connection-url\": \"");
+	cnstrct_json_quote_str(&cbuf, pool->rpc_url);
+	cnstrct_printf(&cbuf, "\", ");
+	cnstrct_printf(&cbuf, "\"info.hw-version\": \"dummy-hw-miner-china-g19-1.2\", ");
+	cnstrct_printf(&cbuf, "\"info.sw-version\": \"dummy-sw-miner-1.0-verylonghexastringinsertheremaybe-anothermaybeheretakesha256fromgit\", ");
+	cnstrct_printf(&cbuf, "\"info.hw-id\": \"");
+	cnstrct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
+	cnstrct_printf(&cbuf, "\"");
+	cnstrct_printf(&cbuf, "}]}");
+
+	if (cnstrct_has_overflown(&cbuf)) {
+		applog(LOG_DEBUG, "The mining.configure message is too damn long");
+		goto out;
+	}
+	if (__stratum_send(pool, cbuf.buf, cnstrct_get_len(&cbuf)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send mining.configure");
 		goto out;
 	}

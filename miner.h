@@ -1714,4 +1714,6 @@ extern void dupalloc(struct cgpu_info *cgpu, int timelimit);
 extern void dupcounters(struct cgpu_info *cgpu, uint64_t *checked, uint64_t *dups);
 extern bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce);
 
+int A1_read_hwid(void);
+
 #endif /* __MINER_H__ */

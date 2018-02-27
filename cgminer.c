@@ -442,7 +442,7 @@ enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses, total_extranonce;
 
-uint8_t miner_hwid[MINER_HWID_LENGTH] = "undef\xff\xff\xff";
+uint8_t miner_hwid[MINER_HWID_LENGTH] = "hwid_was_not_set";
 
 static
 #ifndef HAVE_CURSES
@@ -10448,6 +10448,10 @@ int main(int argc, char *argv[])
 	control_thr = cgcalloc(total_control_threads, sizeof(*thr));
 
 	gwsched_thr_id = 0;
+
+	/* XXX: read HWID first */
+	/* (because hardware is initialized before pool is initialized before hardware) */
+	A1_read_hwid();
 
 	/* initialize/connect to pools */
 	if (!total_pools) {
