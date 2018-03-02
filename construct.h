@@ -1,6 +1,8 @@
 #ifndef __CONSTRUCT_H__
 #define __CONSTRUCT_H__
 
+#include <string.h>
+
 /**
  * Motivation for Construct Buffer
  *
@@ -10,13 +12,12 @@
  * overflows gracefully.
  *
  * The buffer where construction happens is allocated statically by caller
- * (cnstrct_init). When you overflow the buffer, an "overflow" flag is set and
+ * (construct_init). When you overflow the buffer, an "overflow" flag is set and
  * all subsequent operation are "NO-OPs", until this flag is cleared (which is
  * _handy_, because you don't have to check return values/error until the end).
  *
  * A buffer can be extracted at the end of construction.
  */
-
 struct construct_buf {
 	int overflow;
 	char *buf, *ptr, *end;
@@ -29,7 +30,7 @@ struct construct_buf {
  * @param fmt Format string
  * @param ... ...
  */
-int cnstrct_printf(struct construct_buf *cbuf, const char *fmt, ...);
+int construct_printf(struct construct_buf *cbuf, const char *fmt, ...);
 
 /**
  * Initialize construct buffer with memory
@@ -38,7 +39,7 @@ int cnstrct_printf(struct construct_buf *cbuf, const char *fmt, ...);
  * @param buf Data buffer
  * @param size Size of @c buf
  */
-static inline void cnstrct_init(struct construct_buf *cbuf, char *buf, int size)
+static inline void construct_init(struct construct_buf *cbuf, char *buf, int size)
 {
 	cbuf->overflow = 0;
 	cbuf->buf = cbuf->ptr = buf;
@@ -53,7 +54,7 @@ static inline void cnstrct_init(struct construct_buf *cbuf, char *buf, int size)
  *
  * @returns 1 on overflow, 0 otherwise
  */
-static inline int cnstrct_putc(struct construct_buf *cbuf, char x)
+static inline int construct_putc(struct construct_buf *cbuf, char x)
 {
 	if (cbuf->overflow || cbuf->ptr >= cbuf->end) {
 		cbuf->overflow = 1;
@@ -72,7 +73,7 @@ static inline int cnstrct_putc(struct construct_buf *cbuf, char x)
  *
  * @see https://www.jstor.org/stable/453244?seq=1#page_scan_tab_contents
  */
-static inline int cnstrct_has_overflown(struct construct_buf *cbuf)
+static inline int construct_has_overflown(struct construct_buf *cbuf)
 {
 	return !!cbuf->overflow;
 }
@@ -84,19 +85,19 @@ static inline int cnstrct_has_overflown(struct construct_buf *cbuf)
  *
  * @returns 0 on overflow, number of characters otherwise
  */
-static inline size_t cnstrct_get_len(struct construct_buf *cbuf)
+static inline size_t construct_get_len(struct construct_buf *cbuf)
 {
 	if (cbuf->overflow)
 		return 0;
 	return cbuf->ptr - cbuf->buf;
 }
 
-int cnstrct_print_hex(struct construct_buf *cbuf, void *mem, int len);
-int cnstrct_json_quote(struct construct_buf *cbuf, char *buf, int len);
+int construct_print_hex(struct construct_buf *cbuf, void *mem, int len);
+int construct_json_quote(struct construct_buf *cbuf, char *buf, int len);
 
-static inline int cnstrct_json_quote_str(struct construct_buf *cbuf, char *str)
+static inline int construct_json_quote_str(struct construct_buf *cbuf, char *str)
 {
-	return cnstrct_json_quote(cbuf, str, strlen(str));
+	return construct_json_quote(cbuf, str, strlen(str));
 }
 
 #endif /* __CONSTRUCT_H__ */

@@ -6976,23 +6976,23 @@ static void *stratum_tthread(void *userdata)
 		if (unlikely(!tele))
 			quit(1, "Stratum t returned empty tele");
 
-		cnstrct_init(&cbuf, s, RBUFSIZE);
+		construct_init(&cbuf, s, RBUFSIZE);
 		if (tele->type == TELEMETRY_LOG) {
-			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.log\", \"params\": [ [ ", swork_id++);
-			cnstrct_printf(&cbuf, "%d, \"", tele->log.time);
-			cnstrct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
-			cnstrct_printf(&cbuf, "\", \"%s\", \"%s\", \"", tele->log.type, tele->log.source);
-			cnstrct_json_quote(&cbuf, tele->log.msg, strlen(tele->log.msg));
-			cnstrct_printf(&cbuf, "\" ] ] }");
+			construct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.log\", \"params\": [ [ ", swork_id++);
+			construct_printf(&cbuf, "%d, \"", tele->log.time);
+			construct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
+			construct_printf(&cbuf, "\", \"%s\", \"%s\", \"", tele->log.type, tele->log.source);
+			construct_json_quote(&cbuf, tele->log.msg, strlen(tele->log.msg));
+			construct_printf(&cbuf, "\" ] ] }");
 		} else if (tele->type == TELEMETRY_DATA) {
 			int i;
 
-			cnstrct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
-			cnstrct_printf(&cbuf, "%d, \"", tele->data.time);
-			cnstrct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
-			cnstrct_printf(&cbuf, "\", %d, [ \"disabled\", \"num_cores\", \"nonce_ranges_done\", \"nonces_found\", \"hw_errors\", \"stales\", \"temperature\", \"voltage\" ], [ ", tele->data.chain_id);
+			construct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
+			construct_printf(&cbuf, "%d, \"", tele->data.time);
+			construct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
+			construct_printf(&cbuf, "\", %d, [ \"disabled\", \"num_cores\", \"nonce_ranges_done\", \"nonces_found\", \"hw_errors\", \"stales\", \"temperature\", \"voltage\" ], [ ", tele->data.chain_id);
 			for (i = 0; i < tele->data.n_chips; i++) {
-				cnstrct_printf(&cbuf, "%s[%d,%d,%d,%d,%d,%d,%.02f,%.04f]",
+				construct_printf(&cbuf, "%s[%d,%d,%d,%d,%d,%d,%.02f,%.04f]",
 						i > 0 ? ", " : "",
 						tele->data.chips[i].disabled,
 						tele->data.chips[i].num_cores,
@@ -7004,12 +7004,12 @@ static void *stratum_tthread(void *userdata)
 						tele->data.chips[i].voltage
 					);
 			}
-			cnstrct_printf(&cbuf, "] ] }");
+			construct_printf(&cbuf, "] ] }");
 		} else {
 			quit(1, "Stratum t unknown telemetry type %d", tele->type);
 		}
-		if (!cnstrct_has_overflown(&cbuf)) {
-			stratum_send(pool, cbuf.buf, cnstrct_get_len(&cbuf));
+		if (!construct_has_overflown(&cbuf)) {
+			stratum_send(pool, cbuf.buf, construct_get_len(&cbuf));
 		}
 
 		free_telemetry(tele);

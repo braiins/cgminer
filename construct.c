@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include "construct.h"
 
-int cnstrct_printf(struct construct_buf *cbuf, const char *fmt, ...)
+int construct_printf(struct construct_buf *cbuf, const char *fmt, ...)
 {
 	va_list ap;
 	int ret;
@@ -31,29 +31,29 @@ overflow:
 	return 0;
 }
 
-int cnstrct_json_quote(struct construct_buf *cbuf, char *buf, int len)
+int construct_json_quote(struct construct_buf *cbuf, char *buf, int len)
 {
 	int i;
 
 	for (i = 0; i < len; i++) {
 		char c = buf[i];
 		if (c < 0x20)
-			cnstrct_printf(cbuf, "\\u%04x", c);
-		else if (c == '\\' || c == '\"') 
-			cnstrct_printf(cbuf, "\\%c", c);
+			construct_printf(cbuf, "\\u%04x", c);
+		else if (c == '\\' || c == '\"')
+			construct_printf(cbuf, "\\%c", c);
 		else
-			cnstrct_putc(cbuf, c);
+			construct_putc(cbuf, c);
 	}
 	return !cbuf->overflow;
 }
 
-int cnstrct_print_hex(struct construct_buf *cbuf, void *mem, int len)
+int construct_print_hex(struct construct_buf *cbuf, void *mem, int len)
 {
 	uint8_t *buf = mem;
 	int i;
 
 	for (i = 0; i < len; i++)
-		cnstrct_printf(cbuf, "%02x", buf[i]);
+		construct_printf(cbuf, "%02x", buf[i]);
 
 	return !cbuf->overflow;
 }

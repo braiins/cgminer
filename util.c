@@ -3142,29 +3142,29 @@ static bool configure_stratum_mining(struct pool *pool)
 
 	/* TODO JCA: read version rolling bits and mask from the hardware driver
 	 * or pool parameters? */
-	cnstrct_init(&cbuf, s, sizeof(s));
-	cnstrct_printf(&cbuf,
+	construct_init(&cbuf, s, sizeof(s));
+	construct_printf(&cbuf,
 			 "{\"id\": %d, \"method\": \"mining.configure\", \"params\": ",
 			 swork_id++);
-	cnstrct_printf(&cbuf,
+	construct_printf(&cbuf,
 			 "[[\""STRATUM_VERSION_ROLLING"\", \""STRATUM_SP_TELEMETRY"\", \"info\"], {");
-	cnstrct_printf(&cbuf, "\""STRATUM_VERSION_ROLLING".mask\": \"%x\", ", 0xffffffff);
-	cnstrct_printf(&cbuf, "\"sp-telemetry.version\": 1, ");
-	cnstrct_printf(&cbuf, "\"info.connection-url\": \"");
-	cnstrct_json_quote_str(&cbuf, pool->rpc_url);
-	cnstrct_printf(&cbuf, "\", ");
-	cnstrct_printf(&cbuf, "\"info.hw-version\": \"dummy-hw-miner-china-g19-1.2\", ");
-	cnstrct_printf(&cbuf, "\"info.sw-version\": \"dummy-sw-miner-1.0-verylonghexastringinsertheremaybe-anothermaybeheretakesha256fromgit\", ");
-	cnstrct_printf(&cbuf, "\"info.hw-id\": \"");
-	cnstrct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
-	cnstrct_printf(&cbuf, "\"");
-	cnstrct_printf(&cbuf, "}]}");
+	construct_printf(&cbuf, "\""STRATUM_VERSION_ROLLING".mask\": \"%x\", ", 0xffffffff);
+	construct_printf(&cbuf, "\"sp-telemetry.version\": 1, ");
+	construct_printf(&cbuf, "\"info.connection-url\": \"");
+	construct_json_quote_str(&cbuf, pool->rpc_url);
+	construct_printf(&cbuf, "\", ");
+	construct_printf(&cbuf, "\"info.hw-version\": \"dummy-hw-miner-china-g19-1.2\", ");
+	construct_printf(&cbuf, "\"info.sw-version\": \"dummy-sw-miner-1.0-verylonghexastringinsertheremaybe-anothermaybeheretakesha256fromgit\", ");
+	construct_printf(&cbuf, "\"info.hw-id\": \"");
+	construct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
+	construct_printf(&cbuf, "\"");
+	construct_printf(&cbuf, "}]}");
 
-	if (cnstrct_has_overflown(&cbuf)) {
+	if (construct_has_overflown(&cbuf)) {
 		applog(LOG_DEBUG, "The mining.configure message is too damn long");
 		goto out;
 	}
-	if (__stratum_send(pool, cbuf.buf, cnstrct_get_len(&cbuf)) != SEND_OK) {
+	if (__stratum_send(pool, cbuf.buf, construct_get_len(&cbuf)) != SEND_OK) {
 		applog(LOG_DEBUG, "Failed to send mining.configure");
 		goto out;
 	}
