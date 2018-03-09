@@ -1641,7 +1641,7 @@ extern void free_telemetry(struct telemetry *tele);
 
 
 #define MINER_HWID_LENGTH 16
-#define MINER_HWID_PATH "/etc/miner_hwid"
+#define MINER_HWID_PATH "/tmp/miner_hwid"
 extern uint8_t miner_hwid[MINER_HWID_LENGTH];
 
 enum api_data_type {
