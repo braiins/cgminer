@@ -1642,7 +1642,10 @@ extern void free_telemetry(struct telemetry *tele);
 
 #define MINER_HWID_LENGTH 16
 #define MINER_HWID_PATH "/tmp/miner_hwid"
-extern uint8_t miner_hwid[MINER_HWID_LENGTH];
+extern char miner_hwid[MINER_HWID_LENGTH + 1];
+#define MINER_HWVER_LENGTH 32
+#define MINER_HWVER_PATH "/tmp/miner_hwver"
+extern char miner_hwver[MINER_HWVER_LENGTH + 1];
 
 enum api_data_type {
 	API_ESCAPE,
@@ -1715,5 +1718,6 @@ extern void dupcounters(struct cgpu_info *cgpu, uint64_t *checked, uint64_t *dup
 extern bool isdupnonce(struct cgpu_info *cgpu, struct work *work, uint32_t nonce);
 
 int A1_read_hwid(void);
+int A1_read_hwver(void);
 
 #endif /* __MINER_H__ */

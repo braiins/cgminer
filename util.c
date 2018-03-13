@@ -41,6 +41,7 @@
 #include <sched.h>
 
 #include "miner.h"
+#include "gitversion.h"
 #include "elist.h"
 #include "compat.h"
 #include "util.h"
@@ -3153,10 +3154,14 @@ static bool configure_stratum_mining(struct pool *pool)
 	construct_printf(&cbuf, "\"info.connection-url\": \"");
 	construct_json_quote_str(&cbuf, pool->rpc_url);
 	construct_printf(&cbuf, "\", ");
-	construct_printf(&cbuf, "\"info.hw-version\": \"dummy-hw-miner-china-g19-1.2\", ");
-	construct_printf(&cbuf, "\"info.sw-version\": \"dummy-sw-miner-1.0-verylonghexastringinsertheremaybe-anothermaybeheretakesha256fromgit\", ");
+	construct_printf(&cbuf, "\"info.hw-version\": \"");
+	construct_json_quote_str(&cbuf, miner_hwver);
+	construct_printf(&cbuf, "\", ");
+	construct_printf(&cbuf, "\"info.sw-version\": \"");
+	construct_json_quote_str(&cbuf, CGMINER_GITBRANCH " (" CGMINER_GITVERSION ")");
+	construct_printf(&cbuf, "\", ");
 	construct_printf(&cbuf, "\"info.hw-id\": \"");
-	construct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
+	construct_json_quote_str(&cbuf, miner_hwid);
 	construct_printf(&cbuf, "\"");
 	construct_printf(&cbuf, "}]}");
 

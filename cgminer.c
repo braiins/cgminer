@@ -443,7 +443,8 @@ enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
 static int total_urls, total_users, total_passes, total_userpasses, total_extranonce;
 
-uint8_t miner_hwid[MINER_HWID_LENGTH] = "hwid_was_not_set";
+char miner_hwid[MINER_HWID_LENGTH + 1];
+char miner_hwver[MINER_HWVER_LENGTH + 1];
 
 static
 #ifndef HAVE_CURSES
@@ -6981,7 +6982,7 @@ static void *stratum_tthread(void *userdata)
 		if (tele->type == TELEMETRY_LOG) {
 			construct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.log\", \"params\": [ [ ", swork_id++);
 			construct_printf(&cbuf, "%d, \"", tele->log.time);
-			construct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
+			construct_json_quote_str(&cbuf, miner_hwid);
 			construct_printf(&cbuf, "\", \"%s\", \"%s\", \"", tele->log.type, tele->log.source);
 			construct_json_quote(&cbuf, tele->log.msg, strlen(tele->log.msg));
 			construct_printf(&cbuf, "\" ] ] }");
@@ -6990,7 +6991,7 @@ static void *stratum_tthread(void *userdata)
 
 			construct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
 			construct_printf(&cbuf, "%d, \"", tele->data.time);
-			construct_json_quote(&cbuf, miner_hwid, MINER_HWID_LENGTH);
+			construct_json_quote_str(&cbuf, miner_hwid);
 			construct_printf(&cbuf, "\", %d, [ \"disabled\", \"num_cores\", \"nonce_ranges_done\", \"nonces_found\", \"hw_errors\", \"stales\", \"temperature\", \"voltage\" ], [ ", tele->data.chain_id);
 			for (i = 0; i < tele->data.n_chips; i++) {
 				construct_printf(&cbuf, "%s[%d,%d,%d,%d,%d,%d,%.02f,%.04f]",
@@ -10453,6 +10454,7 @@ int main(int argc, char *argv[])
 	/* XXX: read HWID first */
 	/* (because hardware is initialized before pool is initialized before hardware) */
 	A1_read_hwid();
+	A1_read_hwver();
 
 	/* initialize/connect to pools */
 	if (!total_pools) {

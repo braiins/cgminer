@@ -918,30 +918,71 @@ bool detect_coincraft_rig_v3(void)
 }
 #endif
 
-int A1_read_hwid(void)
+static void trim(char *str, char *sp)
+{
+	int len = strlen(str);
+
+	while (len > 0) {
+		if (strchr(sp, str[len - 1]) == 0)
+			break;
+		str[--len] = 0;
+	}
+}
+
+static int read_text_file(const char *path, char *dest, int size)
 {
 	FILE *fp;
-	size_t nr;
-	int ret = 0;
+	int ret = -1;
+	char buf[size + 4]; /* 4 extra characters for newlines and spaces */
 
-	fp = fopen(MINER_HWID_PATH, "rb");
+	fp = fopen(path, "r");
 	if (fp == 0) {
-		applog_system(LOG_WARNING, "cannot open dna: %m");
+		applog_system(LOG_WARNING, "cannot open file %s: %m", path);
 		goto done;
 	}
-
-	nr = fread(miner_hwid, MINER_HWID_LENGTH, 1, fp);
-	if (nr != 1) {
-		applog_system(LOG_WARNING, "failed to read %d bytes from hwid", MINER_HWID_LENGTH);
+	if (fgets(buf, sizeof(buf), fp) == 0) {
+		applog_system(LOG_WARNING, "failed to read %s", path);
 		goto done_close;
 	}
-	ret = 1;
+	trim(buf, "\n\r ");
+	ret = strlen(buf);
+	if (ret + 1 > size) {
+		ret = size - 1;
+	}
+	if (ret >= 0) {
+		memcpy(dest, buf, ret + 1);
+	}
 done_close:
 	fclose(fp);
 done:
 	return ret;
 }
 
+int A1_read_hwid(void)
+{
+	int ret;
+
+	ret = read_text_file(MINER_HWID_PATH, miner_hwid, sizeof(miner_hwid));
+	if (ret == MINER_HWID_LENGTH) {
+		applog_system(LOG_INFO, "HWID: %s", miner_hwid);
+	} else {
+		applog_system(LOG_WARNING, "failed to read hwid");
+		snprintf(miner_hwid, sizeof(miner_hwid), "no hwid");
+	}
+}
+
+int A1_read_hwver(void)
+{
+	int ret;
+
+	ret = read_text_file(MINER_HWVER_PATH, miner_hwver, sizeof(miner_hwver));
+	if (ret > 0) {
+		applog_system(LOG_INFO, "HWVER: %s", miner_hwver);
+	} else {
+		applog_system(LOG_WARNING, "failed to read hwver");
+		snprintf(miner_hwver, sizeof(miner_hwver), "no hwver");
+	}
+}
 
 /* Probe SPI channel and register chip chain */
 void A1_detect(bool hotplug)
