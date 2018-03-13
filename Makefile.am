@@ -24,6 +24,42 @@ EXTRA_DIST	= example.conf linux-usb-cgminer \
 
 SUBDIRS		= lib compat ccan
 
+PKG_VERSION ?= $(if $(DUMP),x,$(strip $(shell \
+	if svn info >/dev/null 2>/dev/null; then \
+		revision="svn-r$$(LC_ALL=C svn info | sed -ne 's/^Revision: //p')"; \
+	elif git log -1 >/dev/null 2>/dev/null; then \
+		revision="svn-r$$(LC_ALL=C git log -1 | sed -ne 's/.*git-svn-id: .*@\([0-9]\+\) .*/\1/p')"; \
+		if [ "$$revision" = "svn-r" ]; then \
+			set -- $$(git log -1 --format="%ct %h" --abbrev=7); \
+			secs="$$(($$1 % 86400))"; \
+			yday="$$(date --utc --date="@$$1" "+%y.%j")"; \
+			revision="$$(printf 'git-%s.%05d-%s' "$$yday" "$$secs" "$$2")"; \
+		fi; \
+	else \
+		revision="unknown"; \
+	fi; \
+	echo "$$revision" \
+)))
+
+PKG_GITBRANCH ?= $(if $(DUMP),x,$(strip $(shell \
+	variant="LuCI"; \
+	if git log -1 >/dev/null 2>/dev/null; then \
+		branch="$$(git branch --remote --verbose --no-abbrev --contains 2>/dev/null | \
+			sed -rne 's|^[^/]+/([^ ]+) [a-f0-9]{40} .+$$|\1|p' | head -n1)"; \
+		if [ "$$branch" != "master" ]; then \
+			variant="CGMiner $$branch branch"; \
+		else \
+			variant="CGMiner master"; \
+		fi; \
+	fi; \
+	echo "$$variant" \
+)))
+
+.PHONY: gitversion.h
+gitversion.h:
+	echo "#define CGMINER_GITVERSION \"$(PKG_VERSION)\"" > gitversion.h
+	echo "#define CGMINER_GITBRANCH \"$(PKG_GITBRANCH)\"" >> gitversion.h
+
 cgminer_CPPFLAGS = $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_CPPFLAGS) $(USBUTILS_CPPFLAGS) $(LIBCURL_CPPFLAGS)
 
 bin_PROGRAMS	= cgminer
@@ -42,6 +78,8 @@ endif
 
 # common sources
 cgminer_SOURCES := cgminer.c
+
+cgminer_SOURCES += gitversion.h
 
 cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 		   util.c util.h uthash.h logging.h		\

@@ -30,6 +30,7 @@
 #include <signal.h>
 #include <limits.h>
 #include "scrypt.h"
+#include "gitversion.h"
 
 #ifndef CHIP_A6
 #include "A5_inno.h"
