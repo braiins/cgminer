@@ -964,7 +964,7 @@ int A1_read_hwid(void)
 
 	ret = read_text_file(MINER_HWID_PATH, miner_hwid, sizeof(miner_hwid));
 	if (ret == MINER_HWID_LENGTH) {
-		applog_system(LOG_INFO, "HWID: %s", miner_hwid);
+		applog_system(LOG_INFO, "HWID: \"%s\"", miner_hwid);
 	} else {
 		applog_system(LOG_WARNING, "failed to read hwid");
 		snprintf(miner_hwid, sizeof(miner_hwid), "no hwid");
@@ -977,7 +977,7 @@ int A1_read_hwver(void)
 
 	ret = read_text_file(MINER_HWVER_PATH, miner_hwver, sizeof(miner_hwver));
 	if (ret > 0) {
-		applog_system(LOG_INFO, "HWVER: %s", miner_hwver);
+		applog_system(LOG_INFO, "HWVER: \"%s\"", miner_hwver);
 	} else {
 		applog_system(LOG_WARNING, "failed to read hwver");
 		snprintf(miner_hwver, sizeof(miner_hwver), "no hwver");
