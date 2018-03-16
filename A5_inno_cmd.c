@@ -809,7 +809,8 @@ static void reap_dead_solutions(struct A1_chain *pChain)
 	uint8_t job_id;
 	uint32_t nonce;
 	uint16_t micro_job_id;
-
+	// TODO jca: usleep requires usec to be < 1e6. This is broken and missing
+	// error checking
 	usleep(1000000);
 	while (get_nonce(pChain, (uint8_t*)&nonce, &res_chip_id, &job_id, (uint8_t*)&micro_job_id))
 		;

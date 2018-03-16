@@ -1117,7 +1117,8 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 
 		// configure ADC for voltage measurement (vsensor)
 		inno_configure_tvsensor(chain, ADDR_BROADCAST, 0);
-
+		// TODO jca: looks like a bug, we should skip voltage check if the chip
+		// is disabled
 		for (int chip_id = chain->num_active_chips; chip_id > 0; chip_id--)
 		{
 			inno_check_voltage(chain, chip_id);
