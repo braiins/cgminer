@@ -6950,16 +6950,208 @@ out:
 	return NULL;
 }
 
+static unsigned telering_readable(struct telering *r)
+{
+	return (r->wptr - r->rptr) & TELERING_MASK;
+}
+
+static unsigned telering_writable(struct telering *r)
+{
+	return TELERING_SIZE - 1 - telering_readable(r);
+}
+
+static struct telemetry *telering_read_one(struct telering *r)
+{
+	struct telemetry *c;
+	c = r->data[r->rptr];
+	r->data[r->rptr] = 0;
+	r->rptr = (r->rptr + 1) & TELERING_MASK;
+	return c;
+}
+
+static void telering_write_one(struct telering *r, struct telemetry *c)
+{
+	r->data[r->wptr] = c;
+	r->wptr = (r->wptr + 1) & TELERING_MASK;
+}
+
+static struct telemetry_state *new_telemetry_state(void)
+{
+	struct telemetry_state *ts;
+	ts = cgcalloc(1, sizeof(*ts));
+	ts->ring = cgcalloc(1, sizeof(*ts->ring));
+	ts->budget = 0;
+	ts->continuous = 0;
+	mutex_init(&ts->lock);
+	return ts;
+}
+
+static void free_telemetry_state(struct telemetry_state *ts)
+{
+	mutex_destroy(&ts->lock);
+	free(ts->ring);
+	free(ts);
+}
+
+static void format_telemetry_entry(struct construct_buf *cbuf, struct telemetry *tele)
+{
+	if (tele->type == TELEMETRY_LOG) {
+		construct_printf(cbuf, "[ \"log\", %d, \"", tele->log.time);
+		construct_json_quote_str(cbuf, miner_hwid);
+		construct_printf(cbuf, "\", \"%s\", \"%s\", \"", tele->log.type, tele->log.source);
+		construct_json_quote(cbuf, tele->log.msg, strlen(tele->log.msg));
+		construct_printf(cbuf, "\" ]");
+	} else if (tele->type == TELEMETRY_DATA) {
+		int i;
+
+		construct_printf(cbuf, "[ \"data\", %d, \"", tele->data.time);
+		construct_json_quote_str(cbuf, miner_hwid);
+		construct_printf(cbuf, "\", %d, [ \"disabled\", \"num_cores\", \"nonce_ranges_done\", \"nonces_found\", \"hw_errors\", \"stales\", \"temperature\", \"voltage\" ], [ ", tele->data.chain_id);
+		for (i = 0; i < tele->data.n_chips; i++) {
+			construct_printf(cbuf, "%s[%d,%d,%d,%d,%d,%d,%.02f,%.04f]",
+					i > 0 ? ", " : "",
+					tele->data.chips[i].disabled,
+					tele->data.chips[i].num_cores,
+					tele->data.chips[i].nonce_ranges_done,
+					tele->data.chips[i].nonces_found,
+					tele->data.chips[i].hw_errors,
+					tele->data.chips[i].stales,
+					tele->data.chips[i].temperature,
+					tele->data.chips[i].voltage
+					);
+		}
+		construct_printf(cbuf, "]");
+	} else {
+		quit(1, "Stratum t unknown telemetry type %d", tele->type);
+	}
+}
+
+static void format_telemetry_header(struct construct_buf *cbuf)
+{
+	construct_printf(cbuf, "{ \"id\": null, \"method\": \"telemetry.data\", \"params\": [ ");
+}
+
+static void format_telemetry_footer(struct construct_buf *cbuf, struct telemetry_state *ts)
+{
+	construct_printf(cbuf, "[ \"stat\", %d, %d, %d ]", telering_readable(ts->ring), ts->stat_dropped, ts->budget);
+	ts->stat_dropped = 0;
+	construct_printf(cbuf, "] }");
+}
+
+static void send_one_telemetrum(struct pool *pool, struct telemetry_state *ts, struct telemetry *tele)
+{
+	char s[RBUFSIZE];
+	struct construct_buf cbuf;
+	construct_init(&cbuf, s, RBUFSIZE);
+	format_telemetry_header(&cbuf);
+	format_telemetry_entry(&cbuf, tele);
+	construct_printf(&cbuf, ", ");
+	format_telemetry_footer(&cbuf, ts);
+	if (!construct_has_overflown(&cbuf)) {
+		stratum_send(pool, cbuf.buf, construct_get_len(&cbuf));
+	}
+}
+
+static void send_many_telemetrums(struct pool *pool, struct telemetry_state *ts, int n)
+{
+	char s[RBUFSIZE];
+	struct construct_buf cbuf;
+	struct telemetry *tele;
+	struct telering *ring = ts->ring;
+	int i;
+
+	construct_init(&cbuf, s, RBUFSIZE);
+	format_telemetry_header(&cbuf);
+	for (i = 0; i < n; i++) {
+		if (telering_readable(ring) == 0) {
+			quit(1, "Telemetry queue contains nothing but it should contain %d messages", n - i);
+		}
+		tele = telering_read_one(ring);
+		format_telemetry_entry(&cbuf, tele);
+		construct_printf(&cbuf, ", ");
+		free_telemetry(tele);
+	}
+	format_telemetry_footer(&cbuf, ts);
+	if (!construct_has_overflown(&cbuf)) {
+		stratum_send(pool, cbuf.buf, construct_get_len(&cbuf));
+	}
+}
+
+static void drop_telemetrums(struct pool *pool, struct telemetry_state *ts, int n)
+{
+	int i;
+	struct telering *ring = ts->ring;
+
+	for (i = 0; i < n; i++) {
+		if (telering_readable(ring) >= 0) {
+			struct telemetry *tele = telering_read_one(ring);
+			free_telemetry(tele);
+			ts->stat_dropped++;
+		}
+	}
+}
+
+void telemetry_config_log(struct pool *pool, int budget, bool cont, bool tail)
+{
+	int avail, n_send;
+	struct telemetry_state *ts = pool->telemetry_state;
+	if (!ts)
+		return;
+
+	mutex_lock(&ts->lock);
+	avail = telering_readable(ts->ring);
+	n_send = avail;
+	if (n_send > budget) {
+		n_send = budget;
+	}
+	if (tail) {
+		/* drop all messages from the beginning but the ones we are
+		   going to send */
+		drop_telemetrums(pool, ts, avail - n_send);
+	}
+	if (n_send > 0) {
+		send_many_telemetrums(pool, ts, n_send);
+	}
+
+	ts->budget = budget - n_send;
+	ts->continuous = cont;
+	mutex_unlock(&ts->lock);
+}
+
 /* Each pool has one stratum telemetry thread which waits for statistics from
  * workers and sends them to stratum socket.
  */
+void telemetry_config_data(struct pool *pool, bool send)
+{
+	struct telemetry_state *ts = pool->telemetry_state;
+	if (!ts)
+		return;
+
+	mutex_lock(&ts->lock);
+	if (send) {
+		/* send telemetry for all chains */
+		ts->send_telemetry_for = (1u << ASIC_CHAIN_NUM) - 1;
+	} else {
+		/* disable telemetry */
+		ts->send_telemetry_for = 0;
+	}
+	mutex_unlock(&ts->lock);
+}
+
+/* list of actions to be performed after one telemetry entry is readed from
+   the message queue */
+enum {
+	A_DROP,
+	A_SEND,
+	A_QUEUE,
+};
+
 static void *stratum_tthread(void *userdata)
 {
 	struct pool *pool = (struct pool *)userdata;
 	struct telemetry *tele;
-	char s[RBUFSIZE];
 	char threadname[16];
-	struct construct_buf cbuf;
+	struct telemetry_state *ts;
 
 	pthread_detach(pthread_self());
 
@@ -6969,8 +7161,12 @@ static void *stratum_tthread(void *userdata)
 	pool->stratum_t = tq_new();
 	if (!pool->stratum_t)
 		quit(1, "Failed to create stratum_t in stratum_sthread");
+	ts = new_telemetry_state();
+	pool->telemetry_state = ts;
 
 	for (;;) {
+		int action = A_DROP;
+
 		if (unlikely(pool->removed))
 			break;
 
@@ -6978,45 +7174,54 @@ static void *stratum_tthread(void *userdata)
 		if (unlikely(!tele))
 			quit(1, "Stratum t returned empty tele");
 
-		construct_init(&cbuf, s, RBUFSIZE);
+		mutex_lock(&ts->lock);
+#if 1
 		if (tele->type == TELEMETRY_LOG) {
-			construct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.log\", \"params\": [ [ ", swork_id++);
-			construct_printf(&cbuf, "%d, \"", tele->log.time);
-			construct_json_quote_str(&cbuf, miner_hwid);
-			construct_printf(&cbuf, "\", \"%s\", \"%s\", \"", tele->log.type, tele->log.source);
-			construct_json_quote(&cbuf, tele->log.msg, strlen(tele->log.msg));
-			construct_printf(&cbuf, "\" ] ] }");
-		} else if (tele->type == TELEMETRY_DATA) {
-			int i;
-
-			construct_printf(&cbuf, "{ \"id\": %d, \"method\": \"telemetry.data\", \"params\": [ ", swork_id++);
-			construct_printf(&cbuf, "%d, \"", tele->data.time);
-			construct_json_quote_str(&cbuf, miner_hwid);
-			construct_printf(&cbuf, "\", %d, [ \"disabled\", \"num_cores\", \"nonce_ranges_done\", \"nonces_found\", \"hw_errors\", \"stales\", \"temperature\", \"voltage\" ], [ ", tele->data.chain_id);
-			for (i = 0; i < tele->data.n_chips; i++) {
-				construct_printf(&cbuf, "%s[%d,%d,%d,%d,%d,%d,%.02f,%.04f]",
-						i > 0 ? ", " : "",
-						tele->data.chips[i].disabled,
-						tele->data.chips[i].num_cores,
-						tele->data.chips[i].nonce_ranges_done,
-						tele->data.chips[i].nonces_found,
-						tele->data.chips[i].hw_errors,
-						tele->data.chips[i].stales,
-						tele->data.chips[i].temperature,
-						tele->data.chips[i].voltage
-					);
+			if (ts->continuous) {
+				if (ts->budget > 0) {
+					ts->budget--;
+					action = A_SEND;
+				} else {
+					action = A_QUEUE;
+				}
+			} else {
+				if (telering_writable(ts->ring) == 0) {
+					/* ring overflow, drop one to make
+					   space */
+					drop_telemetrums(pool, ts, 1);
+				}
+				action = A_QUEUE;
 			}
-			construct_printf(&cbuf, "] ] }");
-		} else {
-			quit(1, "Stratum t unknown telemetry type %d", tele->type);
+		} else if (tele->type == TELEMETRY_DATA) {
+			unsigned mask = 1u << tele->data.chain_id;
+			if (ts->send_telemetry_for & mask) {
+				action = A_SEND;
+				ts->send_telemetry_for &= ~mask;
+			} else {
+				action = A_DROP;
+			}
 		}
-		if (!construct_has_overflown(&cbuf)) {
-			stratum_send(pool, cbuf.buf, construct_get_len(&cbuf));
-		}
+#else
+		action = A_SEND;
+#endif
 
-		free_telemetry(tele);
+		switch (action) {
+			case A_SEND:
+				send_one_telemetrum(pool, ts, tele);
+				free_telemetry(tele);
+				break;
+			case A_QUEUE:
+				telering_write_one(ts->ring, tele);
+				break;
+			case A_DROP:
+				free_telemetry(tele);
+				ts->stat_dropped++;
+				break;
+		}
+		mutex_unlock(&ts->lock);
 	}
-
+	pool->telemetry_state = 0;
+	free_telemetry_state(ts);
 	tq_freeze(pool->stratum_t);
 }
 

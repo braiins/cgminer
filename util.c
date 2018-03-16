@@ -2475,6 +2475,69 @@ static bool parse_extranonce(struct pool *pool, json_t *val)
 	return true;
 }
 
+static int match_str(const char *x, const char *y)
+{
+	return strncasecmp(x, y, strlen(x)) == 0;
+}
+
+static bool parse_telemetry_settings(struct pool *pool, json_t *obj_list)
+{
+	int i, n;
+	json_t *obj, *method, *val;
+	const char *config;
+	bool ret = false;
+
+	if (!json_is_array(obj_list))
+		goto out;
+
+	n = json_array_size(obj_list);
+	for (i = 0; i < n; i++) {
+		obj = json_array_get(obj_list, i);
+		if (!obj || !json_is_object(obj))
+			goto out;
+
+		val = json_object_get(obj, "module");
+		if (!val)
+			goto out;
+		config = json_string_value(val);
+		if (!config)
+			goto out;
+
+		if (match_str(config, "log")) {
+			bool cont, tail;
+			int budget;
+
+			val = json_object_get(obj, "budget");
+			if (!val)
+				goto out;
+			budget = json_integer_value(val);
+			val = json_object_get(obj, "continue");
+			if (!val)
+				goto out;
+			cont = json_boolean_value(val);
+			val = json_object_get(obj, "tail");
+			if (!val)
+				goto out;
+			tail = json_boolean_value(val);
+
+			/* may trigger sending data */
+			telemetry_config_log(pool, budget, cont, tail);
+		}
+		if (match_str(config, "data")) {
+			bool send;
+			val = json_object_get(obj, "request");
+			if (!val)
+				goto out;
+			send = json_boolean_value(val);
+
+			telemetry_config_data(pool, send);
+		}
+	}
+	ret = true;
+out:
+	printf("out=%d\n", ret);
+	return ret;
+}
 
 bool parse_method(struct pool *pool, char *s)
 {
@@ -2537,6 +2600,11 @@ bool parse_method(struct pool *pool, char *s)
 		ret = parse_extranonce(pool, params);
 		json_decref(val);
 		return ret;
+	}
+
+	if (!strncasecmp(buf, "telemetry.configure", 19)) {
+		ret = parse_telemetry_settings(pool, params);
+		goto out_decref;
 	}
 
 	if (!strncasecmp(buf, "client.reconnect", 16)) {

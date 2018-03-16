@@ -1255,6 +1255,8 @@ struct stratum_work {
 #define RBUFSIZE 8192
 #define RECVSIZE (RBUFSIZE - 4)
 
+struct telemetry_state;
+
 struct pool {
 	int pool_no;
 	int prio;
@@ -1356,6 +1358,7 @@ struct pool {
 	struct thread_q *stratum_q;
 	struct thread_q *stratum_t; /* queue status messages */
 	int sshares; /* stratum shares submitted waiting on response */
+	struct telemetry_state *telemetry_state;
 
 	/* GBT  variables */
 	bool has_gbt;
@@ -1526,6 +1529,23 @@ struct telemetry {
 	};
 };
 
+#define TELERING_SIZE	256
+#define TELERING_MASK	(TELERING_SIZE - 1)
+
+struct telering {
+	unsigned int rptr, wptr;
+	struct telemetry *data[TELERING_SIZE];
+};
+
+struct telemetry_state {
+	pthread_mutex_t lock;
+	unsigned budget;
+	int continuous;
+	struct telering *ring;
+	unsigned stat_dropped;
+	unsigned send_telemetry_for; /* bitmask of chains */
+};
+
 #ifdef USE_MODMINER
 struct modminer_fpga_state {
 	bool work_running;
@@ -1638,6 +1658,8 @@ extern struct telemetry *make_telemetry_data(int n_chips, int chain_id);
 extern struct telemetry *make_telemetry_log(const char *type, const char *source, const char *msg);
 extern int submit_telemetry(struct telemetry *tele);
 extern void free_telemetry(struct telemetry *tele);
+extern void telemetry_config_log(struct pool *pool, int budget, bool cont, bool tail);
+extern void telemetry_config_data(struct pool *pool, bool send);
 
 
 #define MINER_HWID_LENGTH 16
