@@ -390,7 +390,7 @@ uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work, uint8_t 
 
 #define COOLDOWN_MS			(30 * 1000)
 #define DISABLE_CHIP_FAIL_THRESHOLD	3
-#define LEAST_CORE_ONE_CHAIN	603
+#define LEAST_CORE_ONE_CHAIN	((ASIC_CHIP_NUM * 30) / 100)
 #define RESET_CHAIN_CNT	2
 
 

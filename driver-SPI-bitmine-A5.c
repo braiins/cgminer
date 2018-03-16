@@ -1231,7 +1231,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 	}
 	else
 	{
-		if (inno_cmd_read_reg(a1, 25, reg)) 
+		if (inno_cmd_read_reg(a1, (ASIC_CHIP_NUM / 2) + 1, reg))
 		{
 			uint8_t qstate = reg[9] & 0x02;
 			//hexdump("reg:", reg, REG_LENGTH);
@@ -1365,7 +1365,7 @@ static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
 	}
 	else
 	{
-		if (inno_cmd_read_reg(a1, 25, reg))
+		if (inno_cmd_read_reg(a1, (ASIC_CHIP_NUM / 2) + 1, reg))
 		{
 			uint8_t qstate = reg[9] & 0x02;
 			//hexdump("reg:", reg, REG_LENGTH);
