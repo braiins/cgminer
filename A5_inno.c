@@ -981,6 +981,10 @@ void inno_configure_tvsensor(struct A1_chain *a1, int chip_id,bool is_tsensor)
 	usleep(200);
 
   }
+	// Wait 2ms until A/D conversion is finalized, otherwise the register may
+	// contain result from previous conversion
+	usleep(2000);
+
 	free(tmp_reg);
 	free(src_reg);
 }
