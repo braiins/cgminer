@@ -754,7 +754,6 @@ int chain_detect(struct A1_chain *a1)
 		return -1;
 	}
 */
-	applog_hw_chain(LOG_WARNING, cid, "no A1 chip-chain detected");
 	return a1->num_chips;
 
 }
