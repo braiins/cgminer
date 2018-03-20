@@ -59,6 +59,9 @@ PKG_GITBRANCH ?= $(if $(DUMP),x,$(strip $(shell \
 gitversion.h:
 	echo "#define CGMINER_GITVERSION \"$(PKG_VERSION)\"" > gitversion.h
 	echo "#define CGMINER_GITBRANCH \"$(PKG_GITBRANCH)\"" >> gitversion.h
+cgminer.c: gitversion.h
+util.c: gitversion.h
+
 
 cgminer_CPPFLAGS = $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_CPPFLAGS) $(USBUTILS_CPPFLAGS) $(LIBCURL_CPPFLAGS)
 
