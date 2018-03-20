@@ -89,4 +89,6 @@ mkinstalldirs
 .quilt_checked
 .source_dir
 
+gitversion.h
+
 /ipkg-install/
