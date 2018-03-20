@@ -1666,7 +1666,7 @@ extern void telemetry_config_data(struct pool *pool, bool send);
 #define MINER_HWID_PATH "/tmp/miner_hwid"
 extern char miner_hwid[MINER_HWID_LENGTH + 1];
 #define MINER_HWVER_LENGTH 32
-#define MINER_HWVER_PATH "/tmp/miner_hwver"
+#define MINER_HWVER_PATH "/tmp/sysinfo/board_name"
 extern char miner_hwver[MINER_HWVER_LENGTH + 1];
 
 enum api_data_type {
