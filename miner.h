@@ -1358,6 +1358,9 @@ struct pool {
 	struct thread_q *stratum_q;
 	struct thread_q *stratum_t; /* queue status messages */
 	int sshares; /* stratum shares submitted waiting on response */
+
+	/* Stratum telemetry */
+	pthread_mutex_t telemetry_state_lock;
 	struct telemetry_state *telemetry_state;
 
 	/* GBT  variables */
@@ -1538,7 +1541,6 @@ struct telering {
 };
 
 struct telemetry_state {
-	pthread_mutex_t lock;
 	unsigned budget;
 	int continuous;
 	struct telering *ring;
@@ -1660,6 +1662,7 @@ extern int submit_telemetry(struct telemetry *tele);
 extern void free_telemetry(struct telemetry *tele);
 extern void telemetry_config_log(struct pool *pool, int budget, bool cont, bool tail);
 extern void telemetry_config_data(struct pool *pool, bool send);
+extern struct telemetry_state *new_telemetry_state(void);
 
 
 #define MINER_HWID_LENGTH 16

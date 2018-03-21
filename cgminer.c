@@ -785,6 +785,10 @@ struct pool *add_pool(void)
 	cglock_init(&pool->gbt_lock);
 	INIT_LIST_HEAD(&pool->curlring);
 
+	/* initialize telemetry (done here to avoid races) */
+	mutex_init(&pool->telemetry_state_lock);
+	pool->telemetry_state = new_telemetry_state();
+
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 
@@ -6975,22 +6979,14 @@ static void telering_write_one(struct telering *r, struct telemetry *c)
 	r->wptr = (r->wptr + 1) & TELERING_MASK;
 }
 
-static struct telemetry_state *new_telemetry_state(void)
+struct telemetry_state *new_telemetry_state(void)
 {
 	struct telemetry_state *ts;
 	ts = cgcalloc(1, sizeof(*ts));
 	ts->ring = cgcalloc(1, sizeof(*ts->ring));
 	ts->budget = 0;
 	ts->continuous = 0;
-	mutex_init(&ts->lock);
 	return ts;
-}
-
-static void free_telemetry_state(struct telemetry_state *ts)
-{
-	mutex_destroy(&ts->lock);
-	free(ts->ring);
-	free(ts);
 }
 
 static void format_telemetry_entry(struct construct_buf *cbuf, struct telemetry *tele)
@@ -7098,7 +7094,7 @@ void telemetry_config_log(struct pool *pool, int budget, bool cont, bool tail)
 	if (!ts)
 		return;
 
-	mutex_lock(&ts->lock);
+	mutex_lock(&pool->telemetry_state_lock);
 	avail = telering_readable(ts->ring);
 	n_send = avail;
 	if (n_send > budget) {
@@ -7115,7 +7111,7 @@ void telemetry_config_log(struct pool *pool, int budget, bool cont, bool tail)
 
 	ts->budget = budget - n_send;
 	ts->continuous = cont;
-	mutex_unlock(&ts->lock);
+	mutex_unlock(&pool->telemetry_state_lock);
 }
 
 /* Each pool has one stratum telemetry thread which waits for statistics from
@@ -7127,7 +7123,7 @@ void telemetry_config_data(struct pool *pool, bool send)
 	if (!ts)
 		return;
 
-	mutex_lock(&ts->lock);
+	mutex_lock(&pool->telemetry_state_lock);
 	if (send) {
 		/* send telemetry for all chains */
 		ts->send_telemetry_for = (1u << ASIC_CHAIN_NUM) - 1;
@@ -7135,7 +7131,7 @@ void telemetry_config_data(struct pool *pool, bool send)
 		/* disable telemetry */
 		ts->send_telemetry_for = 0;
 	}
-	mutex_unlock(&ts->lock);
+	mutex_unlock(&pool->telemetry_state_lock);
 }
 
 /* list of actions to be performed after one telemetry entry is readed from
@@ -7161,8 +7157,6 @@ static void *stratum_tthread(void *userdata)
 	pool->stratum_t = tq_new();
 	if (!pool->stratum_t)
 		quit(1, "Failed to create stratum_t in stratum_sthread");
-	ts = new_telemetry_state();
-	pool->telemetry_state = ts;
 
 	for (;;) {
 		int action = A_DROP;
@@ -7174,8 +7168,7 @@ static void *stratum_tthread(void *userdata)
 		if (unlikely(!tele))
 			quit(1, "Stratum t returned empty tele");
 
-		mutex_lock(&ts->lock);
-#if 1
+		mutex_lock(&pool->telemetry_state_lock);
 		if (tele->type == TELEMETRY_LOG) {
 			if (ts->continuous) {
 				if (ts->budget > 0) {
@@ -7201,10 +7194,6 @@ static void *stratum_tthread(void *userdata)
 				action = A_DROP;
 			}
 		}
-#else
-		action = A_SEND;
-#endif
-
 		switch (action) {
 			case A_SEND:
 				send_one_telemetrum(pool, ts, tele);
@@ -7218,10 +7207,8 @@ static void *stratum_tthread(void *userdata)
 				ts->stat_dropped++;
 				break;
 		}
-		mutex_unlock(&ts->lock);
+		mutex_unlock(&pool->telemetry_state_lock);
 	}
-	pool->telemetry_state = 0;
-	free_telemetry_state(ts);
 	tq_freeze(pool->stratum_t);
 }
 
