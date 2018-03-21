@@ -7164,6 +7164,7 @@ static void *stratum_tthread(void *userdata)
 	RenameThread(threadname);
 
 	pool->stratum_t = tq_new();
+	ts = pool->telemetry_state;
 	if (!pool->stratum_t)
 		quit(1, "Failed to create stratum_t in stratum_sthread");
 
