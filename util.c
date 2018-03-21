@@ -2535,7 +2535,6 @@ static bool parse_telemetry_settings(struct pool *pool, json_t *obj_list)
 	}
 	ret = true;
 out:
-	printf("out=%d\n", ret);
 	return ret;
 }
 
