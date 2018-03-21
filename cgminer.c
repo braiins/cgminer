@@ -7055,10 +7055,14 @@ static void send_many_telemetrums(struct pool *pool, struct telemetry_state *ts,
 	struct telemetry *tele;
 	struct telering *ring = ts->ring;
 	int i;
+	int batch_id;
 
-	construct_init(&cbuf, s, RBUFSIZE);
-	format_telemetry_header(&cbuf);
+	batch_id = 0;
 	for (i = 0; i < n; i++) {
+		if (batch_id == 0) {
+			construct_init(&cbuf, s, RBUFSIZE);
+			format_telemetry_header(&cbuf);
+		}
 		if (telering_readable(ring) == 0) {
 			quit(1, "Telemetry queue contains nothing but it should contain %d messages", n - i);
 		}
@@ -7066,11 +7070,16 @@ static void send_many_telemetrums(struct pool *pool, struct telemetry_state *ts,
 		format_telemetry_entry(&cbuf, tele);
 		construct_printf(&cbuf, ", ");
 		free_telemetry(tele);
+		batch_id++;
+		if (i == n - 1 || construct_get_len(&cbuf) >= RBUFSIZE - 1024) {
+			format_telemetry_footer(&cbuf, ts);
+			if (!construct_has_overflown(&cbuf)) {
+				stratum_send(pool, cbuf.buf, construct_get_len(&cbuf));
+			}
+			batch_id = 0;
+		}
 	}
-	format_telemetry_footer(&cbuf, ts);
-	if (!construct_has_overflown(&cbuf)) {
-		stratum_send(pool, cbuf.buf, construct_get_len(&cbuf));
-	}
+	assert(batch_id == 0);
 }
 
 static void drop_telemetrums(struct pool *pool, struct telemetry_state *ts, int n)
