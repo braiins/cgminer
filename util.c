@@ -635,7 +635,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	upload_data.len = strlen(rpc_req);
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) upload_data.len);
-	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE_STRING);
+	sprintf(user_agent_hdr, "User-Agent: %s/%s", PACKAGE, GITVERSION);
 
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
@@ -2404,7 +2404,7 @@ static bool send_version(struct pool *pool, json_t *val)
 		return false;
 	id = json_integer_value(json_object_get(val, "id"));
 
-	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\", \"error\": null}", id);
+	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"GITVERSION""STRATUM_USER_AGENT"\", \"error\": null}", id);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
 
@@ -3225,7 +3225,7 @@ static bool configure_stratum_mining(struct pool *pool)
 	construct_json_quote_str(&cbuf, miner_hwver);
 	construct_printf(&cbuf, "\", ");
 	construct_printf(&cbuf, "\"info.sw-version\": \"");
-	construct_json_quote_str(&cbuf, CGMINER_GITBRANCH " (" CGMINER_GITVERSION ")");
+	construct_json_quote_str(&cbuf, GITVERSION);
 	construct_printf(&cbuf, "\", ");
 	construct_printf(&cbuf, "\"info.hw-id\": \"");
 	construct_json_quote_str(&cbuf, miner_hwid);
@@ -3325,14 +3325,14 @@ resend:
 	} else {
 #ifdef CHIP_A6	
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"GITVERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"GITVERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
 #else
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiinsminer/"VERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiinsminer/"GITVERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiinsminer/"VERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiinsminer/"GITVERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
 #endif
 	}
 

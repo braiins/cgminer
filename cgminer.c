@@ -230,7 +230,7 @@ bool opt_autoengine;
 bool opt_noadl;
 char *opt_api_allow = NULL;
 char *opt_api_groups;
-char *opt_api_description = PACKAGE_STRING;
+char *opt_api_description = PACKAGE "/" GITVERSION;
 int opt_api_port = 4028;
 char *opt_api_host = API_LISTEN_ADDR;
 bool opt_api_listen;
@@ -3380,7 +3380,7 @@ static void curses_print_status(void)
 	int linewidth = opt_widescreen ? 100 : 80;
 
 	wattron(statuswin, A_BOLD);
-	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
+	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " GITVERSION " - Started: %s", datestamp);
 	wattroff(statuswin, A_BOLD);
 	mvwhline(statuswin, 1, 0, '-', linewidth);
 	cg_mvwprintw(statuswin, 2, 0, " %s", statusline);
@@ -10536,7 +10536,7 @@ int main(int argc, char *argv[])
 
 	initialise_usb();
 
-	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
+	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, GITVERSION);
 
 	handler.sa_handler = &sighandler;
 	handler.sa_flags = 0;
