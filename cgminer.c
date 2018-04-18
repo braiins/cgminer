@@ -5734,10 +5734,26 @@ void write_config(FILE *fcfg)
 			     (void *)opt->cb_arg == (void *)set_int_0_to_7680 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
 			     (void *)opt->cb_arg == (void *)set_int_0_to_4 ||
+			     (void *)opt->cb_arg == (void *)set_int_0_to_31 ||
 			     (void *)opt->cb_arg == (void *)set_int_32_to_63 ||
 			     (void *)opt->cb_arg == (void *)set_int_22_to_75 ||
 			     (void *)opt->cb_arg == (void *)set_int_42_to_85)) {
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
+				continue;
+			}
+
+			if (opt->type & OPT_HASARG &&
+			    ((void *)opt->cb_arg == (void *)set_bitmask_from_list)) {
+				int first = 1;
+				int x = *(int *)opt->u.arg;
+				fprintf(fcfg, ",\n\"%s\" : \"", p+2);
+				for (i = 0; i < sizeof(int)*4 - 1; i++) {
+					if (x & (1 << i)) {
+						fprintf(fcfg, "%s%d", first ? "" : ",", i);
+						first = 0;
+					}
+				}
+				fprintf(fcfg, "\"");
 				continue;
 			}
 
