@@ -11,12 +11,7 @@
 
 #include "inno_fan.h"
 
-#define MAGIC_NUM  100 
-
-#define IOCTL_SET_FREQ_0 _IOR(MAGIC_NUM, 0, char *)
-#define IOCTL_SET_DUTY_0 _IOR(MAGIC_NUM, 1, char *)
-#define IOCTL_SET_FREQ_1 _IOR(MAGIC_NUM, 2, char *)
-#define IOCTL_SET_DUTY_1 _IOR(MAGIC_NUM, 3, char *)
+#define N_PWM_CHIPS 3
 
 #ifdef CHIP_A6
 static const int inno_tsadc_table[] = {
@@ -302,40 +297,58 @@ void inno_fan_temp_init(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
     inno_fan_temp_clear(fan_ctrl, chain_id);
 }
 
+static int write_to_file(const char *path_fmt, int id, const char *data_fmt, ...)
+{
+	char path[256];
+	char data[256];
+	va_list ap;
+	int fd;
+	size_t len;
+
+	snprintf(path, sizeof(path), path_fmt,id);
+
+	va_start(ap, data_fmt);
+	vsnprintf(data, sizeof(data), data_fmt, ap);
+	va_end(ap);
+
+	a5_debug("writefile: %s <- \"%s\"\n", path, data);
+
+	fd = open(path, O_WRONLY);
+	if (fd < 0) {
+		applog_hw(LOG_ERR, "open of %s failed", path);
+		return 0;
+	}
+	len = strlen(data);
+	if (write(fd, data, len) != len) {
+		applog_hw(LOG_ERR, "short write to %s", path);
+		return 0;
+	}
+	close(fd);
+	return 1;
+}
+
+static int pwm_chip_initialized[N_PWM_CHIPS];
+
+#define PWMCHIP_SYSFS "/sys/class/pwm/pwmchip%d"
+static void set_fanspeed(int id, int duty)
+{
+	if (!pwm_chip_initialized[id]) {
+		pwm_chip_initialized[id] = 1;
+		write_to_file(PWMCHIP_SYSFS "/export", id, "0");
+		write_to_file(PWMCHIP_SYSFS "/pwm0/period", id, "100000");
+		write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "10000");
+		write_to_file(PWMCHIP_SYSFS "/pwm0/enable", id, "1");
+	}
+	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", (duty*98/100 + 1)*1000);
+}
+
+
+
 void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
 {
-    int fd = 0;
-    int duty_driver = 0;
-
-    duty_driver = ASIC_INNO_FAN_PWM_FREQ_TARGET / 100 * duty;
-
-	mutex_lock(&fan_ctrl->lock);
-
-    a5_debug("FAN speed: %d (%d)", duty, duty_driver);
-    /* 开启风扇结点 */
-    fd = open(ASIC_INNO_FAN_PWM0_DEVICE_NAME, O_RDWR);
-    if(fd < 0)
-    {
-        applog_hw(LOG_ERR, "open %s fail", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
-        mutex_unlock(&fan_ctrl->lock);
-        return;
-    }
-    if(ioctl(fd, IOCTL_SET_FREQ_0, ASIC_INNO_FAN_PWM_FREQ) < 0)
-    {
-        applog_hw(LOG_ERR, "set fan0 frequency fail");
-        mutex_unlock(&fan_ctrl->lock);
-        return;
-    }
-    if(ioctl(fd, IOCTL_SET_DUTY_0, duty_driver) < 0)
-    {
-        applog_hw(LOG_ERR, "set duty fail");
-        mutex_unlock(&fan_ctrl->lock);
-        return;
-    }
-    close(fd);
-
+    mutex_lock(&fan_ctrl->lock);
+    set_fanspeed(0, duty);
     fan_ctrl->duty = duty;
-
     mutex_unlock(&fan_ctrl->lock);
 }
 
