@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <linux/ioctl.h>
+#include <assert.h>
 
 #include "inno_fan.h"
 
@@ -332,6 +333,7 @@ static int pwm_chip_initialized[N_PWM_CHIPS];
 #define PWMCHIP_SYSFS "/sys/class/pwm/pwmchip%d"
 static void set_fanspeed(int id, int duty)
 {
+	assert(id >= 0 && id < N_PWM_CHIPS);
 	if (!pwm_chip_initialized[id]) {
 		pwm_chip_initialized[id] = 1;
 		write_to_file(PWMCHIP_SYSFS "/export", id, "0");
@@ -339,6 +341,10 @@ static void set_fanspeed(int id, int duty)
 		write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "10000");
 		write_to_file(PWMCHIP_SYSFS "/pwm0/enable", id, "1");
 	}
+	/* do not set the extreme values (full-cycle and no-cycle) just in case */
+	/* it shouldn't be buggy, but if it would, setting duty-cycle to 100
+	   would effectively stop the fan and cause miner to overheat and
+	   explode. */
 	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", (duty*98/100 + 1)*1000);
 }
 
@@ -347,7 +353,10 @@ static void set_fanspeed(int id, int duty)
 void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
 {
     mutex_lock(&fan_ctrl->lock);
+    /* control all three PWM generators in sync */
     set_fanspeed(0, duty);
+    set_fanspeed(1, duty);
+    set_fanspeed(2, duty);
     fan_ctrl->duty = duty;
     mutex_unlock(&fan_ctrl->lock);
 }
