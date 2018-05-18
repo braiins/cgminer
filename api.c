@@ -37,6 +37,13 @@
 #define HAVE_AN_ASIC 1
 #endif
 
+#ifdef CHIP_A5
+#include "A5_inno_cmd.h"
+#include "A5_inno_clock.h"
+extern uint8_t A1Pll1;
+#endif
+
+
 #if defined(USE_BITFORCE) || defined(USE_MODMINER)
 #define HAVE_AN_FPGA 1
 #endif
@@ -2048,6 +2055,16 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		root = api_add_mhs(root, "MHS 1m", &cgpu->rolling1, false);
 		root = api_add_mhs(root, "MHS 5m", &cgpu->rolling5, false);
 		root = api_add_mhs(root, "MHS 15m", &cgpu->rolling15, false);
+#ifdef CHIP_A5
+		struct A1_chain *a1 = cgpu->device_data;
+		/* Nominal MHS is the theoretical limit for fully working
+		   chain */
+		double mhs_nom = PLL_Clk_12Mhz[A1Pll1].speedMHz * 2ull * 63 * 32;
+		root = api_add_mhs(root, "nominal MHS", &mhs_nom, false);
+		/* Maximal MHS takes into account number of enabled cores */
+		double mhs_max = PLL_Clk_12Mhz[A1Pll1].speedMHz * 2ull * (a1->num_cores);
+		root = api_add_mhs(root, "maximal MHS", &mhs_max, false);
+#endif
 		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
 		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
 		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
