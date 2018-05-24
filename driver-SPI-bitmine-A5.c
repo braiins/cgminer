@@ -1023,6 +1023,8 @@ void A1_detect(bool hotplug)
     memset(&s_reg_ctrl,0,sizeof(s_reg_ctrl));
     
     inno_fan_init(&s_fan_ctrl);
+    fancontrol_start(opt_enabled_chains);
+
 	set_vid_value(8);
 	
 	A1Pll1 = A1_ConfigA1PLLClock(opt_A1Pll1);
@@ -1056,7 +1058,7 @@ void A1_detect(bool hotplug)
 	exit(0);
 }
 
-#define TEMP_UPDATE_INT_MS	60000
+#define TEMP_UPDATE_INT_MS	5000
 #define RESULTS_UPDATE_INT_MS	10000
 #define VOLTAGE_UPDATE_INT_MS  120000
 #define TELEMETRY_SUBMIT_INT_MS 120000
@@ -1097,6 +1099,7 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 		// the temperature measurement
 		chain->num_cores = 0;
 		for (int chip_id = chain->num_active_chips; chip_id > 0; chip_id--) {
+			// FIXME: scans chips 1..num_of_active_chips - but the chips don't get deactivated in order, back-to-front
 			// NOTE JCA: check_chip takes chip index as parameter!
 			if (!check_chip(chain, chip_id - 1)) {
 				applog_hw_chip(LOG_ERR, chain->chain_id, chip_id, "failed to check chip");

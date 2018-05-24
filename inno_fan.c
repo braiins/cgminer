@@ -11,6 +11,7 @@
 #include <assert.h>
 
 #include "inno_fan.h"
+#include "pid_controller.h"
 
 #define N_PWM_CHIPS 3
 
@@ -92,6 +93,130 @@ static const int inno_tsadc_table[] = {
 };
 #endif
 
+struct chain_temp {
+	int initialized, enabled;
+	double min, max, avg;
+	cgtimer_t time;
+};
+
+struct fan_control {
+	int direction;
+	double high, low;
+};
+
+static struct chain_temp chain_temps[ASIC_CHAIN_NUM];
+static pthread_mutex_t fancontrol_lock;
+static pthread_t fan_tid;
+static struct fan_control fan;
+static void set_fanspeed(int id, int duty);
+static PIDControl temp_pid;
+
+enum {
+	RISING,
+	FALLING,
+};
+
+static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg)
+{
+	struct chain_temp *temp;
+	assert(chain_id >= 0);
+	assert(chain_id < ASIC_CHAIN_NUM);
+
+	printf("update_chain_temp: chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf\n", chain_id, min, max, avg);
+
+	mutex_lock(&fancontrol_lock);
+	temp = &chain_temps[chain_id];
+	temp->initialized = 1;
+	temp->min = min;
+	temp->max = max;
+	temp->avg = avg;
+	cgtimer_time(&temp->time);
+	mutex_unlock(&fancontrol_lock);
+}
+
+static int calc_duty(void)
+{
+	struct chain_temp *temp;
+	double max, min, avg;
+	int n = 0;
+
+	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
+		temp = &chain_temps[i];
+		if (temp->enabled) {
+			if (!temp->initialized)
+				return 0;
+			if (n == 0 || temp->min < min)
+				min = temp->min;
+			if (n == 0 || temp->max > max)
+				max = temp->max;
+			if (n == 0 || temp->avg > avg)
+				avg = temp->avg;
+			n++;
+		}
+	}
+
+	printf("calc_duty: min=%2.3lf max=%2.3lf avg=%2.3lf\n", min, max, avg);
+	if (max > 90) {
+		printf("very hot!\n");
+		return 0;
+	}
+
+
+#if 0
+	if (fan.direction == RISING) {
+		if (avg < fan.high)
+			return 50;
+		fan.direction = FALLING;
+		return 0;
+	} else if (fan.direction == FALLING) {
+		if (avg > fan.low)
+			return 0;
+		fan.direction = RISING;
+		return 50;
+	}
+	return 0;
+#else
+	PIDInputSet(&temp_pid, avg);
+	PIDCompute(&temp_pid);
+	return 100 - PIDOutputGet(&temp_pid);
+#endif
+}
+
+static void *fancontrol_thread(void __maybe_unused *argv)
+{
+	for (;;sleep(5)) {
+		int duty;
+		mutex_lock(&fancontrol_lock);
+		duty = calc_duty();
+		mutex_unlock(&fancontrol_lock);
+		printf("fancontrol_thread: duty=%d\n", duty);
+		set_fanspeed(0, duty);
+	}
+	return NULL;
+}
+
+void fancontrol_start(unsigned enabled_chains)
+{
+	struct chain_temp *temp;
+	mutex_init(&fancontrol_lock);
+	set_fanspeed(0, 0);
+	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
+		temp = &chain_temps[i];
+		temp->enabled = 0;
+		temp->initialized = 0;
+		if (enabled_chains & (1u << i))
+			temp->enabled = 1;
+	}
+#if 0
+	fan.high = 69;
+	fan.low = 68;
+	fan.direction = RISING;
+#else
+	PIDInit(&temp_pid, 20, 0.05, 0.1, 5, 0, 100, AUTOMATIC, REVERSE);
+	PIDSetpointSet(&temp_pid, 70);
+#endif
+	pthread_create(&fan_tid, NULL, fancontrol_thread, NULL);
+}
 
 
 static int inno_fan_temp_compare(const void *a, const void *b);
@@ -173,6 +298,8 @@ void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool w
     index++;
     fan_ctrl->index[chain_id] = index; 
 
+    temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
+    //printf("chain=%d index=%d temp=%f\n", chain_id, index, temp_f);
     /* 避免工作中输出 温度告警信息,影响算力 */
     if(!warn_on)
     {
@@ -328,16 +455,18 @@ static int write_to_file(const char *path_fmt, int id, const char *data_fmt, ...
 	return 1;
 }
 
+#define PWMCHIP_SYSFS "/sys/class/pwm/pwmchip%d"
+#define PWMCHIP_PERIOD 100000
+
 static int pwm_chip_initialized[N_PWM_CHIPS];
 
-#define PWMCHIP_SYSFS "/sys/class/pwm/pwmchip%d"
 static void set_fanspeed(int id, int duty)
 {
 	assert(id >= 0 && id < N_PWM_CHIPS);
 	if (!pwm_chip_initialized[id]) {
 		pwm_chip_initialized[id] = 1;
 		write_to_file(PWMCHIP_SYSFS "/export", id, "0");
-		write_to_file(PWMCHIP_SYSFS "/pwm0/period", id, "100000");
+		write_to_file(PWMCHIP_SYSFS "/pwm0/period", id, "%d", PWMCHIP_PERIOD);
 		write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "10000");
 		write_to_file(PWMCHIP_SYSFS "/pwm0/enable", id, "1");
 	}
@@ -345,7 +474,7 @@ static void set_fanspeed(int id, int duty)
 	/* it shouldn't be buggy, but if it would, setting duty-cycle to 100
 	   would effectively stop the fan and cause miner to overheat and
 	   explode. */
-	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", (duty*98/100 + 1)*1000);
+	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", duty*PWMCHIP_PERIOD/100);
 }
 
 
@@ -353,10 +482,12 @@ static void set_fanspeed(int id, int duty)
 void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
 {
     mutex_lock(&fan_ctrl->lock);
+#if 0
     /* control all three PWM generators in sync */
     set_fanspeed(0, duty);
     set_fanspeed(1, duty);
     set_fanspeed(2, duty);
+#endif
     fan_ctrl->duty = duty;
     mutex_unlock(&fan_ctrl->lock);
 }
@@ -423,14 +554,13 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
     float arvarge_f = 0.0f; /* 最高温度 */
     float highest_f = 0.0f; /* 最高温度 */
     float lowest_f  = 0.0f; /* 最低温度 */
+    float avg2;
 
     /* 统计温度 */
     inno_fan_temp_sort(fan_ctrl, chain_id);
     arvarge = inno_fan_temp_get_arvarge(fan_ctrl, chain_id);
     highest = inno_fan_temp_get_highest(fan_ctrl, chain_id);
     lowest  = inno_fan_temp_get_lowest(fan_ctrl, chain_id);
-    /* 清空,为下一轮做准备 */
-    inno_fan_temp_clear(fan_ctrl, chain_id);
 
 #if 0
     /* 控制策略1(否定,temp_init温度很低,风扇最大依然不够)
@@ -470,6 +600,19 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
      * 最高温度 highest > 90度(<460) speed max
      *
      */
+    {
+	    int max = fan_ctrl->index[chain_id];
+	    avg2 = 0;
+	    if (max > 0) {
+		    for (int i = 0; i < max; i++) {
+			    avg2 += inno_fan_temp_to_float(fan_ctrl, fan_ctrl->temp[chain_id][i]);
+		    }
+		    avg2 /= fan_ctrl->index[chain_id];
+	    }
+    }
+    /* 清空,为下一轮做准备 */
+    inno_fan_temp_clear(fan_ctrl, chain_id);
+
     arvarge_f = inno_fan_temp_to_float(fan_ctrl, (int)arvarge);
     lowest_f = inno_fan_temp_to_float(fan_ctrl, (int)lowest);
     highest_f = inno_fan_temp_to_float(fan_ctrl, (int)highest);
@@ -499,6 +642,8 @@ void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_
             applog_hw(LOG_ERR, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
         }
     } 
+
+    fancontrol_update_chain_temp(chain_id, lowest_f, highest_f, avg2);
 
     cgpu->temp = arvarge_f;
     cgpu->temp_max = highest_f;

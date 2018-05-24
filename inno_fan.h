@@ -66,5 +66,7 @@ void inno_fan_speed_down(INNO_FAN_CTRL_T *fan_ctrl);
 void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty);
 #endif
 
+void fancontrol_start(unsigned enabled_chains);
+
 #endif
 
