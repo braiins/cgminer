@@ -110,6 +110,8 @@ static pthread_t fan_tid;
 static struct fan_control fan;
 static void set_fanspeed(int id, int duty);
 static PIDControl temp_pid;
+static FILE *pid_log;
+static int xxtick;
 
 enum {
 	RISING,
@@ -134,6 +136,8 @@ static void fancontrol_update_chain_temp(int chain_id, double min, double max, d
 	mutex_unlock(&fancontrol_lock);
 }
 
+#define plog(f,a...) ({ if (pid_log) fprintf(pid_log, f "\n", ##a); fflush(pid_log); })
+
 static int calc_duty(void)
 {
 	struct chain_temp *temp;
@@ -157,6 +161,7 @@ static int calc_duty(void)
 
 	printf("calc_duty: min=%2.3lf max=%2.3lf avg=%2.3lf\n", min, max, avg);
 	if (max > 90) {
+		plog("# very hot!");
 		printf("very hot!\n");
 		return 0;
 	}
@@ -178,7 +183,12 @@ static int calc_duty(void)
 #else
 	PIDInputSet(&temp_pid, avg);
 	PIDCompute(&temp_pid);
-	return 100 - PIDOutputGet(&temp_pid);
+	xxtick++;
+	{
+		int out = 100 - PIDOutputGet(&temp_pid);
+		plog("t=%f min=%f max=%f avg=%f out=%d", xxtick*5.0, min, max, avg, out);
+		return out;
+	}
 #endif
 }
 
@@ -198,6 +208,7 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 void fancontrol_start(unsigned enabled_chains)
 {
 	struct chain_temp *temp;
+	pid_log = fopen("/tmp/PID.log", "w");
 	mutex_init(&fancontrol_lock);
 	set_fanspeed(0, 0);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
@@ -212,8 +223,17 @@ void fancontrol_start(unsigned enabled_chains)
 	fan.low = 68;
 	fan.direction = RISING;
 #else
-	PIDInit(&temp_pid, 20, 0.05, 0.1, 5, 0, 100, AUTOMATIC, REVERSE);
-	PIDSetpointSet(&temp_pid, 70);
+	{
+		float kp = 20;
+		float ki = 0.05;
+		float kd = 0.1;
+		float dt = 5;
+		float set_point = 70;
+
+		PIDInit(&temp_pid, kp, ki, kd, dt, 0, 100, AUTOMATIC, REVERSE);
+		PIDSetpointSet(&temp_pid, set_point);
+		plog("# kp=%f ki=%f kd=%f dt=%f target=%f", kp, ki, kd, dt, set_point);
+	}
 #endif
 	pthread_create(&fan_tid, NULL, fancontrol_thread, NULL);
 }
