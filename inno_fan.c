@@ -230,7 +230,7 @@ void fancontrol_start(unsigned enabled_chains)
 		float dt = 5;
 		float set_point = 70;
 
-		PIDInit(&temp_pid, kp, ki, kd, dt, 0, 100, AUTOMATIC, REVERSE);
+		PIDInit(&temp_pid, kp, ki, kd, dt, 40, 100, AUTOMATIC, REVERSE);
 		PIDSetpointSet(&temp_pid, set_point);
 		plog("# kp=%f ki=%f kd=%f dt=%f target=%f", kp, ki, kd, dt, set_point);
 	}
