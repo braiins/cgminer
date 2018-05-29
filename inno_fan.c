@@ -15,84 +15,6 @@
 
 #define N_PWM_CHIPS 3
 
-#ifdef CHIP_A6
-static const int inno_tsadc_table[] = {
-    /* val temp_f */
-    652, //-40, 
-    645, //-35, 
-    638, //-30, 
-    631, //-25, 
-    623, //-20, 
-    616, //-15, 
-    609, //-10, 
-    601, // -5, 
-    594, //  0, 
-    587, //  5, 
-    579, // 10, 
-    572, // 15, 
-    564, // 20, 
-    557, // 25, 
-    550, // 30, 
-    542, // 35, 
-    535, // 40, 
-    527, // 45, 
-    520, // 50, 
-    512, // 55, 
-    505, // 60, 
-    498, // 65, 
-    490, // 70, 
-    483, // 75, 
-    475, // 80, 
-    468, // 85, 
-    460, // 90, 
-    453, // 95, 
-    445, //100, 
-    438, //105, 
-    430, //110, 
-    423, //115, 
-    415, //120, 
-    408, //125, 
-};
-#else
-static const int inno_tsadc_table[] = {
-    /* val temp_f */
-    647, //-40, 
-    640, //-35, 
-    632, //-30, 
-    625, //-25, 
-    617, //-20, 
-    610, //-15, 
-    602, //-10, 
-    595, // -5, 
-    588, //  0, 
-    580, //  5, 
-    572, // 10, 
-    565, // 15, 
-    557, // 20, 
-    550, // 25, 
-    542, // 30, 
-    535, // 35, 
-    527, // 40, 
-    520, // 45, 
-    512, // 50, 
-    505, // 55, 
-    497, // 60, 
-    489, // 65, 
-    482, // 70, 
-    474, // 75, 
-    467, // 80, 
-    459, // 85, 
-    452, // 90, 
-    444, // 95, 
-    437, //100, 
-    429, //105, 
-    421, //110, 
-    414, //115, 
-    406, //120, 
-    399 //125, 
-};
-#endif
-
 struct chain_temp {
 	int initialized, enabled;
 	double min, max, avg;
@@ -282,12 +204,6 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
         inno_fan_temp_clear(fan_ctrl, chain_id);
     }
 
-    fan_ctrl->temp_nums = sizeof(inno_tsadc_table) / sizeof(inno_tsadc_table[0]);
-    fan_ctrl->temp_v_min = inno_tsadc_table[fan_ctrl->temp_nums - 1];
-    fan_ctrl->temp_v_max = inno_tsadc_table[0];
-    fan_ctrl->temp_f_step = 5.0f;
-    fan_ctrl->temp_f_min = -40.0f;
-    fan_ctrl->temp_f_max = fan_ctrl->temp_f_min + fan_ctrl->temp_f_step * (fan_ctrl->temp_nums - 1);
 
 	applog_hw(LOG_ERR, "chip nums:%d.", ASIC_CHIP_A_BUCKET);
 	applog_hw(LOG_ERR, "pwm  name:%s.", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
@@ -298,12 +214,6 @@ void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
 	applog_hw(LOG_ERR, "max  thrd:%5.2f.", ASIC_INNO_FAN_TEMP_MAX_THRESHOLD);
 	applog_hw(LOG_ERR, "up   thrd:%5.2f.", ASIC_INNO_FAN_TEMP_UP_THRESHOLD);
 	applog_hw(LOG_ERR, "down thrd:%5.2f.", ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD);
-	applog_hw(LOG_ERR, "temp nums:%d.", fan_ctrl->temp_nums);
-	applog_hw(LOG_ERR, "temp vmin:%d.", fan_ctrl->temp_v_min);
-	applog_hw(LOG_ERR, "temp vmax:%d.", fan_ctrl->temp_v_max);
-	applog_hw(LOG_ERR, "temp fstp:%5.2f.", fan_ctrl->temp_f_step);
-	applog_hw(LOG_ERR, "temp fmin:%5.2f.", fan_ctrl->temp_f_min);
-	applog_hw(LOG_ERR, "temp fmax:%5.2f.", fan_ctrl->temp_f_max);
 }
 
 void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on)

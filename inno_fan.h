@@ -30,13 +30,6 @@ typedef struct INNO_FAN_CTRL_tag{
 	pthread_mutex_t lock;                       /* 互斥锁 */
     int duty;                                   /* 0 - 100 */
 
-    /* 用于转化寄存器原始值到实际温度 */
-    int temp_nums;                              /* temp寄存器与温度对应表 的点数 */
-    int temp_v_max;                             /* temp最大值 对应最低温度 */
-    int temp_v_min;                             /* temp最小值 对应最高温度 */
-    float temp_f_min;                           /* 温度最小值 */
-    float temp_f_max;                           /* 温度最大值 */
-    float temp_f_step;                          /* 温度步长 */
 }INNO_FAN_CTRL_T;
 
 /* 模块初始化 */
