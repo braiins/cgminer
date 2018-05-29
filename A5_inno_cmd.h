@@ -84,10 +84,23 @@ struct A1_chip {
 	/* mark chip disabled, do not try to re-enable it */
 	bool disabled;
 
-	int temp;
 	float temp_f;
 
 	struct measurement voltage;
+};
+
+struct A1_chain_temp_stats {
+	/* temperature and index of coldest chip */
+	float min;
+	int min_chip;
+	/* temperature and index of hottest chip */
+	float max;
+	int max_chip;
+	/* average temperature */
+	float avg;
+	/* this is index of chip that has temperature "closest" to
+	   average temperature */
+	int avg_chip;
 };
 
 struct A1_chain {
@@ -116,6 +129,9 @@ struct A1_chain {
 	struct timeval tvScryptCurr;
 	struct timeval tvScryptDiff;
 	int work_start_delay;
+
+	/* temperature control */
+	struct A1_chain_temp_stats temp_stats;
 
 	/* for benchmarking purposes */
 	unsigned nonces_found;

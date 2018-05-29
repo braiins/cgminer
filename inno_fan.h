@@ -13,49 +13,17 @@
 #include "A5_inno_clock.h"
 #endif
 
-#define ASIC_INNO_TEMP_CONTRL_THRESHOLD (25.0f)
+#define DANGEROUS_TEMP	110
+#define HOT_TEMP	95
+#define TARGET_TEMP	75
 
-typedef struct INNO_FAN_CTRL_tag{
-    /* 温度原始值 */
-	int temp[ASIC_CHAIN_NUM][ASIC_CHIP_NUM];    /* chip temp bits */
-    int index[ASIC_CHAIN_NUM];                  /* chip index in chain */
+void inno_fan_temp_init(struct A1_chain *chain);
+void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu);
 
-    /* 以寄存器原始值为格式 */
-    int temp_arvarge[ASIC_CHAIN_NUM];           /* 当前温度(均值) */
-    int temp_init[ASIC_CHAIN_NUM];              /* 初始温度(均值) */
-    int temp_highest[ASIC_CHAIN_NUM];           /* 当前温度(最高) */
-    int temp_lowest[ASIC_CHAIN_NUM];            /* 当前温度(最低) */
-
-    /* 保护多链(线程)共享的数据 */
-	pthread_mutex_t lock;                       /* 互斥锁 */
-    int duty;                                   /* 0 - 100 */
-
-}INNO_FAN_CTRL_T;
-
-/* 模块初始化 */
-void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl);
-/* 设置启动温度 */
-void inno_fan_temp_init(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
-/* 加入芯片温度 */
-void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on);
-/* 清空芯片温度,为下轮循环准备 */
-void inno_fan_temp_clear(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
-/* 根据温度更新转速 */
-void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_info *cgpu);
-
-int inno_fan_temp_get_highest(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
-
-void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_id);
-
-#if 0
-float inno_fan_temp_get(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
-#endif
-
-#if 0
-void inno_fan_speed_up(INNO_FAN_CTRL_T *fan_ctrl);
-void inno_fan_speed_down(INNO_FAN_CTRL_T *fan_ctrl);
-void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty);
-#endif
+static inline float inno_fan_temp_get_highest(struct A1_chain *chain)
+{
+	return chain->temp_stats.max;
+}
 
 void fancontrol_start(unsigned enabled_chains);
 
@@ -63,8 +31,6 @@ static inline float inno_temp_to_celsius(int reg)
 {
 	return (588.0f - reg) * 2 / 3 + 0.5f;
 }
-
-#define inno_fan_temp_to_float(x,y) inno_temp_to_celsius(y)
 
 #endif
 

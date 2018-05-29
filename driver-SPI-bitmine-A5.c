@@ -63,15 +63,12 @@ uint8_t A1Pll4=A5_PLL_CLOCK_800MHz;
 uint8_t A1Pll5=A5_PLL_CLOCK_800MHz;
 uint8_t A1Pll6=A5_PLL_CLOCK_800MHz;
 
-/* FAN CTRL */
-static INNO_FAN_CTRL_T s_fan_ctrl;
 static uint32_t show_log[ASIC_CHAIN_NUM];
 static uint32_t update_cnt[ASIC_CHAIN_NUM];
 static uint32_t write_flag[ASIC_CHAIN_NUM];
 static uint32_t check_disbale_flag[ASIC_CHAIN_NUM];
 static uint32_t first_flag[ASIC_CHAIN_NUM] = {0};
 static inno_reg_ctrl_t s_reg_ctrl;
-#define DANGEROUS_TMP  110
 #define STD_V          0.84
 int spi_plug_status[ASIC_CHAIN_NUM] = {0};
 
@@ -193,18 +190,18 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 
 	for (i = 0; i < a1->num_active_chips; i++) {
 		check_chip(a1, i);
-		inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp, true);
 	}
-	/* ÉèÖÃ³õÊ¼Öµ */
-	inno_fan_temp_init(&s_fan_ctrl, chain_id);
+
+	/* initialize temp stats */
+	inno_fan_temp_init(a1);
 
 	applog_hw_chain(LOG_INFO, chain_id, "found %d chips with total %d active cores",
 	       a1->num_active_chips, a1->num_cores);
-	//modify 0922       
-	if(inno_fan_temp_get_highest(&s_fan_ctrl,chain_id) > DANGEROUS_TMP)
-	{
-	 asic_gpio_write(spi[a1->chain_id]->power_en, 0);
-	 early_quit(1,"Notice chain %d maybe has some promble in temperate\n",a1->chain_id);
+
+	/* check temperature is ok */
+	if (inno_fan_temp_get_highest(a1) > DANGEROUS_TEMP) {
+		asic_gpio_write(spi[a1->chain_id]->power_en, 0);
+		early_quit(1, "Chain %d has some problem with temperature (max=%f)\n", a1->chain_id, a1->temp_stats.max);
 	}
 	
 	mutex_init(&a1->lock);
@@ -228,7 +225,7 @@ static void A1_printstats_chain(struct A1_chain *a1)
 				chip->num_cores,
 				chip->nonce_ranges_done, chip->nonces_found,
 				chip->hw_errors, chip->stales,
-				inno_fan_temp_to_float(&s_fan_ctrl,chip->temp),
+				chip->temp_f,
 				s_reg_ctrl.cur_vol[a1->chain_id][i]);
 	}
 }
@@ -266,7 +263,7 @@ static void A1_submit_stats(struct A1_chain *a1)
 		chipstats->nonces_found = chip->nonces_found;
 		chipstats->hw_errors = chip->hw_errors;
 		chipstats->stales = chip->stales;
-		chipstats->temperature = inno_fan_temp_to_float(&s_fan_ctrl,chip->temp);
+		chipstats->temperature = chip->temp_f;
 		chipstats->voltage = measurement_get_avg(&chip->voltage);
 	}
 
@@ -1015,10 +1012,9 @@ void A1_detect(bool hotplug)
 		parsed_config_options = &A1_config_options;
 	}
 	applog_hw(LOG_DEBUG, "A1 detect");
-    memset(&s_reg_ctrl,0,sizeof(s_reg_ctrl));
+	memset(&s_reg_ctrl,0,sizeof(s_reg_ctrl));
     
-    inno_fan_init(&s_fan_ctrl);
-    fancontrol_start(opt_enabled_chains);
+	fancontrol_start(opt_enabled_chains);
 
 	set_vid_value(8);
 	
@@ -1100,12 +1096,11 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 				applog_hw_chip(LOG_ERR, chain->chain_id, chip_id, "failed to check chip");
 				continue;
 			}
-			inno_fan_temp_add(&s_fan_ctrl, chain->chain_id, chain->chips[chip_id - 1].temp, false);
 		}
-		inno_fan_speed_update(&s_fan_ctrl, chain->chain_id, cgpu);
-		if(inno_fan_temp_get_highest(&s_fan_ctrl, chain->chain_id) > DANGEROUS_TMP) {
+		inno_fan_speed_update(chain, cgpu);
+		if (inno_fan_temp_get_highest(chain) > DANGEROUS_TEMP) {
 			asic_gpio_write(spi[chain->chain_id]->power_en, 0);
-			early_quit(1, "Notice chain %d has some temperature problem, disabling power\n", chain->chain_id);
+			early_quit(1, "Chain %d has some problem with temperature (max=%f)\n", chain->chain_id, chain->temp_stats.max);
 		}
 	}
 
@@ -1254,13 +1249,13 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 					
 					if(show_log[cid] > 0)					
 					{												
-						a5_debug("%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%d/%5.2f",
+						a5_debug("%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%5.2f",
 							   cid, c, chip->num_cores,chip->nonce_ranges_done, chip->nonces_found,
-							   chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
+							   chip->hw_errors, chip->stales, chip->temp_f);
 						
-						sprintf(szShowLog[cid][c-1], "%8d/%8d/%8d/%8d/%8d/%4d/%2d/%2d\r\n",
+						sprintf(szShowLog[cid][c-1], "%8d/%8d/%8d/%8d/%4d/%2d/%2d\r\n",
 								chip->nonce_ranges_done, chip->nonces_found,
-								chip->hw_errors, chip->stales,chip->temp,chip->num_cores,c-1,cid);
+								chip->hw_errors, chip->stales,chip->num_cores,c-1,cid);
 						
 						if(i==1) show_log[cid] = 0;
 
@@ -1385,13 +1380,13 @@ static int64_t A1_bench_scanwork(struct cgpu_info *cgpu)
 
 					if(show_log[cid] > 0)
 					{
-						a5_debug("%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%d/%5.2f",
+						a5_debug("%d: chip:%d ,core:%d ,job done: %d/%d/%d/%d/%5.2f",
 								cid, c, chip->num_cores,chip->nonce_ranges_done, chip->nonces_found,
-								chip->hw_errors, chip->stales,chip->temp, inno_fan_temp_to_float(&s_fan_ctrl,chip->temp));
+								chip->hw_errors, chip->stales, chip->temp_f);
 
-						sprintf(szShowLog[cid][c-1], "%8d/%8d/%8d/%8d/%8d/%4d/%2d/%2d\r\n",
+						sprintf(szShowLog[cid][c-1], "%8d/%8d/%8d/%8d/%4d/%2d/%2d\r\n",
 								chip->nonce_ranges_done, chip->nonces_found,
-								chip->hw_errors, chip->stales,chip->temp,chip->num_cores,c-1,cid);
+								chip->hw_errors, chip->stales,chip->num_cores,c-1,cid);
 
 						if(i==1) show_log[cid] = 0;
 

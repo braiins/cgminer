@@ -9,11 +9,14 @@
 #include <sys/ioctl.h>
 #include <linux/ioctl.h>
 #include <assert.h>
+#include <math.h>
+#include <time.h>
 
 #include "inno_fan.h"
 #include "pid_controller.h"
 
 #define N_PWM_CHIPS 3
+#define FAN_DUTY_MAX 0
 
 struct chain_temp {
 	int initialized, enabled;
@@ -30,15 +33,11 @@ static struct chain_temp chain_temps[ASIC_CHAIN_NUM];
 static pthread_mutex_t fancontrol_lock;
 static pthread_t fan_tid;
 static struct fan_control fan;
+static int fancontrol_in_panic;
 static void set_fanspeed(int id, int duty);
 static PIDControl temp_pid;
 static FILE *pid_log;
 static int xxtick;
-
-enum {
-	RISING,
-	FALLING,
-};
 
 static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg)
 {
@@ -58,6 +57,13 @@ static void fancontrol_update_chain_temp(int chain_id, double min, double max, d
 	mutex_unlock(&fancontrol_lock);
 }
 
+static void fancontrol_panic(int chain_id)
+{
+	mutex_lock(&fancontrol_lock);
+	fancontrol_in_panic = 1;
+	mutex_unlock(&fancontrol_lock);
+}
+
 #define plog(f,a...) ({ if (pid_log) fprintf(pid_log, f "\n", ##a); fflush(pid_log); })
 
 static int calc_duty(void)
@@ -65,6 +71,7 @@ static int calc_duty(void)
 	struct chain_temp *temp;
 	double max, min, avg;
 	int n = 0;
+	int duty = FAN_DUTY_MAX;
 
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
 		temp = &chain_temps[i];
@@ -82,36 +89,26 @@ static int calc_duty(void)
 	}
 
 	printf("calc_duty: min=%2.3lf max=%2.3lf avg=%2.3lf\n", min, max, avg);
-	if (max > 95) {
+	if (max > HOT_TEMP) {
 		plog("# very hot!");
 		printf("very hot!\n");
-		return 0;
+		return FAN_DUTY_MAX;
 	}
 
 
-#if 0
-	if (fan.direction == RISING) {
-		if (avg < fan.high)
-			return 50;
-		fan.direction = FALLING;
-		return 0;
-	} else if (fan.direction == FALLING) {
-		if (avg > fan.low)
-			return 0;
-		fan.direction = RISING;
-		return 50;
-	}
-	return 0;
-#else
 	PIDInputSet(&temp_pid, avg);
 	PIDCompute(&temp_pid);
-	xxtick++;
+	duty = 100 - PIDOutputGet(&temp_pid);
 	{
-		int out = 100 - PIDOutputGet(&temp_pid);
-		plog("t=%f min=%f max=%f avg=%f out=%d", xxtick*5.0, min, max, avg, out);
-		return out;
+		char buf[128];
+		time_t now;
+		struct tm tm;
+		time(&now);
+		localtime_r(&now, &tm);
+		strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+		plog("%s min=%f max=%f avg=%f out=%d", buf, min, max, avg, duty);
 	}
-#endif
+	return duty;
 }
 
 static void *fancontrol_thread(void __maybe_unused *argv)
@@ -119,7 +116,12 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 	for (;;sleep(5)) {
 		int duty;
 		mutex_lock(&fancontrol_lock);
-		duty = calc_duty();
+		if (fancontrol_panic) {
+			printf("fancontrol_thread: !!! PANIC !!! PANIC !!!\n");
+			duty = FAN_DUTY_MAX;
+		} else {
+			duty = calc_duty();
+		}
 		mutex_unlock(&fancontrol_lock);
 		printf("fancontrol_thread: duty=%d\n", duty);
 		set_fanspeed(0, duty);
@@ -140,219 +142,92 @@ void fancontrol_start(unsigned enabled_chains)
 		if (enabled_chains & (1u << i))
 			temp->enabled = 1;
 	}
-#if 0
-	fan.high = 69;
-	fan.low = 68;
-	fan.direction = RISING;
-#else
+
 	{
 		float kp = 20;
 		float ki = 0.05;
 		float kd = 0.1;
 		float dt = 5;
-		float set_point = 75;
+		float set_point = TARGET_TEMP;
 
 		PIDInit(&temp_pid, kp, ki, kd, dt, 40, 100, AUTOMATIC, REVERSE);
 		PIDSetpointSet(&temp_pid, set_point);
 		plog("# kp=%f ki=%f kd=%f dt=%f target=%f", kp, ki, kd, dt, set_point);
 	}
-#endif
 	pthread_create(&fan_tid, NULL, fancontrol_thread, NULL);
 }
 
-
-static int inno_fan_temp_compare(const void *a, const void *b);
-static void inno_fan_speed_max(INNO_FAN_CTRL_T *fan_ctrl);
-static void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty);
-
-void inno_fan_init(INNO_FAN_CTRL_T *fan_ctrl)
+static int temp_calc_minmaxavg(struct A1_chain *chain)
 {
-    int chain_id = 0;
+	struct A1_chain_temp_stats *stats = &chain->temp_stats;
+	int min_chip = 0, max_chip = 0;
+	int n = 0;
+	float min = 0, max = 0, avg = 0;
 
-#if 0 /* 测试风扇 */
-    int j = 0;
+	for (int i = 0; i < chain->num_active_chips; i++) {
+		struct A1_chip *chip = &chain->chips[i];
+		if (!chip->disabled) {
+			float temp = chip->temp_f;
 
-	for(j = 100; j > 0; j -= 10)
-	{
-        applog_hw(LOG_ERR, "set test duty:%d", j);
-        inno_fan_pwm_set(fan_ctrl, j);
-        sleep(5);
+			if (n == 0) {
+				min = max = temp;
+				min_chip = max_chip = i;
+			} else {
+				if (temp < min) {
+					min = temp;
+					min_chip = i;
+				}
+				if (temp > max) {
+					max = temp;
+					max_chip = i;
+				}
+			}
+			avg += temp;
+		}
+	}
+	if (n == 0) {
+		stats->min = 9999;
+		stats->max = 9999;
+		stats->avg = 9999;
+		stats->min_chip = 0;
+		stats->max_chip = 0;
+		stats->avg_chip = 0;
+		return 0;
 	}
 
-	for(j = 0; j < 100; j += 10)
-    {
-        applog_hw(LOG_ERR, "down test duty.");
-        inno_fan_speed_down(fan_ctrl);
-        sleep(1);
-    }
+	avg /= n;
 
-	for(j = 0; j < 100; j += 10)
-    {
-        applog_hw(LOG_ERR, "up test duty.");
-        inno_fan_speed_up(fan_ctrl);
-        sleep(1);
-    }
-#endif
-    mutex_init(&fan_ctrl->lock);
+	float min_avg_diff = 0;
+	int avg_chip = 0;
+	int first = 1;
 
-    inno_fan_pwm_set(fan_ctrl, 10); /* 90% */
-    sleep(1);
-    inno_fan_pwm_set(fan_ctrl, 5); /* 95% */
+	for (int i = 0; i < chain->num_active_chips; i++) {
+		struct A1_chip *chip = &chain->chips[i];
+		if (!chip->disabled) {
+			float temp = chip->temp_f;
+			float diff = fabs(avg - temp);
 
-    for(chain_id = 0; chain_id < ASIC_CHAIN_NUM; chain_id++)
-    {
-        inno_fan_temp_clear(fan_ctrl, chain_id);
-    }
+			if (first || diff < min_avg_diff) {
+				min_avg_diff = diff;
+				avg_chip = i;
+			}
+			first = 0;
+		}
+	}
 
+	stats->min = min;
+	stats->min_chip = min_chip;
+	stats->max = max;
+	stats->max_chip = max_chip;
+	stats->avg = avg;
+	stats->avg_chip = avg_chip;
 
-	applog_hw(LOG_ERR, "chip nums:%d.", ASIC_CHIP_A_BUCKET);
-	applog_hw(LOG_ERR, "pwm  name:%s.", ASIC_INNO_FAN_PWM0_DEVICE_NAME);
-	applog_hw(LOG_ERR, "pwm  step:%d.", ASIC_INNO_FAN_PWM_STEP);
-	applog_hw(LOG_ERR, "duty max: %d.", ASIC_INNO_FAN_PWM_DUTY_MAX);
-	applog_hw(LOG_ERR, "targ freq:%d.", ASIC_INNO_FAN_PWM_FREQ_TARGET);
-	applog_hw(LOG_ERR, "freq rate:%d.", ASIC_INNO_FAN_PWM_FREQ);
-	applog_hw(LOG_ERR, "max  thrd:%5.2f.", ASIC_INNO_FAN_TEMP_MAX_THRESHOLD);
-	applog_hw(LOG_ERR, "up   thrd:%5.2f.", ASIC_INNO_FAN_TEMP_UP_THRESHOLD);
-	applog_hw(LOG_ERR, "down thrd:%5.2f.", ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD);
+	return 1;
 }
 
-void inno_fan_temp_add(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, int temp, bool warn_on)
+void inno_fan_temp_init(struct A1_chain *chain)
 {
-    float temp_f = 0.0f;
-    int index = 0;
-
-    index = fan_ctrl->index[chain_id];
-
-    applog_hw(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d)", chain_id, index, inno_fan_temp_to_float(fan_ctrl, temp), temp);
-    fan_ctrl->temp[chain_id][index] = temp;
-    index++;
-    fan_ctrl->index[chain_id] = index; 
-
-    temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
-    //printf("chain=%d index=%d temp=%f\n", chain_id, index, temp_f);
-    /* 避免工作中输出 温度告警信息,影响算力 */
-    if(!warn_on)
-    {
-        return;
-    }
-
-    /* 有芯片温度过高,输出告警打印 */
-    /* applog_hw(LOG_ERR, "inno_fan_temp_add: temp warn_on(init):%d", warn_on); */
-    temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
-    if(temp_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
-    { 
-        applog_hw(LOG_DEBUG, "inno_fan_temp_add:chain_%d,chip_%d,temp:%7.4f(%d) is too high!", chain_id, index, temp_f, temp);
-    }
-}
-
-static void inno_fan_temp_sort(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
-{
-    int i = 0;
-    int temp_nums = 0;
-
-    temp_nums = fan_ctrl->index[chain_id];
-
-    applog_hw(LOG_DEBUG, "not sort:");
-    for(i = 0; i < temp_nums; i++)
-    {
-        applog_hw(LOG_DEBUG, "chip_%d:%08x(%d)", i, fan_ctrl->temp[chain_id][i], fan_ctrl->temp[chain_id][i]);
-    }
-    applog_hw(LOG_DEBUG, "sorted:");
-    qsort(fan_ctrl->temp[chain_id], temp_nums, sizeof(fan_ctrl->temp[chain_id][0]), inno_fan_temp_compare);
-    for(i = 0; i < temp_nums; i++)
-    {
-        applog_hw(LOG_DEBUG, "chip_%d:%08x(%d)", i, fan_ctrl->temp[chain_id][i], fan_ctrl->temp[chain_id][i]);
-    }
-    applog_hw(LOG_DEBUG, "sort end.");
-}
-
-static int inno_fan_temp_get_arvarge(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
-{
-    int   i = 0;
-    int   temp_nums = 0;
-    int   head_index = 0;
-    int   tail_index = 0;
-    float arvarge_temp = 0.0f; 
-
-    temp_nums = fan_ctrl->index[chain_id];
-    /* step1: delete temp (0, ASIC_INNO_FAN_TEMP_MARGIN_NUM) & (max - ASIC_INNO_FAN_TEMP_MARGIN_NUM, max) */
-    head_index = temp_nums * ASIC_INNO_FAN_TEMP_MARGIN_RATE;
-    tail_index = temp_nums - head_index;
-    /* 防止越界 */
-    if(head_index < 0)
-    {
-        head_index = 0;
-    }
-    if(tail_index < 0)
-    {
-        tail_index = head_index;
-    }
-
-    /* step2: arvarge */
-    for(i = head_index; i < tail_index; i++)
-    {
-        arvarge_temp += fan_ctrl->temp[chain_id][i];
-    }
-    arvarge_temp /= (tail_index - head_index);
-
-    float temp_f = 0.0f;
-    temp_f = inno_fan_temp_to_float(fan_ctrl, (int)arvarge_temp);
-	applog_hw(LOG_DEBUG, "inno_fan_temp_get_arvarge, chain_id:%d, temp nums:%d, valid index[%d,%d], reseult:%7.4f(%d).",
-            chain_id, temp_nums, head_index, tail_index, inno_fan_temp_to_float(fan_ctrl, (int)arvarge_temp), (int)arvarge_temp); 
-
-    return (int)arvarge_temp;
-}
-
-int inno_fan_temp_get_highest(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
-{
-    return fan_ctrl->temp[chain_id][0];
-}
-
-static int inno_fan_temp_get_lowest(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
-{
-    int temp_nums = 0;
-    int index = 0;
-
-    temp_nums = fan_ctrl->index[chain_id];
-    index = temp_nums - 1;
-
-    /* 避免越界 */
-    if(index < 0)
-    {
-        index = 0;
-    }
-
-    return fan_ctrl->temp[chain_id][index];
-}
-
-void inno_fan_temp_clear(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
-{
-    int i = 0;
-
-    fan_ctrl->index[chain_id] = 0;
-    for(i = 0; i < ASIC_CHIP_NUM; i++)
-    {
-        fan_ctrl->temp[chain_id][i] = 0;
-    }
-}
-
-void inno_fan_temp_init(INNO_FAN_CTRL_T *fan_ctrl, int chain_id)
-{
-    int temp = 0;
-
-    inno_fan_temp_sort(fan_ctrl, chain_id);
-
-    temp = inno_fan_temp_get_arvarge(fan_ctrl, chain_id);
-    fan_ctrl->temp_init[chain_id] = temp;
-    fan_ctrl->temp_arvarge[chain_id] = temp;
-
-    temp = inno_fan_temp_get_highest(fan_ctrl, chain_id);
-    fan_ctrl->temp_highest[chain_id] = temp;
-
-    temp = inno_fan_temp_get_lowest(fan_ctrl, chain_id);
-    fan_ctrl->temp_lowest[chain_id] = temp;
-
-    inno_fan_temp_clear(fan_ctrl, chain_id);
+	temp_calc_minmaxavg(chain);
 }
 
 static int write_to_file(const char *path_fmt, int id, const char *data_fmt, ...)
@@ -407,63 +282,6 @@ static void set_fanspeed(int id, int duty)
 	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", duty*PWMCHIP_PERIOD/100);
 }
 
-
-
-void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty)
-{
-    mutex_lock(&fan_ctrl->lock);
-#if 0
-    /* control all three PWM generators in sync */
-    set_fanspeed(0, duty);
-    set_fanspeed(1, duty);
-    set_fanspeed(2, duty);
-#endif
-    fan_ctrl->duty = duty;
-    mutex_unlock(&fan_ctrl->lock);
-}
-
-void inno_fan_speed_up(INNO_FAN_CTRL_T *fan_ctrl)
-{
-    int duty = 0;
-    
-    /* 已经到达最大值,不调 */
-    if(0 == fan_ctrl->duty)
-    {
-        return;
-    }
-
-    duty = fan_ctrl->duty;
-    duty -= ASIC_INNO_FAN_PWM_STEP;
-    if(duty < 0)
-    {
-        duty = 0;
-    } 
-    applog_hw(LOG_DEBUG, "speed+(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
-
-    inno_fan_pwm_set(fan_ctrl, duty);
-}
-
-void inno_fan_speed_down(INNO_FAN_CTRL_T *fan_ctrl)
-{
-    int duty = 0;
-
-    /* 已经到达最小值,不调 */
-    if(ASIC_INNO_FAN_PWM_DUTY_MAX == fan_ctrl->duty)
-    {
-        return;
-    }
-
-    duty = fan_ctrl->duty;
-    duty += ASIC_INNO_FAN_PWM_STEP;
-    if(duty > ASIC_INNO_FAN_PWM_DUTY_MAX)
-    {
-        duty = ASIC_INNO_FAN_PWM_DUTY_MAX;
-    }
-    applog_hw(LOG_DEBUG, "speed-(%02d%% to %02d%%)" , 100 - fan_ctrl->duty, 100 - duty);
-
-    inno_fan_pwm_set(fan_ctrl, duty);
-}
-
 #ifndef CHIP_A6
 extern uint8_t A1Pll1;
 extern uint8_t A1Pll2;
@@ -472,144 +290,28 @@ extern const struct PLL_Clock PLL_Clk_12Mhz[142];
 extern struct A1_chain *chain[ASIC_CHAIN_NUM];
 #endif
 
-void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_info *cgpu)
+void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 {
+	struct A1_chain_temp_stats *temp_stats = &chain->temp_stats;
 
-	struct A1_chain *a1 = cgpu->device_data;
+	if (!temp_calc_minmaxavg(chain)) {
+		fancontrol_panic(chain->chain_id);
+		return;
+	}
+	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg);
 
-    int arvarge = 0;        /* 平均温度 */
-    int highest = 0;        /* 最高温度 */
-    int lowest  = 0;        /* 最低温度 */
+	cgpu->temp = temp_stats->avg;
+	cgpu->temp_max = temp_stats->max;
+	cgpu->temp_min = temp_stats->min;
+	cgpu->fan_duty = 100;
 
-    float arvarge_f = 0.0f; /* 最高温度 */
-    float highest_f = 0.0f; /* 最高温度 */
-    float lowest_f  = 0.0f; /* 最低温度 */
-    float avg2;
+	cgpu->chip_num = chain->num_active_chips;
+	cgpu->core_num = chain->num_cores;
 
-    /* 统计温度 */
-    inno_fan_temp_sort(fan_ctrl, chain_id);
-    arvarge = inno_fan_temp_get_arvarge(fan_ctrl, chain_id);
-    highest = inno_fan_temp_get_highest(fan_ctrl, chain_id);
-    lowest  = inno_fan_temp_get_lowest(fan_ctrl, chain_id);
-
-#if 0
-    /* 控制策略1(否定,temp_init温度很低,风扇最大依然不够)
-     * temp_init为初始值
-     * temp_now - temp_init;
-     *
-     * temp_now > temp_init 表示 temp 较低, speed down
-     * else                 表示 temp 较高, speed up
-     */
-    if(fan_ctrl->temp_now[chain_id] > fan_ctrl->temp_init[chain_id])
-    {
-        //inno_fan_speed_down();
-        applog_hw(LOG_ERR, "- to %d" , fan_ctrl->duty);
-    }
-    else
-    {
-        //inno_fan_speed_up();
-        applog_hw(LOG_ERR, "+ to %d" , fan_ctrl->duty);
-    }
-#endif
-
-#if 0
-    /* 控制策略2 OK(效果不好)
-     * temp_delta为与上次温度的差值
-     *
-     * temp_delta > 0 表示 temp 较低, speed down
-     * else           表示 temp 较高, speed up
-     */
-#endif
-
-#if 1
-    /* 控制策略3
-     * 
-     * 最高温度 highest > 80度(<475) speed up
-     * 最高温度 highest < 50度(>520) speed down
-     *
-     * 最高温度 highest > 90度(<460) speed max
-     *
-     */
-    {
-	    int max = fan_ctrl->index[chain_id];
-	    avg2 = 0;
-	    if (max > 0) {
-		    for (int i = 0; i < max; i++) {
-			    avg2 += inno_fan_temp_to_float(fan_ctrl, fan_ctrl->temp[chain_id][i]);
-		    }
-		    avg2 /= fan_ctrl->index[chain_id];
-	    }
-    }
-    /* 清空,为下一轮做准备 */
-    inno_fan_temp_clear(fan_ctrl, chain_id);
-
-    arvarge_f = inno_fan_temp_to_float(fan_ctrl, (int)arvarge);
-    lowest_f = inno_fan_temp_to_float(fan_ctrl, (int)lowest);
-    highest_f = inno_fan_temp_to_float(fan_ctrl, (int)highest);
-
-    /* 加入整条链Power Down */
-    if(highest_f > ASIC_INNO_FAN_TEMP_MAX_THRESHOLD)
-    {
-        applog_hw(LOG_ERR, "%s z:arv:%5.2f, lest:%5.2f, hest:%5.2f, power down", __func__, arvarge_f, lowest_f, highest_f);
-    }
-
-    /* 温度过高 */
-    if(highest_f > ASIC_INNO_FAN_TEMP_UP_THRESHOLD)
-    {
-        if(0 != fan_ctrl->duty)
-        {
-            inno_fan_pwm_set(fan_ctrl, 0);
-            applog_hw(LOG_ERR, "%s +:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
-        } 
-    }
-
-    /* 温度已经恢复低温 */
-    if(highest_f < ASIC_INNO_FAN_TEMP_DOWN_THRESHOLD)
-    {
-        if(40 != fan_ctrl->duty) 
-        {
-            inno_fan_pwm_set(fan_ctrl, 40);
-            applog_hw(LOG_ERR, "%s -:arv:%5.2f, lest:%5.2f, hest:%5.2f, speed:%d%%", __func__, arvarge_f, lowest_f, highest_f, 100 - fan_ctrl->duty);
-        }
-    } 
-
-    fancontrol_update_chain_temp(chain_id, lowest_f, highest_f, avg2);
-
-    cgpu->temp = arvarge_f;
-    cgpu->temp_max = highest_f;
-    cgpu->temp_min = lowest_f;
-    cgpu->fan_duty = 100 - fan_ctrl->duty;
-            
-    cgpu->chip_num = a1->num_active_chips;
-    cgpu->core_num = a1->num_cores;
-#ifndef CHIP_A6
-	switch(a1->chain_id){
-		case 0:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2ull * (a1->num_cores);break;
-		case 1:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll2].speedMHz * 2ull * (a1->num_cores);break;
-		case 2:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll3].speedMHz * 2ull * (a1->num_cores);break;
+	switch(chain->chain_id){
+		case 0:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll1].speedMHz * 2ull * (chain->num_cores);break;
+		case 1:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll2].speedMHz * 2ull * (chain->num_cores);break;
+		case 2:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll3].speedMHz * 2ull * (chain->num_cores);break;
 		default:;
 	}
-#endif
-    //static int times = 0;       /* 降低风扇控制的频率 */
-    /* 降低风扇打印的频率 */
-    //if(times++ <  ASIC_INNO_FAN_CTLR_FREQ_DIV)
-    //{
-    //    return;
-    //}
-    /* applog_hw(LOG_DEBUG, "inno_fan_speed_updat times:%d" , times); */
-    //times = 0;
-
-    //applog_hw(LOG_ERR, "%s n:arv:%5.2f, lest:%5.2f, hest:%5.2f", __func__, arvarge_f, lowest_f, highest_f);
-#endif
-
-}
-
-static void inno_fan_speed_max(INNO_FAN_CTRL_T *fan_ctrl)
-{
-    inno_fan_pwm_set(fan_ctrl, 0);
-}
-
-static int inno_fan_temp_compare(const void *a, const void *b)
-{
-    return *(int *)a - *(int *)b;
 }
