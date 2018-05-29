@@ -191,6 +191,7 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	for (i = 0; i < a1->num_active_chips; i++) {
 		check_chip(a1, i);
 	}
+	sum_cores(a1);
 
 	/* initialize temp stats */
 	inno_fan_temp_init(a1);
@@ -298,10 +299,10 @@ bool test_bench_init_chain(struct A1_chain *a1)
 
 	usleep(200);
 
-	for (i = 0; i < a1->num_active_chips; i++)
-    {
+	for (i = 0; i < a1->num_active_chips; i++) {
 		check_chip(a1, i);
-    }
+	}
+	sum_cores(a1);
 
 	applog_hw_chain(LOG_INFO, a1->chain_id, "found %d chips with total %d active cores",
 	       a1->num_active_chips, a1->num_cores);
@@ -1096,14 +1097,7 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 				continue;
 			}
 		}
-		/* recalculate the number of active cores */
-		chain->num_cores = 0;
-		for (int i = 0; i < chain->num_active_chips; i++) {
-			struct A1_chip *chip = &chain->chips[i];
-			if (!chip->disabled) {
-				chain->num_cores += chip->num_cores;
-			}
-		}
+		sum_cores(chain);
 		/* recalculate temperature avg/max/min and send them to fancontrol */
 		inno_fan_speed_update(chain, cgpu);
 		if (inno_fan_temp_get_highest(chain) > DANGEROUS_TEMP) {
@@ -1111,6 +1105,7 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 			early_quit(1, "Chain %d has some problem with temperature (max=%f)\n", chain->chain_id, chain->temp_stats.max);
 		}
 	}
+
 	if ((now_ms - chain->last_mini_temp_time) > MINI_TEMP_UPDATE_INT_MS) {
 		struct A1_chain_temp_stats *stats = &chain->temp_stats;
 		chain->last_mini_temp_time = now_ms;

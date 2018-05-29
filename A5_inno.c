@@ -495,6 +495,7 @@ void check_disabled_chips(struct A1_chain *a1)
 		{
 			check_chip(a1, i);
 		}
+		sum_cores(a1);
 	}
 	
 	return;
@@ -619,6 +620,18 @@ bool abort_work(struct A1_chain *a1)
 	applog_hw_chain(LOG_INFO, a1->chain_id, "Start to reset");
 
 	return true;
+}
+
+void sum_cores(struct A1_chain *a1)
+{
+	/* recalculate the number of active cores */
+	a1->num_cores = 0;
+	for (int i = 0; i < a1->num_active_chips; i++) {
+		struct A1_chip *chip = &a1->chips[i];
+		if (!chip->disabled) {
+			a1->num_cores += chip->num_cores;
+		}
+	}
 }
 
 bool check_chip(struct A1_chain *a1, int i)

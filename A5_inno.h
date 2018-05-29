@@ -45,6 +45,7 @@ typedef struct{
 bool inno_check_voltage(struct A1_chain *a1, int chip_id);
 void inno_configure_tvsensor(struct A1_chain *a1, int chip_id,bool is_tsensor);
 
+void sum_cores(struct A1_chain *a1);
 bool check_chip(struct A1_chain *a1, int i);
 void prechain_detect(struct A1_chain *a1, int idxpll);
 int chain_detect(struct A1_chain *a1);
