@@ -116,7 +116,7 @@ static int calc_duty(void)
 
 static void *fancontrol_thread(void __maybe_unused *argv)
 {
-	for (;;sleep(5)) {
+	for (;;sleep(1)) {
 		int duty;
 		mutex_lock(&fan.lock);
 		if (fan.in_panic) {
@@ -236,11 +236,15 @@ static int temp_calc_minmaxavg(struct A1_chain *chain)
 			float temp = chip->temp_f;
 			float diff = fabs(avg - temp);
 
-			if (first || diff < min_avg_diff) {
-				min_avg_diff = diff;
-				avg_chip = i;
+			/* only consider chips, whose temperature is greater
+			   than average */
+			if (temp >= avg) {
+				if (first || diff < min_avg_diff) {
+					min_avg_diff = diff;
+					avg_chip = i;
+				}
+				first = 0;
 			}
-			first = 0;
 		}
 	}
 
@@ -250,6 +254,9 @@ static int temp_calc_minmaxavg(struct A1_chain *chain)
 	stats->max_chip = max_chip;
 	stats->avg = avg;
 	stats->avg_chip = avg_chip;
+	stats->valid = 1;
+
+	printf("stats: min_chip=%d max_chip=%d avg_chip=%d\n", stats->min_chip, stats->max_chip, stats->avg_chip);
 
 	return 1;
 }
@@ -349,7 +356,7 @@ void inno_fan_speed_mini_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 {
 	struct A1_chain_temp_stats *temp_stats = &chain->temp_stats;
 
-	if (!temp_calc_minmaxavg(chain))
+	if (!temp_calc_minmaxavg_mini(chain))
 		return;
 
 	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg, 1);
