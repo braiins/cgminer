@@ -625,13 +625,14 @@ bool check_chip(struct A1_chain *a1, int i)
 	uint8_t buffer[64];
 	int chip_id = i + 1;
 	int cid = a1->chain_id;
+	struct A1_chip *chip = &a1->chips[i];
 
 	memset(buffer, 0, sizeof(buffer));
-	if (!inno_cmd_read_reg(a1, chip_id, buffer)) 
+	if (!inno_cmd_read_reg(a1, chip_id, buffer))
 	{
 		applog_hw_chip(LOG_WARNING, cid, chip_id, "Failed to read register -> disabling");
-		a1->chips[i].num_cores = 0;
-		a1->chips[i].disabled = 1;
+		chip->num_cores = 0;
+		chip->disabled = 1;
 		return false;;
 	}
 	else
@@ -639,36 +640,38 @@ bool check_chip(struct A1_chain *a1, int i)
 		//hexdump("check chip:", buffer, REG_LENGTH);
 	}
 
-	a1->chips[i].num_cores = buffer[11];
+	chip->num_cores = buffer[11];
+	/* FIXME 1 */
 	a1->num_cores += a1->chips[i].num_cores;
 	//applog_hw(LOG_WARNING, "%d: Found chip %d with %d active cores",
 	 //      cid, chip_id, a1->chips[i].num_cores);
 
 	//keep ASIC register value
-	memcpy(a1->chips[i].reg, buffer, 12);
-	a1->chips[i].temp= 0x000003ff & ((buffer[7] << 8) | buffer[8]);
+	memcpy(chip->reg, buffer, 12);
+	chip->temp = 0x000003ff & ((buffer[7] << 8) | buffer[8]);
+	//chip->temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
 
-	if (a1->chips[i].num_cores < BROKEN_CHIP_THRESHOLD) 
+	if (chip->num_cores < BROKEN_CHIP_THRESHOLD)
 	{
 		applog_hw_chip(LOG_WARNING, cid, chip_id,
-			"broken chip with %d active cores (threshold = %d)", 
-		       a1->chips[i].num_cores, BROKEN_CHIP_THRESHOLD);
+			"broken chip with %d active cores (threshold = %d)",
+		       chip->num_cores, BROKEN_CHIP_THRESHOLD);
 
 		//set low pll
 		//A1_SetA1PLLClock(a1, BROKEN_CHIP_SYS_CLK, chip_id);
 		//cmd_READ_REG(a1, chip_id);
 		hexdump_error("new.PLL", a1->spi_rx, 8);
-		a1->chips[i].disabled = true;
-		a1->num_cores -= a1->chips[i].num_cores;
+		chip->disabled = true;
+		a1->num_cores -= chip->num_cores;
 		
 		return false;
 	}
 
-	if (a1->chips[i].num_cores < WEAK_CHIP_THRESHOLD) 
+	if (chip->num_cores < WEAK_CHIP_THRESHOLD)
 	{
 		applog_hw_chip(LOG_WARNING, cid, chip_id,
 			"weak chip with %d active cores (threshold = %d)",
-		       a1->chips[i].num_cores, WEAK_CHIP_THRESHOLD);
+		       chip->num_cores, WEAK_CHIP_THRESHOLD);
 
 		//A1_SetA1PLLClock(a1, WEAK_CHIP_SYS_CLK, chip_id);
 		//cmd_READ_REG(a1, chip_id);

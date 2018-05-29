@@ -1492,6 +1492,7 @@ static void A1_flush_work(struct cgpu_info *cgpu)
 
 static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu)
 {
+#if 0
 	struct A1_chain *a1 = cgpu->device_data;
 	char temp[10];
 	if (a1->temp != 0)
@@ -1499,6 +1500,9 @@ static void A1_get_statline_before(char *buf, size_t len, struct cgpu_info *cgpu
 	tailsprintf(buf, len, " %2d:%2d/%3d %s",
 		    a1->chain_id, a1->num_active_chips, a1->num_cores,
 		    a1->temp == 0 ? "   " : temp);
+#else
+	strncpy(buf, "<|>", len);
+#endif
 }
 
 static void A1_power_off(void)

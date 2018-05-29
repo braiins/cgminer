@@ -85,6 +85,7 @@ struct A1_chip {
 	bool disabled;
 
 	int temp;
+	float temp_f;
 
 	struct measurement voltage;
 };
@@ -107,7 +108,6 @@ struct A1_chain {
 
 	/* mark chain disabled, do not try to re-enable it */
 	bool disabled;
-	uint8_t temp;
 	unsigned long last_temp_time;
 	unsigned long last_voltage_time;
 	unsigned long last_telemetry_time;
