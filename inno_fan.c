@@ -16,7 +16,8 @@
 #include "pid_controller.h"
 
 #define N_PWM_CHIPS 3
-#define FAN_DUTY_MAX 0
+#define FAN_DUTY_MAX 100
+#define FAN_DUTY_MIN 40
 
 struct chain_temp {
 	int initialized, enabled;
@@ -25,19 +26,17 @@ struct chain_temp {
 };
 
 struct fan_control {
-	int direction;
-	double high, low;
+	pthread_mutex_t lock;
+	struct chain_temp chain_temps[ASIC_CHAIN_NUM];
+	PIDControl pid;
+	pthread_t fancontrol_tid;
+	int in_panic;
+	FILE *pid_log;
 };
 
-static struct chain_temp chain_temps[ASIC_CHAIN_NUM];
-static pthread_mutex_t fancontrol_lock;
-static pthread_t fan_tid;
-static struct fan_control fan;
-static int fancontrol_in_panic;
 static void set_fanspeed(int id, int duty);
-static PIDControl temp_pid;
-static FILE *pid_log;
-static int xxtick;
+
+static struct fan_control fan;
 
 static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg)
 {
@@ -47,24 +46,24 @@ static void fancontrol_update_chain_temp(int chain_id, double min, double max, d
 
 	printf("update_chain_temp: chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf\n", chain_id, min, max, avg);
 
-	mutex_lock(&fancontrol_lock);
-	temp = &chain_temps[chain_id];
+	mutex_lock(&fan.lock);
+	temp = &fan.chain_temps[chain_id];
 	temp->initialized = 1;
 	temp->min = min;
 	temp->max = max;
 	temp->avg = avg;
 	cgtimer_time(&temp->time);
-	mutex_unlock(&fancontrol_lock);
+	mutex_unlock(&fan.lock);
 }
 
 static void fancontrol_panic(int chain_id)
 {
-	mutex_lock(&fancontrol_lock);
-	fancontrol_in_panic = 1;
-	mutex_unlock(&fancontrol_lock);
+	mutex_lock(&fan.lock);
+	fan.in_panic = 1;
+	mutex_unlock(&fan.lock);
 }
 
-#define plog(f,a...) ({ if (pid_log) fprintf(pid_log, f "\n", ##a); fflush(pid_log); })
+#define plog(f,a...) ({ if (fan.pid_log) fprintf(fan.pid_log, f "\n", ##a); fflush(fan.pid_log); })
 
 static int calc_duty(void)
 {
@@ -74,7 +73,7 @@ static int calc_duty(void)
 	int duty = FAN_DUTY_MAX;
 
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
-		temp = &chain_temps[i];
+		temp = &fan.chain_temps[i];
 		if (temp->enabled) {
 			if (!temp->initialized)
 				return 0;
@@ -96,9 +95,9 @@ static int calc_duty(void)
 	}
 
 
-	PIDInputSet(&temp_pid, avg);
-	PIDCompute(&temp_pid);
-	duty = 100 - PIDOutputGet(&temp_pid);
+	PIDInputSet(&fan.pid, avg);
+	PIDCompute(&fan.pid);
+	duty = PIDOutputGet(&fan.pid);
 	{
 		char buf[128];
 		time_t now;
@@ -115,46 +114,49 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 {
 	for (;;sleep(5)) {
 		int duty;
-		mutex_lock(&fancontrol_lock);
-		if (fancontrol_panic) {
+		mutex_lock(&fan.lock);
+		if (fan.in_panic) {
 			printf("fancontrol_thread: !!! PANIC !!! PANIC !!!\n");
 			duty = FAN_DUTY_MAX;
 		} else {
 			duty = calc_duty();
 		}
-		mutex_unlock(&fancontrol_lock);
+		mutex_unlock(&fan.lock);
 		printf("fancontrol_thread: duty=%d\n", duty);
 		set_fanspeed(0, duty);
 	}
 	return NULL;
 }
 
+static void fancontrol_init_pid(void)
+{
+	float kp = 20;
+	float ki = 0.05;
+	float kd = 0.1;
+	float dt = 5;
+	float set_point = TARGET_TEMP;
+
+	PIDInit(&fan.pid, kp, ki, kd, dt, FAN_DUTY_MIN, FAN_DUTY_MAX, AUTOMATIC, REVERSE);
+	PIDSetpointSet(&fan.pid, set_point);
+	plog("# kp=%f ki=%f kd=%f dt=%f target=%f", kp, ki, kd, dt, set_point);
+}
+
 void fancontrol_start(unsigned enabled_chains)
 {
 	struct chain_temp *temp;
-	pid_log = fopen("/tmp/PID.log", "w");
-	mutex_init(&fancontrol_lock);
-	set_fanspeed(0, 0);
+	fan.pid_log = fopen("/tmp/PID.log", "w");
+	mutex_init(&fan.lock);
+	set_fanspeed(0, FAN_DUTY_MAX);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
-		temp = &chain_temps[i];
+		temp = &fan.chain_temps[i];
 		temp->enabled = 0;
 		temp->initialized = 0;
 		if (enabled_chains & (1u << i))
 			temp->enabled = 1;
 	}
 
-	{
-		float kp = 20;
-		float ki = 0.05;
-		float kd = 0.1;
-		float dt = 5;
-		float set_point = TARGET_TEMP;
-
-		PIDInit(&temp_pid, kp, ki, kd, dt, 40, 100, AUTOMATIC, REVERSE);
-		PIDSetpointSet(&temp_pid, set_point);
-		plog("# kp=%f ki=%f kd=%f dt=%f target=%f", kp, ki, kd, dt, set_point);
-	}
-	pthread_create(&fan_tid, NULL, fancontrol_thread, NULL);
+	fancontrol_init_pid();
+	pthread_create(&fan.fancontrol_tid, NULL, fancontrol_thread, NULL);
 }
 
 static int temp_calc_minmaxavg(struct A1_chain *chain)
@@ -183,6 +185,7 @@ static int temp_calc_minmaxavg(struct A1_chain *chain)
 				}
 			}
 			avg += temp;
+			n++;
 		}
 	}
 	if (n == 0) {
@@ -279,7 +282,7 @@ static void set_fanspeed(int id, int duty)
 	/* it shouldn't be buggy, but if it would, setting duty-cycle to 100
 	   would effectively stop the fan and cause miner to overheat and
 	   explode. */
-	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", duty*PWMCHIP_PERIOD/100);
+	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", (100 - duty)*PWMCHIP_PERIOD/100);
 }
 
 #ifndef CHIP_A6
