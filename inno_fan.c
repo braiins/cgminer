@@ -76,7 +76,7 @@ static int calc_duty(void)
 		temp = &fan.chain_temps[i];
 		if (temp->enabled) {
 			if (!temp->initialized)
-				return 0;
+				return FAN_DUTY_MAX;
 			if (n == 0 || temp->min < min)
 				min = temp->min;
 			if (n == 0 || temp->max > max)
