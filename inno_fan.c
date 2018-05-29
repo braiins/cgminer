@@ -160,7 +160,7 @@ static int calc_duty(void)
 	}
 
 	printf("calc_duty: min=%2.3lf max=%2.3lf avg=%2.3lf\n", min, max, avg);
-	if (max > 90) {
+	if (max > 95) {
 		plog("# very hot!");
 		printf("very hot!\n");
 		return 0;
@@ -228,7 +228,7 @@ void fancontrol_start(unsigned enabled_chains)
 		float ki = 0.05;
 		float kd = 0.1;
 		float dt = 5;
-		float set_point = 70;
+		float set_point = 75;
 
 		PIDInit(&temp_pid, kp, ki, kd, dt, 40, 100, AUTOMATIC, REVERSE);
 		PIDSetpointSet(&temp_pid, set_point);
@@ -702,74 +702,6 @@ static void inno_fan_speed_max(INNO_FAN_CTRL_T *fan_ctrl)
 static int inno_fan_temp_compare(const void *a, const void *b)
 {
     return *(int *)a - *(int *)b;
-}
-
-/**
- * Converts raw ADC value via inno_tsadc_table to actual temperature (float)
- *
- * The conversion uses a lookup table and interpolates a precise value once start/end points are found
- *
- * @param fan_ctrl
- * @param temp - raw ADC value
- * @return temperature in degrees of Celcius
- */
-float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp)
-{
-    int i = 0;
-    int i_max = 0;
-    float temp_f_min = 0.0f;
-    float temp_f_step = 0.0f;
-
-    float temp_f_start = 0.0f;
-    float temp_f_end = 0.0f;
-    int temp_v_start = 0;
-    int temp_v_end = 0;
-    float temp_f = 0.0f;
-
-    /* 避免越界 */
-    if(temp < fan_ctrl->temp_v_min)
-    {
-        return 9999.0f;
-    }
-    if(temp > fan_ctrl->temp_v_max)
-    {
-        return -9999.0f;
-    } 
-    
-    /* 缩小范围 头和尾已经处理  */
-    i_max = fan_ctrl->temp_nums;
-    for(i = 1; i < i_max - 1; i++)
-    {
-        if(temp > inno_tsadc_table[i])
-        {
-            break;
-        }
-    }
-
-    temp_f_min = fan_ctrl->temp_f_min;
-    temp_f_step = fan_ctrl->temp_f_step;
-
-    /* 分段线性,按照线性比例计算:
-     *
-     * (x - temp_f_start) / temp_f_step = (temp - temp_v_start) / (temp_v_end - temp_v_start)
-     *
-     * x = temp_f_start + temp_f_step * (temp - temp_v_start) / (temp_v_end - temp_v_start)
-     *
-     * */
-    temp_f_end = temp_f_min + i * temp_f_step;
-    temp_f_start = temp_f_end - temp_f_step;
-    temp_v_start = inno_tsadc_table[i - 1];
-    temp_v_end = inno_tsadc_table[i]; 
-
-    temp_f = temp_f_start + temp_f_step * (temp - temp_v_start) / (temp_v_end - temp_v_start);
-
-    applog_hw(LOG_DEBUG, "inno_fan_temp_to_float: temp:%d,%d,%d, %7.4f,%7.4f" , temp,
-            temp_v_start, temp_v_end, temp_f_start, temp_f_end);
-    applog_hw(LOG_DEBUG, "inno_fan_temp_to_float: :%7.4f,%7.4f,%d,%d",
-            temp_f_start, temp_f_step,
-            temp - temp_v_start, temp_v_end - temp_v_start);
-
-    return temp_f;
 }
 
 #ifndef CHIP_A6

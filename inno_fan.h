@@ -50,8 +50,6 @@ void inno_fan_temp_clear(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 /* 根据温度更新转速 */
 void inno_fan_speed_update(INNO_FAN_CTRL_T *fan_ctrl, int chain_id, struct cgpu_info *cgpu);
 
-float inno_fan_temp_to_float(INNO_FAN_CTRL_T *fan_ctrl, int temp);
-
 int inno_fan_temp_get_highest(INNO_FAN_CTRL_T *fan_ctrl, int chain_id);
 
 void inno_temp_contrl(INNO_FAN_CTRL_T *fan_ctrl, struct A1_chain *a1, int chain_id);
@@ -67,6 +65,13 @@ void inno_fan_pwm_set(INNO_FAN_CTRL_T *fan_ctrl, int duty);
 #endif
 
 void fancontrol_start(unsigned enabled_chains);
+
+static inline float inno_temp_to_celsius(int reg)
+{
+	return (588.0f - reg) * 2 / 3 + 0.5f;
+}
+
+#define inno_fan_temp_to_float(x,y) inno_temp_to_celsius(y)
 
 #endif
 

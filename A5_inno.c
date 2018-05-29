@@ -14,6 +14,7 @@
 #include "A5_inno_cmd.h"
 #include "A5_inno_clock.h"
 #include "A5_inno_gpio.h"
+#include "inno_fan.h"
 
 
 #define MUL_COEF 1.248
@@ -649,7 +650,7 @@ bool check_chip(struct A1_chain *a1, int i)
 	//keep ASIC register value
 	memcpy(chip->reg, buffer, 12);
 	chip->temp = 0x000003ff & ((buffer[7] << 8) | buffer[8]);
-	//chip->temp_f = inno_fan_temp_to_float(fan_ctrl, temp);
+	chip->temp_f = inno_temp_to_celsius(chip->temp);
 
 	if (chip->num_cores < BROKEN_CHIP_THRESHOLD)
 	{
