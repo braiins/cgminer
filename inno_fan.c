@@ -30,6 +30,7 @@ struct fan_control {
 	struct chain_temp chain_temps[ASIC_CHAIN_NUM];
 	PIDControl pid;
 	pthread_t fancontrol_tid;
+	unsigned long last_ms;
 	int in_panic;
 	FILE *pid_log;
 };
@@ -38,13 +39,13 @@ static void set_fanspeed(int id, int duty);
 
 static struct fan_control fan;
 
-static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg)
+static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg, int mini)
 {
 	struct chain_temp *temp;
 	assert(chain_id >= 0);
 	assert(chain_id < ASIC_CHAIN_NUM);
 
-	printf("update_chain_temp: chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf\n", chain_id, min, max, avg);
+	printf("update_chain_temp: mini=%d chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf\n", mini, chain_id, min, max, avg);
 
 	mutex_lock(&fan.lock);
 	temp = &fan.chain_temps[chain_id];
@@ -71,6 +72,10 @@ static int calc_duty(void)
 	double max, min, avg;
 	int n = 0;
 	int duty = FAN_DUTY_MAX;
+	unsigned long now_ms = get_current_ms();
+	float dt = (now_ms - fan.last_ms) / 1000.0;
+
+	fan.last_ms = now_ms;
 
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
 		temp = &fan.chain_temps[i];
@@ -87,16 +92,15 @@ static int calc_duty(void)
 		}
 	}
 
-	printf("calc_duty: min=%2.3lf max=%2.3lf avg=%2.3lf\n", min, max, avg);
+	printf("calc_duty: dt=%f min=%2.3lf max=%2.3lf avg=%2.3lf\n", dt, min, max, avg);
 	if (max > HOT_TEMP) {
 		plog("# very hot!");
 		printf("very hot!\n");
 		return FAN_DUTY_MAX;
 	}
 
-
 	PIDInputSet(&fan.pid, avg);
-	PIDCompute(&fan.pid);
+	PIDCompute(&fan.pid, dt);
 	duty = PIDOutputGet(&fan.pid);
 	{
 		char buf[128];
@@ -105,7 +109,7 @@ static int calc_duty(void)
 		time(&now);
 		localtime_r(&now, &tm);
 		strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
-		plog("%s min=%f max=%f avg=%f out=%d", buf, min, max, avg, duty);
+		plog("%s dt=%f min=%f max=%f avg=%f out=%d", buf, dt, min, max, avg, duty);
 	}
 	return duty;
 }
@@ -133,18 +137,18 @@ static void fancontrol_init_pid(void)
 	float kp = 20;
 	float ki = 0.05;
 	float kd = 0.1;
-	float dt = 5;
 	float set_point = TARGET_TEMP;
 
-	PIDInit(&fan.pid, kp, ki, kd, dt, FAN_DUTY_MIN, FAN_DUTY_MAX, AUTOMATIC, REVERSE);
+	PIDInit(&fan.pid, kp, ki, kd, FAN_DUTY_MIN, FAN_DUTY_MAX, AUTOMATIC, REVERSE);
 	PIDSetpointSet(&fan.pid, set_point);
-	plog("# kp=%f ki=%f kd=%f dt=%f target=%f", kp, ki, kd, dt, set_point);
+	plog("# kp=%f ki=%f kd=%f target=%f", kp, ki, kd, set_point);
 }
 
 void fancontrol_start(unsigned enabled_chains)
 {
 	struct chain_temp *temp;
 	fan.pid_log = fopen("/tmp/PID.log", "w");
+	fan.last_ms = get_current_ms();
 	mutex_init(&fan.lock);
 	set_fanspeed(0, FAN_DUTY_MAX);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
@@ -323,7 +327,7 @@ void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 		fancontrol_panic(chain->chain_id);
 		return;
 	}
-	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg);
+	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg, 0);
 
 	cgpu->temp = temp_stats->avg;
 	cgpu->temp_max = temp_stats->max;
@@ -348,5 +352,5 @@ void inno_fan_speed_mini_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 	if (!temp_calc_minmaxavg(chain))
 		return;
 
-	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg);
+	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg, 1);
 }

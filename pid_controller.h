@@ -110,12 +110,6 @@ typedef struct
     float iTerm;
     
     // 
-    // The interval (in seconds) on which the PID controller
-    // will be called
-    // 
-    float sampleTime;
-    
-    // 
     // The values that the output will be constrained to
     // 
     float outMin;
@@ -157,7 +151,6 @@ PIDControl;
 //      kp - Positive P gain constant value.
 //      ki - Positive I gain constant value.
 //      kd - Positive D gain constant value.
-//      sampleTimeSeconds - Interval in seconds on which PIDCompute will be called.
 //      minOutput - Constrain PID output to this minimum value.
 //      maxOutput - Constrain PID output to this maximum value.
 //      mode - Tells how the controller should respond if the user has taken over
@@ -171,22 +164,22 @@ PIDControl;
 // Returns:
 //      Nothing.
 // 
-extern void PIDInit(PIDControl *pid, float kp, float ki, float kd, 
-                    float sampleTimeSeconds, float minOutput, float maxOutput, 
-                    PIDMode mode, PIDDirection controllerDirection);     	
+extern void PIDInit(PIDControl *pid, float kp, float ki, float kd,
+                    float minOutput, float maxOutput,
+                    PIDMode mode, PIDDirection controllerDirection);
 
 // 
 // PID Compute
 // Description:
-//      Should be called on a regular interval defined by sampleTimeSeconds.
 //      Typically, PIDSetpointSet and PIDInputSet should be called immediately
 //      before PIDCompute.
 // Parameters:
 //      pid - The address of a PIDControl instantiation.
+//	dt - time in seconds since last call
 // Returns:
 //      True if in AUTOMATIC. False if in MANUAL.
 //                     
-extern bool PIDCompute(PIDControl *pid); 
+extern bool PIDCompute(PIDControl *pid, float dt);
 
 // 
 // PID Mode Set
@@ -267,33 +260,6 @@ extern void PIDTuningKiSet(PIDControl *pid, float ki);
 //      Nothing.
 // 
 extern void PIDTuningKdSet(PIDControl *pid, float kd);
-
-// 
-// PID Controller Direction Set
-// Description:
-//      Sets the new controller direction.
-// Parameters:
-//      pid - The address of a PIDControl instantiation.
-//      controllerDirection - The sense of direction of the controller
-//                            DIRECT:  A positive setpoint gives a positive output
-//                            REVERSE: A positive setpoint gives a negative output
-// Returns:
-//      Nothing.
-// 
-extern void PIDControllerDirectionSet(PIDControl *pid, 
-                                      PIDDirection controllerDirection);	  									  									  									  
-
-// 
-// PID Sample Time Set
-// Description:
-//      Sets the new sampling time (in seconds).
-// Parameters:
-//      pid - The address of a PIDControl instantiation.
-//      sampleTimeSeconds - Interval in seconds on which PIDCompute will be called.
-// Returns:
-//      Nothing.
-// 
-extern void PIDSampleTimeSet(PIDControl *pid, float sampleTimeSeconds);                                                       									  									  									   
 
 // 
 // Basic Set and Get Functions for PID Parameters

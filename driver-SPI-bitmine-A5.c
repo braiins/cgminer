@@ -1121,7 +1121,6 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 		}
 	}
 
-
 	if ((now_ms - chain->last_voltage_time) > VOLTAGE_UPDATE_INT_MS) {
 		chain->last_voltage_time = now_ms;
 		show_log[chain->chain_id]++;
