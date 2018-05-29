@@ -1050,6 +1050,7 @@ void A1_detect(bool hotplug)
 }
 
 #define TEMP_UPDATE_INT_MS	5000
+#define MINI_TEMP_UPDATE_INT_MS	1000
 #define RESULTS_UPDATE_INT_MS	10000
 #define VOLTAGE_UPDATE_INT_MS  120000
 #define TELEMETRY_SUBMIT_INT_MS 120000
@@ -1083,12 +1084,10 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 
 	if ((now_ms - chain->last_temp_time) > TEMP_UPDATE_INT_MS) {
 		chain->last_temp_time = now_ms;
+		chain->last_mini_temp_time = now_ms;
 		// TODO jca: to be cleared/removed
 		check_disbale_flag[chain->chain_id]++;
 
-		// Reset the number of cores in the chain as check_chip will sum up all working cores while taking
-		// the temperature measurement
-		chain->num_cores = 0;
 		for (int chip_id = chain->num_active_chips; chip_id > 0; chip_id--) {
 			// FIXME: scans chips 1..num_of_active_chips - but the chips don't get deactivated in order, back-to-front
 			// NOTE JCA: check_chip takes chip index as parameter!
@@ -1097,12 +1096,31 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 				continue;
 			}
 		}
+		/* recalculate the number of active cores */
+		chain->num_cores = 0;
+		for (int i = 0; i < chain->num_active_chips; i++) {
+			struct A1_chip *chip = &chain->chips[i];
+			if (!chip->disabled) {
+				chain->num_cores += chip->num_cores;
+			}
+		}
+		/* recalculate temperature avg/max/min and send them to fancontrol */
 		inno_fan_speed_update(chain, cgpu);
 		if (inno_fan_temp_get_highest(chain) > DANGEROUS_TEMP) {
 			asic_gpio_write(spi[chain->chain_id]->power_en, 0);
 			early_quit(1, "Chain %d has some problem with temperature (max=%f)\n", chain->chain_id, chain->temp_stats.max);
 		}
 	}
+	if ((now_ms - chain->last_mini_temp_time) > MINI_TEMP_UPDATE_INT_MS) {
+		struct A1_chain_temp_stats *stats = &chain->temp_stats;
+		chain->last_mini_temp_time = now_ms;
+		if (stats->valid) {
+			check_chip(chain, stats->max_chip);
+			check_chip(chain, stats->avg_chip);
+			inno_fan_speed_mini_update(chain, cgpu);
+		}
+	}
+
 
 	if ((now_ms - chain->last_voltage_time) > VOLTAGE_UPDATE_INT_MS) {
 		chain->last_voltage_time = now_ms;

@@ -19,6 +19,7 @@
 
 void inno_fan_temp_init(struct A1_chain *chain);
 void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu);
+void inno_fan_speed_mini_update(struct A1_chain *chain, struct cgpu_info *cgpu);
 
 static inline float inno_fan_temp_get_highest(struct A1_chain *chain)
 {

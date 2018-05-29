@@ -642,10 +642,6 @@ bool check_chip(struct A1_chain *a1, int i)
 	}
 
 	chip->num_cores = buffer[11];
-	/* FIXME 1 */
-	a1->num_cores += a1->chips[i].num_cores;
-	//applog_hw(LOG_WARNING, "%d: Found chip %d with %d active cores",
-	 //      cid, chip_id, a1->chips[i].num_cores);
 
 	//keep ASIC register value
 	memcpy(chip->reg, buffer, 12);
@@ -665,7 +661,6 @@ bool check_chip(struct A1_chain *a1, int i)
 		//cmd_READ_REG(a1, chip_id);
 		hexdump_error("new.PLL", a1->spi_rx, 8);
 		chip->disabled = true;
-		a1->num_cores -= chip->num_cores;
 		
 		return false;
 	}

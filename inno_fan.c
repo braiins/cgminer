@@ -159,12 +159,39 @@ void fancontrol_start(unsigned enabled_chains)
 	pthread_create(&fan.fancontrol_tid, NULL, fancontrol_thread, NULL);
 }
 
+static int temp_calc_minmaxavg_mini(struct A1_chain *chain)
+{
+	struct A1_chain_temp_stats *stats = &chain->temp_stats;
+	struct A1_chip *chip;
+
+	if (!stats->valid)
+		return 0;
+
+	chip = &chain->chips[stats->max_chip];
+	if (!chip->disabled) {
+		stats->max = chip->temp_f;
+	}
+	chip = &chain->chips[stats->avg_chip];
+	if (!chip->disabled) {
+		stats->avg = chip->temp_f;
+	}
+	return 1;
+}
+
 static int temp_calc_minmaxavg(struct A1_chain *chain)
 {
 	struct A1_chain_temp_stats *stats = &chain->temp_stats;
 	int min_chip = 0, max_chip = 0;
 	int n = 0;
 	float min = 0, max = 0, avg = 0;
+
+	stats->valid = 0;
+	stats->min = 9999;
+	stats->max = 9999;
+	stats->avg = 9999;
+	stats->min_chip = 0;
+	stats->max_chip = 0;
+	stats->avg_chip = 0;
 
 	for (int i = 0; i < chain->num_active_chips; i++) {
 		struct A1_chip *chip = &chain->chips[i];
@@ -189,12 +216,7 @@ static int temp_calc_minmaxavg(struct A1_chain *chain)
 		}
 	}
 	if (n == 0) {
-		stats->min = 9999;
-		stats->max = 9999;
-		stats->avg = 9999;
-		stats->min_chip = 0;
-		stats->max_chip = 0;
-		stats->avg_chip = 0;
+		/* nothing to measure */
 		return 0;
 	}
 
@@ -317,4 +339,14 @@ void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 		case 2:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll3].speedMHz * 2ull * (chain->num_cores);break;
 		default:;
 	}
+}
+
+void inno_fan_speed_mini_update(struct A1_chain *chain, struct cgpu_info *cgpu)
+{
+	struct A1_chain_temp_stats *temp_stats = &chain->temp_stats;
+
+	if (!temp_calc_minmaxavg(chain))
+		return;
+
+	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg);
 }

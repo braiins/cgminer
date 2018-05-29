@@ -90,6 +90,8 @@ struct A1_chip {
 };
 
 struct A1_chain_temp_stats {
+	/* are these stats valid? */
+	int valid;
 	/* temperature and index of coldest chip */
 	float min;
 	int min_chip;
@@ -122,6 +124,7 @@ struct A1_chain {
 	/* mark chain disabled, do not try to re-enable it */
 	bool disabled;
 	unsigned long last_temp_time;
+	unsigned long last_mini_temp_time;
 	unsigned long last_voltage_time;
 	unsigned long last_telemetry_time;
 
