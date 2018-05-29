@@ -184,25 +184,20 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	//configure for vsensor
 	inno_configure_tvsensor(a1,ADDR_BROADCAST,0);
 
-	for (i = 0; i < a1->num_active_chips; i++)
-    {
+	for (i = 0; i < a1->num_active_chips; i++) {
 		inno_check_voltage(a1, i+1);
-    }
-	
+	}
+
 	//configure for tsensor
 	inno_configure_tvsensor(a1,ADDR_BROADCAST,1);
 
-	for (i = 0; i < a1->num_active_chips; i++)
-    {
+	for (i = 0; i < a1->num_active_chips; i++) {
 		check_chip(a1, i);
+		inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp, true);
+	}
+	/* ÉèÖÃ³õÊ¼Öµ */
+	inno_fan_temp_init(&s_fan_ctrl, chain_id);
 
-        inno_fan_temp_add(&s_fan_ctrl, chain_id, a1->chips[i].temp, true);
-    }
-    /* ÉèÖÃ³õÊ¼Öµ */ 
-    inno_fan_temp_init(&s_fan_ctrl, chain_id);
-#ifndef CHIP_A6
-	inno_temp_contrl(&s_fan_ctrl, a1, chain_id);
-#endif
 	applog_hw_chain(LOG_INFO, chain_id, "found %d chips with total %d active cores",
 	       a1->num_active_chips, a1->num_cores);
 	//modify 0922       
