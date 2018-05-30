@@ -661,6 +661,11 @@ bool check_chip(struct A1_chain *a1, int i)
 	{
 		int temp = 0x000003ff & ((buffer[7] << 8) | buffer[8]);
 		chip->temp_f = inno_temp_to_celsius(temp);
+
+		/* check temperature is within bounds */
+		if (chip->temp_f > DANGEROUS_TEMP) {
+			chain_temp_panic(a1, chip->temp_f);
+		}
 	}
 
 	if (chip->num_cores < BROKEN_CHIP_THRESHOLD)

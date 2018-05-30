@@ -120,6 +120,12 @@ struct A1_config_options A1_config_options = {
 static struct A1_config_options *parsed_config_options;
 
 /********** driver interface */
+void chain_temp_panic(struct A1_chain *a1, float temp)
+{
+	asic_gpio_write(spi[a1->chain_id]->power_en, 0);
+	early_quit(1, "Chain %d has some problem with temperature (%f degree C)\n", a1->chain_id, temp);
+}
+
 void exit_A1_chain(struct A1_chain *a1)
 {
 	if (a1 == NULL)
@@ -199,12 +205,6 @@ struct A1_chain *init_A1_chain(struct spi_ctx *ctx, int chain_id)
 	applog_hw_chain(LOG_INFO, chain_id, "found %d chips with total %d active cores",
 	       a1->num_active_chips, a1->num_cores);
 
-	/* check temperature is ok */
-	if (inno_fan_temp_get_highest(a1) > DANGEROUS_TEMP) {
-		asic_gpio_write(spi[a1->chain_id]->power_en, 0);
-		early_quit(1, "Chain %d has some problem with temperature (max=%f)\n", a1->chain_id, a1->temp_stats.max);
-	}
-	
 	mutex_init(&a1->lock);
 	INIT_LIST_HEAD(&a1->active_wq.head);
 
@@ -1100,10 +1100,6 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 		sum_cores(chain);
 		/* recalculate temperature avg/max/min and send them to fancontrol */
 		inno_fan_speed_update(chain, cgpu);
-		if (inno_fan_temp_get_highest(chain) > DANGEROUS_TEMP) {
-			asic_gpio_write(spi[chain->chain_id]->power_en, 0);
-			early_quit(1, "Chain %d has some problem with temperature (max=%f)\n", chain->chain_id, chain->temp_stats.max);
-		}
 	}
 
 	if ((now_ms - chain->last_mini_temp_time) > MINI_TEMP_UPDATE_INT_MS) {

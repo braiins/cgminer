@@ -62,6 +62,8 @@ void check_disabled_chips(struct A1_chain *a1);
 uint8_t *create_job(uint8_t chip_id, uint8_t job_id, struct work *work, uint8_t *job, unsigned midstate_id);
 void test_bench_pll_config(struct A1_chain *a1,uint32_t uiPll);
 
+void chain_temp_panic(struct A1_chain *a1, float temp);
+
 #define a5_debug(p, q...) ({ if (opt_A5_extra_debug > 0) { fprintf(stderr, "a5: " p "\n", ##q); } })
 
 #endif
