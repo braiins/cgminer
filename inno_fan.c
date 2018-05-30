@@ -32,6 +32,7 @@ struct fan_control {
 	pthread_t fancontrol_tid;
 	unsigned long last_ms;
 	int in_panic;
+	int new_data;
 	FILE *pid_log;
 };
 
@@ -53,6 +54,7 @@ static void fancontrol_update_chain_temp(int chain_id, double min, double max, d
 	temp->min = min;
 	temp->max = max;
 	temp->avg = avg;
+	fan.new_data++;
 	cgtimer_time(&temp->time);
 	mutex_unlock(&fan.lock);
 }
@@ -117,17 +119,23 @@ static int calc_duty(void)
 static void *fancontrol_thread(void __maybe_unused *argv)
 {
 	for (;;sleep(1)) {
-		int duty;
+		int duty = -1;
+
 		mutex_lock(&fan.lock);
 		if (fan.in_panic) {
 			printf("fancontrol_thread: !!! PANIC !!! PANIC !!!\n");
 			duty = FAN_DUTY_MAX;
 		} else {
-			duty = calc_duty();
+			if (fan.new_data > 0) {
+				duty = calc_duty();
+				fan.new_data = 0;
+			}
 		}
 		mutex_unlock(&fan.lock);
-		printf("fancontrol_thread: duty=%d\n", duty);
-		set_fanspeed(0, duty);
+		if (duty >= 0) {
+			printf("fancontrol_thread: duty=%d\n", duty);
+			set_fanspeed(0, duty);
+		}
 	}
 	return NULL;
 }
