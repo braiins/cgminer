@@ -86,13 +86,6 @@ static int calc_duty(void)
 		}
 	}
 
-	printf("calc_duty: dt=%f min=%2.3lf max=%2.3lf avg=%2.3lf\n", dt, min, max, avg);
-	if (max > HOT_TEMP) {
-		plog("# very hot!");
-		printf("very hot!\n");
-		return FAN_DUTY_MAX;
-	}
-
 	PIDInputSet(&fan.pid, avg);
 	PIDCompute(&fan.pid, dt);
 	duty = PIDOutputGet(&fan.pid);
@@ -104,6 +97,11 @@ static int calc_duty(void)
 		localtime_r(&now, &tm);
 		strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
 		plog("%s dt=%f min=%f max=%f avg=%f out=%d", buf, dt, min, max, avg, duty);
+	}
+	if (max > HOT_TEMP) {
+		plog("# very hot!");
+		printf("very hot!\n");
+		return FAN_DUTY_MAX;
 	}
 	return duty;
 }
