@@ -90,19 +90,7 @@ struct A1_chip {
 };
 
 struct A1_chain_temp_stats {
-	/* are these stats valid? */
-	int valid;
-	/* temperature and index of coldest chip */
-	float min;
-	int min_chip;
-	/* temperature and index of hottest chip */
-	float max;
-	int max_chip;
-	/* average temperature */
-	float avg;
-	/* this is index of chip that has temperature "closest" to
-	   average temperature */
-	int avg_chip;
+	float min, max, avg;
 };
 
 struct A1_chain {

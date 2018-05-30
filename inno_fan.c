@@ -31,7 +31,6 @@ struct fan_control {
 	PIDControl pid;
 	pthread_t fancontrol_tid;
 	unsigned long last_ms;
-	int in_panic;
 	int new_data;
 	FILE *pid_log;
 };
@@ -40,13 +39,13 @@ static void set_fanspeed(int id, int duty);
 
 static struct fan_control fan;
 
-static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg, int mini)
+static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg)
 {
 	struct chain_temp *temp;
 	assert(chain_id >= 0);
 	assert(chain_id < ASIC_CHAIN_NUM);
 
-	printf("update_chain_temp: mini=%d chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf\n", mini, chain_id, min, max, avg);
+	printf("update_chain_temp: chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf\n", chain_id, min, max, avg);
 
 	mutex_lock(&fan.lock);
 	temp = &fan.chain_temps[chain_id];
@@ -56,13 +55,6 @@ static void fancontrol_update_chain_temp(int chain_id, double min, double max, d
 	temp->avg = avg;
 	fan.new_data++;
 	cgtimer_time(&temp->time);
-	mutex_unlock(&fan.lock);
-}
-
-static void fancontrol_panic(int chain_id)
-{
-	mutex_lock(&fan.lock);
-	fan.in_panic = 1;
 	mutex_unlock(&fan.lock);
 }
 
@@ -122,14 +114,9 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 		int duty = -1;
 
 		mutex_lock(&fan.lock);
-		if (fan.in_panic) {
-			printf("fancontrol_thread: !!! PANIC !!! PANIC !!!\n");
-			duty = FAN_DUTY_MAX;
-		} else {
-			if (fan.new_data > 0) {
-				duty = calc_duty();
-				fan.new_data = 0;
-			}
+		if (fan.new_data > 0) {
+			duty = calc_duty();
+			fan.new_data = 0;
 		}
 		mutex_unlock(&fan.lock);
 		if (duty >= 0) {
@@ -171,39 +158,15 @@ void fancontrol_start(unsigned enabled_chains)
 	pthread_create(&fan.fancontrol_tid, NULL, fancontrol_thread, NULL);
 }
 
-static int temp_calc_minmaxavg_mini(struct A1_chain *chain)
+static void temp_calc_minmaxavg(struct A1_chain *chain)
 {
 	struct A1_chain_temp_stats *stats = &chain->temp_stats;
-	struct A1_chip *chip;
-
-	if (!stats->valid)
-		return 0;
-
-	chip = &chain->chips[stats->max_chip];
-	if (!chip->disabled) {
-		stats->max = chip->temp_f;
-	}
-	chip = &chain->chips[stats->avg_chip];
-	if (!chip->disabled) {
-		stats->avg = chip->temp_f;
-	}
-	return 1;
-}
-
-static int temp_calc_minmaxavg(struct A1_chain *chain)
-{
-	struct A1_chain_temp_stats *stats = &chain->temp_stats;
-	int min_chip = 0, max_chip = 0;
 	int n = 0;
 	float min = 0, max = 0, avg = 0;
 
-	stats->valid = 0;
-	stats->min = 9999;
+	stats->min = -9999;
 	stats->max = 9999;
 	stats->avg = 9999;
-	stats->min_chip = 0;
-	stats->max_chip = 0;
-	stats->avg_chip = 0;
 
 	for (int i = 0; i < chain->num_active_chips; i++) {
 		struct A1_chip *chip = &chain->chips[i];
@@ -212,16 +175,11 @@ static int temp_calc_minmaxavg(struct A1_chain *chain)
 
 			if (n == 0) {
 				min = max = temp;
-				min_chip = max_chip = i;
 			} else {
-				if (temp < min) {
+				if (temp < min)
 					min = temp;
-					min_chip = i;
-				}
-				if (temp > max) {
+				if (temp > max)
 					max = temp;
-					max_chip = i;
-				}
 			}
 			avg += temp;
 			n++;
@@ -229,44 +187,14 @@ static int temp_calc_minmaxavg(struct A1_chain *chain)
 	}
 	if (n == 0) {
 		/* nothing to measure */
-		return 0;
+		return;
 	}
 
 	avg /= n;
 
-	float min_avg_diff = 0;
-	int avg_chip = 0;
-	int first = 1;
-
-	for (int i = 0; i < chain->num_active_chips; i++) {
-		struct A1_chip *chip = &chain->chips[i];
-		if (!chip->disabled) {
-			float temp = chip->temp_f;
-			float diff = fabs(avg - temp);
-
-			/* only consider chips, whose temperature is greater
-			   than average */
-			if (temp >= avg) {
-				if (first || diff < min_avg_diff) {
-					min_avg_diff = diff;
-					avg_chip = i;
-				}
-				first = 0;
-			}
-		}
-	}
-
 	stats->min = min;
-	stats->min_chip = min_chip;
 	stats->max = max;
-	stats->max_chip = max_chip;
 	stats->avg = avg;
-	stats->avg_chip = avg_chip;
-	stats->valid = 1;
-
-	printf("stats: min_chip=%d max_chip=%d avg_chip=%d\n", stats->min_chip, stats->max_chip, stats->avg_chip);
-
-	return 1;
 }
 
 void inno_fan_temp_init(struct A1_chain *chain)
@@ -338,11 +266,8 @@ void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 {
 	struct A1_chain_temp_stats *temp_stats = &chain->temp_stats;
 
-	if (!temp_calc_minmaxavg(chain)) {
-		fancontrol_panic(chain->chain_id);
-		return;
-	}
-	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg, 0);
+	temp_calc_minmaxavg(chain);
+	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg);
 
 	cgpu->temp = temp_stats->avg;
 	cgpu->temp_max = temp_stats->max;
@@ -358,14 +283,4 @@ void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 		case 2:cgpu->mhs_av = (double)PLL_Clk_12Mhz[A1Pll3].speedMHz * 2ull * (chain->num_cores);break;
 		default:;
 	}
-}
-
-void inno_fan_speed_mini_update(struct A1_chain *chain, struct cgpu_info *cgpu)
-{
-	struct A1_chain_temp_stats *temp_stats = &chain->temp_stats;
-
-	if (!temp_calc_minmaxavg_mini(chain))
-		return;
-
-	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg, 1);
 }

@@ -1050,8 +1050,7 @@ void A1_detect(bool hotplug)
 	exit(0);
 }
 
-#define TEMP_UPDATE_INT_MS	5000
-#define MINI_TEMP_UPDATE_INT_MS	1000
+#define TEMP_UPDATE_INT_MS	10000
 #define RESULTS_UPDATE_INT_MS	10000
 #define VOLTAGE_UPDATE_INT_MS  120000
 #define TELEMETRY_SUBMIT_INT_MS 120000
@@ -1085,7 +1084,6 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 
 	if ((now_ms - chain->last_temp_time) > TEMP_UPDATE_INT_MS) {
 		chain->last_temp_time = now_ms;
-		chain->last_mini_temp_time = now_ms;
 		// TODO jca: to be cleared/removed
 		check_disbale_flag[chain->chain_id]++;
 
@@ -1100,16 +1098,6 @@ static void monitor_and_control_chain_health(struct cgpu_info *cgpu, bool submit
 		sum_cores(chain);
 		/* recalculate temperature avg/max/min and send them to fancontrol */
 		inno_fan_speed_update(chain, cgpu);
-	}
-
-	if ((now_ms - chain->last_mini_temp_time) > MINI_TEMP_UPDATE_INT_MS) {
-		struct A1_chain_temp_stats *stats = &chain->temp_stats;
-		chain->last_mini_temp_time = now_ms;
-		if (stats->valid) {
-			check_chip(chain, stats->max_chip);
-			check_chip(chain, stats->avg_chip);
-			inno_fan_speed_mini_update(chain, cgpu);
-		}
 	}
 
 	if ((now_ms - chain->last_voltage_time) > VOLTAGE_UPDATE_INT_MS) {
