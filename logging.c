@@ -16,7 +16,7 @@
 #include "miner.h"
 
 bool opt_debug = false;
-bool opt_log_output = false;
+bool opt_log_output = true;
 
 /* per default priorities higher than LOG_NOTICE are logged */
 int opt_log_level = LOG_WARNING;
