@@ -17,7 +17,10 @@
 
 #define N_PWM_CHIPS 3
 #define FAN_DUTY_MAX 100
-#define FAN_DUTY_MIN 40
+/* do not go lower than 60% duty cycle during warmup */
+#define FAN_DUTY_MIN_WARMUP 60
+#define FAN_DUTY_MIN 10
+#define WARMUP_PERIOD_MS (60*1000)
 
 struct chain_temp {
 	int initialized, enabled;
@@ -30,7 +33,6 @@ struct fan_control {
 	struct chain_temp chain_temps[ASIC_CHAIN_NUM];
 	PIDControl pid;
 	pthread_t fancontrol_tid;
-	unsigned long last_ms;
 	int new_data;
 	FILE *pid_log;
 };
@@ -45,7 +47,7 @@ static void fancontrol_update_chain_temp(int chain_id, double min, double max, d
 	assert(chain_id >= 0);
 	assert(chain_id < ASIC_CHAIN_NUM);
 
-	printf("update_chain_temp: chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf\n", chain_id, min, max, avg);
+	applog_hw(LOG_INFO, "update_chain_temp: chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf", chain_id, min, max, avg);
 
 	mutex_lock(&fan.lock);
 	temp = &fan.chain_temps[chain_id];
@@ -58,24 +60,45 @@ static void fancontrol_update_chain_temp(int chain_id, double min, double max, d
 	mutex_unlock(&fan.lock);
 }
 
-#define plog(f,a...) ({ if (fan.pid_log) fprintf(fan.pid_log, f "\n", ##a); fflush(fan.pid_log); })
+static void plog(const char *fmt, ...)
+{
+	va_list ap;
+	char buf[128];
+	time_t now;
+	struct tm tm;
 
-static int calc_duty(void)
+	if (fan.pid_log == 0)
+		return;
+
+	time(&now);
+	localtime_r(&now, &tm);
+	strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+	fprintf(fan.pid_log, "%s ", buf);
+
+	va_start(ap, fmt);
+	vfprintf(fan.pid_log, fmt, ap);
+	va_end(ap);
+
+	fprintf(fan.pid_log, "\n");
+	fflush(fan.pid_log);
+}
+
+static int calc_duty(float dt)
 {
 	struct chain_temp *temp;
 	double max, min, avg;
 	int n = 0;
+	/* default behavior is to run fan at max */
 	int duty = FAN_DUTY_MAX;
-	unsigned long now_ms = get_current_ms();
-	float dt = (now_ms - fan.last_ms) / 1000.0;
 
-	fan.last_ms = now_ms;
-
+	/* take maximu average temperature of all enabled chains */
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
 		temp = &fan.chain_temps[i];
 		if (temp->enabled) {
+			/* if not all enabled chains are initialized,
+			   do not control fan */
 			if (!temp->initialized)
-				return FAN_DUTY_MAX;
+				goto done;
 			if (n == 0 || temp->min < min)
 				min = temp->min;
 			if (n == 0 || temp->max > max)
@@ -86,39 +109,56 @@ static int calc_duty(void)
 		}
 	}
 
+	/* run PID on average temperature */
 	PIDInputSet(&fan.pid, avg);
 	PIDCompute(&fan.pid, dt);
 	duty = PIDOutputGet(&fan.pid);
-	{
-		char buf[128];
-		time_t now;
-		struct tm tm;
-		time(&now);
-		localtime_r(&now, &tm);
-		strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
-		plog("%s dt=%f min=%f max=%f avg=%f out=%d", buf, dt, min, max, avg, duty);
-	}
+
+	/* turn fan full on if temperature is too hot */
 	if (max > HOT_TEMP) {
-		plog("# very hot!");
-		printf("very hot!\n");
-		return FAN_DUTY_MAX;
+		plog("very hot!");
+		duty = FAN_DUTY_MAX;
 	}
+
+done:
+	plog("dt=%f min=%f max=%f avg=%f out=%d", dt, min, max, avg, duty);
 	return duty;
 }
 
 static void *fancontrol_thread(void __maybe_unused *argv)
 {
+	unsigned long start_time, last_pid_time;
+	int warming_up;
+
+	start_time = last_pid_time = get_current_ms();
+	warming_up = 0;
+
+	/* try to adjust fan speed every second */
 	for (;;sleep(1)) {
 		int duty = -1;
 
+		/* everything fan* is protected by lock */
 		mutex_lock(&fan.lock);
+		/* call pid only if new data are available */
 		if (fan.new_data > 0) {
-			duty = calc_duty();
+			unsigned long now = get_current_ms();
+			/* time delta in seconds since last pid */
+			float dt = (now - last_pid_time) / 1000.0;
+
+			/* if we are past warming phase, remove fan speed limits */
+			if (warming_up && now - start_time > WARMUP_PERIOD_MS) {
+				PIDOutputLimitsSet(&fan.pid, FAN_DUTY_MIN, FAN_DUTY_MAX);
+				warming_up = 0;
+			}
+			/* calculate new fan duty cycle */
+			duty = calc_duty(dt);
 			fan.new_data = 0;
+			last_pid_time = now;
 		}
 		mutex_unlock(&fan.lock);
+
 		if (duty >= 0) {
-			printf("fancontrol_thread: duty=%d\n", duty);
+			applog_hw(LOG_INFO, "fancontrol_thread: duty=%d", duty);
 			set_fanspeed(0, duty);
 		}
 	}
@@ -132,7 +172,7 @@ static void fancontrol_init_pid(void)
 	float kd = 0.1;
 	float set_point = TARGET_TEMP;
 
-	PIDInit(&fan.pid, kp, ki, kd, FAN_DUTY_MIN, FAN_DUTY_MAX, AUTOMATIC, REVERSE);
+	PIDInit(&fan.pid, kp, ki, kd, FAN_DUTY_MIN_WARMUP, FAN_DUTY_MAX, AUTOMATIC, REVERSE);
 	PIDSetpointSet(&fan.pid, set_point);
 	plog("# kp=%f ki=%f kd=%f target=%f", kp, ki, kd, set_point);
 }
@@ -141,7 +181,7 @@ void fancontrol_start(unsigned enabled_chains)
 {
 	struct chain_temp *temp;
 	fan.pid_log = fopen("/tmp/PID.log", "w");
-	fan.last_ms = get_current_ms();
+	fan.new_data = 1;
 	mutex_init(&fan.lock);
 	set_fanspeed(0, FAN_DUTY_MAX);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
