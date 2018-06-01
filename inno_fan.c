@@ -20,7 +20,7 @@
 /* do not go lower than 60% duty cycle during warmup */
 #define FAN_DUTY_MIN_WARMUP 60
 #define FAN_DUTY_MIN 10
-#define WARMUP_PERIOD_MS (60*1000)
+#define WARMUP_PERIOD_MS (360*1000)
 
 struct chain_temp {
 	int initialized, enabled;
@@ -131,7 +131,7 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 	int warming_up;
 
 	start_time = last_pid_time = get_current_ms();
-	warming_up = 0;
+	warming_up = 1;
 
 	/* try to adjust fan speed every second */
 	for (;;sleep(1)) {
