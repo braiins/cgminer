@@ -24,7 +24,7 @@
 
 struct chain_temp {
 	int initialized, enabled;
-	double min, max, avg;
+	double min, max, med, avg;
 	cgtimer_t time;
 };
 
@@ -41,19 +41,20 @@ static void set_fanspeed(int id, int duty);
 
 static struct fan_control fan;
 
-static void fancontrol_update_chain_temp(int chain_id, double min, double max, double avg)
+static void fancontrol_update_chain_temp(int chain_id, double min, double max, double med, double avg)
 {
 	struct chain_temp *temp;
 	assert(chain_id >= 0);
 	assert(chain_id < ASIC_CHAIN_NUM);
 
-	applog_hw(LOG_INFO, "update_chain_temp: chain=%d min=%2.3lf max=%2.3lf avg=%2.3lf", chain_id, min, max, avg);
+	applog_hw(LOG_INFO, "update_chain_temp: chain=%d min=%2.3lf max=%2.3lf med=%2.3lf avg=%2.3lf", chain_id, min, max, med, avg);
 
 	mutex_lock(&fan.lock);
 	temp = &fan.chain_temps[chain_id];
 	temp->initialized = 1;
 	temp->min = min;
 	temp->max = max;
+	temp->med = med;
 	temp->avg = avg;
 	fan.new_data++;
 	cgtimer_time(&temp->time);
@@ -196,43 +197,49 @@ void fancontrol_start(unsigned enabled_chains)
 	pthread_create(&fan.fancontrol_tid, NULL, fancontrol_thread, NULL);
 }
 
+int floatcmp(const void *a, const void *b)
+{
+	const float *fa = a, *fb = b;
+	if (*fa < *fb) return -1;
+	if (*fa > *fb) return 1;
+	return 0;
+}
+
 static void temp_calc_minmaxavg(struct A1_chain *chain)
 {
 	struct A1_chain_temp_stats *stats = &chain->temp_stats;
-	int n = 0;
-	float min = 0, max = 0, avg = 0;
+	int n;
+	float sum;
+	float temp[MAX_CHAIN_LENGTH];
 
+	/* fill-in safe defaults */
 	stats->min = -9999;
 	stats->max = 9999;
+	stats->med = 9999;
 	stats->avg = 9999;
 
+	/* gather statistics */
+	n = 0;
+	sum = 0;
 	for (int i = 0; i < chain->num_active_chips; i++) {
 		struct A1_chip *chip = &chain->chips[i];
 		if (!chip->disabled) {
-			float temp = chip->temp_f;
-
-			if (n == 0) {
-				min = max = temp;
-			} else {
-				if (temp < min)
-					min = temp;
-				if (temp > max)
-					max = temp;
-			}
-			avg += temp;
+			temp[n] = chip->temp_f;
+			sum += chip->temp_f;
 			n++;
 		}
 	}
-	if (n == 0) {
-		/* nothing to measure */
+
+	/* all chips disabled - do nothing */
+	if (n == 0)
 		return;
-	}
 
-	avg /= n;
-
-	stats->min = min;
-	stats->max = max;
-	stats->avg = avg;
+	/* compute statistics */
+	qsort(temp, n, sizeof(float), floatcmp);
+	stats->avg = sum / n;
+	stats->min = temp[0];
+	stats->max = temp[n - 1];
+	stats->med = temp[n / 2];
 }
 
 void inno_fan_temp_init(struct A1_chain *chain)
@@ -305,7 +312,7 @@ void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 	struct A1_chain_temp_stats *temp_stats = &chain->temp_stats;
 
 	temp_calc_minmaxavg(chain);
-	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->avg);
+	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->med, temp_stats->avg);
 
 	cgpu->temp = temp_stats->avg;
 	cgpu->temp_max = temp_stats->max;

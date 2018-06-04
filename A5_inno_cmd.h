@@ -90,7 +90,7 @@ struct A1_chip {
 };
 
 struct A1_chain_temp_stats {
-	float min, max, avg;
+	float min, max, med, avg;
 };
 
 struct A1_chain {
