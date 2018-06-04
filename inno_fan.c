@@ -35,6 +35,9 @@ struct fan_control {
 	pthread_t fancontrol_tid;
 	int new_data;
 	FILE *pid_log;
+	/* temperature log */
+	pthread_mutex_t temp_lock;
+	FILE *temp_log;
 };
 
 static void set_fanspeed(int id, int duty);
@@ -184,6 +187,8 @@ void fancontrol_start(unsigned enabled_chains)
 	fan.pid_log = fopen("/tmp/PID.log", "w");
 	fan.new_data = 1;
 	mutex_init(&fan.lock);
+	fan.temp_log = fopen("/tmp/temp.log", "w");
+	mutex_init(&fan.temp_lock);
 	set_fanspeed(0, FAN_DUTY_MAX);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
 		temp = &fan.chain_temps[i];
@@ -307,11 +312,32 @@ extern const struct PLL_Clock PLL_Clk_12Mhz[142];
 extern struct A1_chain *chain[ASIC_CHAIN_NUM];
 #endif
 
+static void log_chain_temp(struct A1_chain *chain)
+{
+	FILE *f = fan.temp_log;
+	if (!f)
+		return;
+	mutex_lock(&fan.temp_lock);
+	fprintf(f, "%d %d ", time(0), chain->chain_id);
+	for (int i = 0; i < chain->num_active_chips; i++) {
+		struct A1_chip *chip = &chain->chips[i];
+		if (i > 0)
+			fputc(',', f);
+		if (chip->disabled)
+			fprintf(f, "0");
+		else
+			fprintf(f, "%3.2f", chip->temp_f);
+	}
+	fputc('\n', f);
+	mutex_unlock(&fan.temp_lock);
+}
+
 void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 {
 	struct A1_chain_temp_stats *temp_stats = &chain->temp_stats;
 
 	temp_calc_minmaxavg(chain);
+	log_chain_temp(chain);
 	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->med, temp_stats->avg);
 
 	cgpu->temp = temp_stats->avg;
