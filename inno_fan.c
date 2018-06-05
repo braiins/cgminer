@@ -34,6 +34,7 @@ struct fan_control {
 	PIDControl pid;
 	pthread_t fancontrol_tid;
 	int new_data;
+	int duty;
 	FILE *pid_log;
 	/* temperature log */
 	pthread_mutex_t temp_lock;
@@ -101,8 +102,10 @@ static int calc_duty(float dt)
 		if (temp->enabled) {
 			/* if not all enabled chains are initialized,
 			   do not control fan */
-			if (!temp->initialized)
+			if (!temp->initialized) {
+				duty = FAN_DUTY_MAX;
 				goto done;
+			}
 			if (n == 0 || temp->min < min)
 				min = temp->min;
 			if (n == 0 || temp->max > max)
@@ -155,7 +158,7 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 				warming_up = 0;
 			}
 			/* calculate new fan duty cycle */
-			duty = calc_duty(dt);
+			duty = fan.duty = calc_duty(dt);
 			fan.new_data = 0;
 			last_pid_time = now;
 		}
@@ -319,6 +322,9 @@ static void log_chain_temp(struct A1_chain *chain)
 		return;
 	mutex_lock(&fan.temp_lock);
 	fprintf(f, "%d %d ", time(0), chain->chain_id);
+	mutex_lock(&fan.lock);
+	fprintf(f, "%d ", fan.duty);
+	mutex_unlock(&fan.lock);
 	for (int i = 0; i < chain->num_active_chips; i++) {
 		struct A1_chip *chip = &chain->chips[i];
 		if (i > 0)
