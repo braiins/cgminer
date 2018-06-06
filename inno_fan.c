@@ -187,10 +187,15 @@ static void fancontrol_init_pid(void)
 void fancontrol_start(unsigned enabled_chains)
 {
 	struct chain_temp *temp;
-	fan.pid_log = fopen("/tmp/PID.log", "w");
 	fan.new_data = 1;
 	mutex_init(&fan.lock);
+#ifdef TEMP_DEBUG_ENABLED
+	fan.pid_log = fopen("/tmp/PID.log", "w");
 	fan.temp_log = fopen("/tmp/temp.log", "w");
+#else
+	fan.pid_log = 0;
+	fan.temp_log = 0;
+#endif
 	mutex_init(&fan.temp_lock);
 	set_fanspeed(0, FAN_DUTY_MAX);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
@@ -321,7 +326,7 @@ static void log_chain_temp(struct A1_chain *chain)
 	if (!f)
 		return;
 	mutex_lock(&fan.temp_lock);
-	fprintf(f, "%d %d ", time(0), chain->chain_id);
+	fprintf(f, "%ld %d ", time(0), chain->chain_id);
 	mutex_lock(&fan.lock);
 	fprintf(f, "%d ", fan.duty);
 	mutex_unlock(&fan.lock);
