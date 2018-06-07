@@ -159,7 +159,8 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 					PIDOutputLimitsSet(&fan.pid, FAN_DUTY_MIN, FAN_DUTY_MAX);
 					warming_up = 0;
 				}
-			} else {
+			}
+			if (!warming_up) {
 				/* only allow to lower fan duty by 1% a second */
 				int new_min_duty = fan.duty - dt*1;
 				if (new_min_duty < FAN_DUTY_MIN)
