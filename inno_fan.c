@@ -21,6 +21,7 @@
 #define FAN_DUTY_MIN_WARMUP 60
 #define FAN_DUTY_MIN 10
 #define WARMUP_PERIOD_MS (360*1000)
+#undef TEMP_DEBUG_ENABLED
 
 struct chain_temp {
 	int initialized, enabled;
@@ -128,7 +129,7 @@ static int calc_duty(float dt)
 	}
 
 done:
-	plog("dt=%f min=%f max=%f avg=%f out=%d", dt, min, max, avg, duty);
+	plog("dt=%f min=%f max=%f avg=%f out=%d (outmin=%f)", dt, min, max, avg, duty, fan.pid.outMin);
 	return duty;
 }
 
@@ -152,10 +153,18 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 			/* time delta in seconds since last pid */
 			float dt = (now - last_pid_time) / 1000.0;
 
-			/* if we are past warming phase, remove fan speed limits */
-			if (warming_up && now - start_time > WARMUP_PERIOD_MS) {
-				PIDOutputLimitsSet(&fan.pid, FAN_DUTY_MIN, FAN_DUTY_MAX);
-				warming_up = 0;
+			if (warming_up) {
+				/* if we are past warming phase, remove fan speed limits */
+				if (now - start_time > WARMUP_PERIOD_MS) {
+					PIDOutputLimitsSet(&fan.pid, FAN_DUTY_MIN, FAN_DUTY_MAX);
+					warming_up = 0;
+				}
+			} else {
+				/* only allow to lower fan duty by 1% a second */
+				int new_min_duty = fan.duty - dt*1;
+				if (new_min_duty < FAN_DUTY_MIN)
+					new_min_duty = FAN_DUTY_MIN;
+				PIDOutputLimitsSet(&fan.pid, new_min_duty, FAN_DUTY_MAX);
 			}
 			/* calculate new fan duty cycle */
 			duty = fan.duty = calc_duty(dt);
@@ -196,6 +205,7 @@ void fancontrol_start(unsigned enabled_chains)
 	fan.pid_log = 0;
 	fan.temp_log = 0;
 #endif
+	fan.duty = 100;
 	mutex_init(&fan.temp_lock);
 	set_fanspeed(0, FAN_DUTY_MAX);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
