@@ -43,6 +43,7 @@ struct fan_control {
 };
 
 static void set_fanspeed(int id, int duty);
+static void set_fanspeed_allfans(int duty);
 
 static struct fan_control fan;
 
@@ -176,7 +177,7 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 
 		if (duty >= 0) {
 			applog_hw(LOG_INFO, "fancontrol_thread: duty=%d", duty);
-			set_fanspeed(0, duty);
+			set_fanspeed_allfans(duty);
 		}
 	}
 	return NULL;
@@ -208,7 +209,7 @@ void fancontrol_start(unsigned enabled_chains)
 #endif
 	fan.duty = 100;
 	mutex_init(&fan.temp_lock);
-	set_fanspeed(0, FAN_DUTY_MAX);
+	set_fanspeed_allfans(FAN_DUTY_MAX);
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
 		temp = &fan.chain_temps[i];
 		temp->enabled = 0;
@@ -321,6 +322,13 @@ static void set_fanspeed(int id, int duty)
 	   would effectively stop the fan and cause miner to overheat and
 	   explode. */
 	write_to_file(PWMCHIP_SYSFS "/pwm0/duty_cycle", id, "%d", (100 - duty)*PWMCHIP_PERIOD/100);
+}
+
+static void set_fanspeed_allfans(int duty)
+{
+	set_fanspeed(0, duty);
+	set_fanspeed(1, duty);
+	set_fanspeed(2, duty);
 }
 
 #ifndef CHIP_A6
