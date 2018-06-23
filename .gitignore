@@ -84,7 +84,7 @@ mkinstalldirs
 *.swp
 
 .built
-.configured_yyyyyyy
+.configured_*
 .prepared
 .quilt_checked
 .source_dir
