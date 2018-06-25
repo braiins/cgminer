@@ -1690,6 +1690,8 @@ enum api_data_type {
 	API_UINT64,
 	API_INT64,
 	API_DOUBLE,
+	API_FLOATARRAY,
+	API_INTARRAY,
 	API_ELAPSED,
 	API_BOOL,
 	API_TIMEVAL,
@@ -1711,6 +1713,7 @@ struct api_data {
 	char *name;
 	void *data;
 	bool data_was_malloc;
+	int n_elements;
 	struct api_data *prev;
 	struct api_data *next;
 };

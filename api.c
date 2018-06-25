@@ -253,6 +253,7 @@ static const char *OSINFO =
 #endif
 
 #define _DEVS		"DEVS"
+#define _CHAINS		"CHAINS"
 #define _POOLS		"POOLS"
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
@@ -294,6 +295,7 @@ static const char ISJSON = '{';
 
 #define JSON_START	JSON0
 #define JSON_DEVS	JSON1 _DEVS JSON2
+#define JSON_CHAINS	JSON1 _CHAINS JSON2
 #define JSON_POOLS	JSON1 _POOLS JSON2
 #define JSON_SUMMARY	JSON1 _SUMMARY JSON2
 #define JSON_STATUS	JSON1 _STATUS JSON2
@@ -454,6 +456,8 @@ static const char *JSON_PARAMETER = "parameter";
 
 #define MSG_DEPRECATED 126
 
+#define MSG_CHAINS 127
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -517,6 +521,7 @@ struct CODES {
 #endif
  },
 
+ { SEVERITY_SUCC,  MSG_CHAINS,	PARAM_DMAX,	"%d Chain(s)" },
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
@@ -997,6 +1002,14 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 	return root;
 }
 
+static struct api_data *api_add_array(struct api_data *root, char *name, enum api_data_type type, void *data, int n_elements)
+{
+	struct api_data *api_data = api_add_data_full(root, name, type, data, false)->prev;
+	api_data->n_elements = n_elements;
+	api_data->data_was_malloc = true;
+	return api_data;
+}
+
 struct api_data *api_add_escape(struct api_data *root, char *name, char *data, bool copy_data)
 {
 	return api_add_data_full(root, name, API_ESCAPE, (void *)data, copy_data);
@@ -1214,6 +1227,23 @@ static struct api_data *print_data(struct io_data *io_data, struct api_data *roo
 					add_item_buf(item, JSON1);
 				if (escape != original)
 					free(escape);
+				done = true;
+				break;
+			case API_FLOATARRAY:
+			case API_INTARRAY:
+				if (isjson)
+					add_item_buf(item, "[");
+				for (int i = 0; i < root->n_elements; i++) {
+					if (i > 0)
+						add_item_buf(item, ",");
+					if (root->type == API_FLOATARRAY)
+						snprintf(buf, sizeof(buf), "%f", ((float *)root->data)[i]);
+					else
+						snprintf(buf, sizeof(buf), "%d", ((int *)root->data)[i]);
+					add_item_buf(item, buf);
+				}
+				if (isjson)
+					add_item_buf(item, "]");
 				done = true;
 				break;
 			case API_UINT8:
@@ -2236,6 +2266,70 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	if (isjson && io_open)
 		io_close(io_data);
 }
+
+static void chainstatus_one(struct io_data *io_data, int asc, bool isjson, bool precom)
+{
+	struct api_data *root = NULL;
+	char *enabled;
+	char *status;
+	int numasc = numascs();
+
+	if (numasc > 0 && asc >= 0 && asc < numasc) {
+		int dev = ascdevice(asc);
+		if (dev < 0) // Should never happen
+			return;
+
+		struct cgpu_info *cgpu = get_devices(dev);
+
+		root = api_add_int(root, "ASC", &asc, false);
+		root = api_add_string(root, "Name", cgpu->drv->name, false);
+		root = api_add_int(root, "ID", &(cgpu->device_id), false);
+
+		struct A1_chain *a1 = cgpu->device_data;
+		root = api_add_int(root, "NumCores", &a1->num_cores, false);
+		root = api_add_int(root, "NumChips", &a1->num_chips, false);
+
+		float *temps = cgmalloc(sizeof(*temps) * a1->num_chips);
+		int *cores = cgmalloc(sizeof(*cores) * a1->num_chips);
+
+		for (int i = 0; i < a1->num_chips; i++) {
+			struct A1_chip *chip = &a1->chips[i];
+			temps[i] = chip->temp_f;
+			if (chip->disabled)
+				cores[i] = 0;
+			else
+				cores[i] = chip->num_cores;
+		}
+		root = api_add_array(root, "ChipTemperatures", API_FLOATARRAY, temps, a1->num_chips);
+		root = api_add_array(root, "ChipCores", API_INTARRAY, cores, a1->num_chips);
+		root = print_data(io_data, root, isjson, precom);
+	}
+}
+
+static void chainstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	bool io_open = false;
+	int devcount = 0;
+	int numasc = 0;
+	int numpga = 0;
+	int i;
+
+	numasc = numascs();
+
+	message(io_data, MSG_CHAINS, 0, NULL, isjson);
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_CHAINS);
+
+	for (i = 0; i < numasc; i++) {
+		chainstatus_one(io_data, i, isjson, isjson && devcount > 0);
+
+		devcount++;
+	}
+
+	if (isjson && io_open)
+		io_close(io_data);
+}
+
 
 static void edevstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
@@ -4076,6 +4170,7 @@ struct CMDS {
 } cmds[] = {
 	{ "version",		apiversion,	false,	true },
 	{ "config",		minerconfig,	false,	true },
+	{ "chains",		chainstatus,	false,	true },
 	{ "devs",		devstatus,	false,	true },
 	{ "edevs",		edevstatus,	false,	true },
 	{ "pools",		poolstatus,	false,	true },
