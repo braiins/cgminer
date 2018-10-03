@@ -46,6 +46,7 @@
 #include "compat.h"
 #include "util.h"
 #include "construct.h"
+#include "braiins-os.h"
 
 #define DEFAULT_SOCKWAIT 60
 #ifndef STRATUM_USER_AGENT
@@ -3330,9 +3331,9 @@ resend:
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"GITVERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
 #else
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiinsminer/"GITVERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiins-os-"PACKAGE"_"BOS_FIRMWARE_VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiinsminer/"GITVERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"braiins-os-"PACKAGE"_"BOS_FIRMWARE_VERSION"\"]}", swork_id++);
 #endif
 	}
 
