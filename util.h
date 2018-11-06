@@ -187,4 +187,20 @@ void measurement_add(struct measurement *mt, double x);
 double measurement_get_avg(struct measurement *mt);
 void measurement_reset(struct measurement *mt);
 
+struct timed_avg {
+	double last;
+	double sum;
+	double t_start, t_prev;
+	double interval;
+	bool first_window, first_sample;
+};
+
+void avg_reset(struct timed_avg *ta);
+void avg_init(struct timed_avg *ta, double interval);
+void avg_insert(struct timed_avg *ta, double now, double x);
+double avg_getavg(struct timed_avg *ta, double now);
+void avg_dump(struct timed_avg *ta);
+
+extern struct timed_avg w_rolling1m, w_rolling15m, w_rolling24h;
+
 #endif /* __UTIL_H__ */
