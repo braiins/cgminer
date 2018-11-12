@@ -8311,11 +8311,14 @@ static void submit_work_async(struct work *work)
 
 void inc_hw_errors(struct thr_info *thr, struct work *work)
 {
+	struct timeval now;
+
 	applog_hw_chip(LOG_INFO, work->chain_id, work->chip_id,
 		"%s %d: invalid nonce - HW error",
 		thr->cgpu->drv->name,
 		thr->cgpu->device_id);
 
+	cgtime(&now);
 	mutex_lock(&stats_lock);
 	hw_errors++;
 #ifdef CHIP_A6  
@@ -8323,6 +8326,7 @@ void inc_hw_errors(struct thr_info *thr, struct work *work)
 #else
 	thr->cgpu->hw_errors++;
 #endif
+	avg_insert(&thr->cgpu->hw_error_rate, now.tv_sec, 1);
 	mutex_unlock(&stats_lock);
 
 	thr->cgpu->drv->hw_error(thr);
@@ -10278,6 +10282,7 @@ bool add_cgpu(struct cgpu_info *cgpu, int device_id)
 
 	mutex_lock(&stats_lock);
 	cgpu->last_device_valid_work = time(NULL);
+	avg_init(&cgpu->hw_error_rate, CHAIN_ERROR_RATE_WINDOW_SEC);
 	mutex_unlock(&stats_lock);
 
 	if (hotplug_mode)

@@ -441,6 +441,7 @@ struct cgminer_pool_stats {
 	uint64_t net_bytes_received;
 };
 
+#define CHAIN_ERROR_RATE_WINDOW_SEC (60*60)
 struct cgpu_info {
 	int cgminer_id;
 	struct device_drv *drv;
@@ -485,6 +486,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int hw_errors;
+	struct timed_avg hw_error_rate;
 	double rolling;
 	double rolling1;
 	double rolling5;

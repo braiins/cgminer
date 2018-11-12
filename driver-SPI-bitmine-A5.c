@@ -1206,6 +1206,7 @@ static int64_t  A1_scanwork(struct thr_info *thr)
 			applog_hw_chip(LOG_ERR, cid, chip_id, "Invalid midstate index encoded in micro job ID (%d)",
 						   micro_job_id);
 			chip->hw_errors++;
+			inc_hw_errors(thr, work);
 			continue;
 
 		}

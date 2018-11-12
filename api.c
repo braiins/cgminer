@@ -2006,8 +2006,10 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 	struct api_data *root = NULL;
 	char *enabled;
 	char *status;
+	struct timeval now;
 	int numasc = numascs();
 
+	cgtime(&now);
 	if (numasc > 0 && asc >= 0 && asc < numasc) {
 		int dev = ascdevice(asc);
 		if (dev < 0) // Should never happen
@@ -2068,6 +2070,8 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
 		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
 		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
+		double error_rate = avg_getavg(&cgpu->hw_error_rate, now.tv_sec) * CHAIN_ERROR_RATE_WINDOW_SEC;
+		root = api_add_double(root, "Hardware Error Rate", &error_rate, false);
 		root = api_add_utility(root, "Utility", &(cgpu->utility), false);
 		//int last_share_pool = cgpu->last_share_pool_time > 0 ?
 		//			cgpu->last_share_pool : -1;
