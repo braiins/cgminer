@@ -4893,7 +4893,6 @@ void api(int api_thr_id)
 	char group;
 	json_error_t json_err;
 	json_t *json_config;
-	json_t *json_val;
 	bool isjson;
 	bool end_with_nul;
 	bool did, isjoin, firstjoin;
@@ -5047,6 +5046,9 @@ void api(int api_thr_id)
 				io_reinit(io_data);
 
 				did = false;
+				isjoin = false;
+				json_config = 0;
+
 				if (strncmp(buf, "GET /", 5) == 0) {
 					char *ptr = buf + 5;
 					char *end = strchr(ptr, ' ');
@@ -5054,6 +5056,7 @@ void api(int api_thr_id)
 					end_with_nul = false;
 					param = NULL;
 					cmd = NULL;
+
 					io_add(io_data, "HTTP/1.1 200 OK\nContent-Type: application/json\nAccess-Control-Allow-Origin: *\n\n");
 					if (!end) {
 						message(io_data, MSG_MISCMD, 0, NULL, isjson);
@@ -5076,6 +5079,8 @@ void api(int api_thr_id)
 						send_result(io_data, c, isjson, end_with_nul);
 						did = true;
 					} else {
+						json_t *json_val;
+
 						json_val = json_object_get(json_config, JSON_COMMAND);
 						if (json_val == NULL) {
 							message(io_data, MSG_MISCMD, 0, NULL, isjson);
