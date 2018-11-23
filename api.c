@@ -1935,7 +1935,7 @@ static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	message(io_data, MSG_VERSION, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_VERSION : _VERSION COMSTR);
 
-	root = api_add_string(root, "CGMiner", GITVERSION, false);
+	root = api_add_string(root, "CGMiner", BOS_SMALL_VERSION_STRING, false);
 	root = api_add_const(root, "API", APIVERSION, false);
 
 	root = print_data(io_data, root, isjson, false);
@@ -1967,7 +1967,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_const(root, "Strategy", strategies[pool_strategy].s, false);
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
-	root = api_add_const(root, "OS", OSINFO, false);
+	root = api_add_const(root, "OS", "Braiins OS", false);
 #ifdef USE_USBUTILS
 	if (hotplug_time == 0)
 		root = api_add_const(root, "Hotplug", DISABLED, false);

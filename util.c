@@ -46,7 +46,6 @@
 #include "compat.h"
 #include "util.h"
 #include "construct.h"
-#include "braiins-os.h"
 
 #define DEFAULT_SOCKWAIT 60
 #ifndef STRATUM_USER_AGENT
@@ -636,7 +635,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 	upload_data.len = strlen(rpc_req);
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) upload_data.len);
-	sprintf(user_agent_hdr, "User-Agent: %s/%s", PACKAGE, GITVERSION);
+	sprintf(user_agent_hdr, "User-Agent: %s/%s", PACKAGE, BOS_SMALL_VERSION_STRING);
 
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
@@ -2405,7 +2404,7 @@ static bool send_version(struct pool *pool, json_t *val)
 		return false;
 	id = json_integer_value(json_object_get(val, "id"));
 
-	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"GITVERSION""STRATUM_USER_AGENT"\", \"error\": null}", id);
+	sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"BOS_SMALL_VERSION_STRING"\", \"error\": null}", id);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
 
@@ -3324,17 +3323,10 @@ resend:
 	if (recvd) {
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
-#ifdef CHIP_A6	
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"GITVERSION""STRATUM_USER_AGENT"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""BOS_SMALL_VERSION_STRING"\", \"%s\"]}", swork_id++, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"GITVERSION""STRATUM_USER_AGENT"\"]}", swork_id++);
-#else
-		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"bOS_"BOS_FIRMWARE_SUBTARGET"-"BOS_FIRMWARE_VERSION_COMPRESSED"\", \"%s\"]}", swork_id++, pool->sessionid);
-		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"bOS_"BOS_FIRMWARE_SUBTARGET"-"BOS_FIRMWARE_VERSION_COMPRESSED"\"]}", swork_id++);
-#endif
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""BOS_SMALL_VERSION_STRING"\"]}", swork_id++);
 	}
 
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
