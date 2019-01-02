@@ -15,10 +15,8 @@
 #define PID_KI 0.03
 #define PID_KD 0.015
 
-#define FAN_DUTY_MAX 		100
 /* do not go lower than 60% duty cycle during warmup */
 #define FAN_DUTY_MIN_WARMUP 	60
-#define FAN_DUTY_MIN 		10
 /* at this fan duty the temperature should be stable at some */
 /* sensible (non-dangerous) value */
 #define FAN_MIDPOINT		70

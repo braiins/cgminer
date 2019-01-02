@@ -12,14 +12,10 @@
 #include "A5_inno_cmd.h"
 #include "A5_inno_clock.h"
 #endif
-
-#define DANGEROUS_TEMP	110
-#define HOT_TEMP	95
-#define TARGET_TEMP	75
+#include "fancontrol.h"
 
 void inno_fan_temp_init(struct A1_chain *chain);
 void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu);
-void inno_fan_speed_mini_update(struct A1_chain *chain, struct cgpu_info *cgpu);
 
 static inline float inno_fan_temp_get_highest(struct A1_chain *chain)
 {
