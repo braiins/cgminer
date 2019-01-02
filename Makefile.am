@@ -65,7 +65,7 @@ cgminer_SOURCES	+= noncedup.c
 
 cgminer_SOURCES	+= construct.c
 
-cgminer_SOURCES	+= pid_controller.c pid_controller.h
+cgminer_SOURCES	+= pid_controller.c pid_controller.h fancontrol.c fancontrol.h
 
 if NEED_FPGAUTILS
 cgminer_SOURCES += fpgautils.c fpgautils.h

@@ -190,7 +190,7 @@ static void fancontrol_init_pid(void)
 	float kd = 0.1;
 	float set_point = TARGET_TEMP;
 
-	PIDInit(&fan.pid, kp, ki, kd, FAN_DUTY_MIN_WARMUP, FAN_DUTY_MAX, AUTOMATIC, REVERSE);
+	PIDInit(&fan.pid, kp, ki, kd, FAN_DUTY_MIN_WARMUP, FAN_DUTY_MAX, 70, AUTOMATIC, REVERSE);
 	PIDSetpointSet(&fan.pid, set_point);
 	plog("# kp=%f ki=%f kd=%f target=%f", kp, ki, kd, set_point);
 }
