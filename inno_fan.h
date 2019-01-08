@@ -22,7 +22,9 @@ static inline float inno_fan_temp_get_highest(struct A1_chain *chain)
 	return chain->temp_stats.max;
 }
 
-void fancontrol_start(unsigned enabled_chains);
+void innofan_start(unsigned enabled_chains);
+void innofan_reconfigure_fans(void);
+void innofan_copy_fancontrol(struct fancontrol *fc);
 
 static inline float inno_temp_to_celsius(int reg)
 {

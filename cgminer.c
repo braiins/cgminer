@@ -69,6 +69,8 @@ char *curly = ":D";
 #include "bench_block.h"
 #include "construct.h"
 
+#include "fancontrol.h"
+
 #ifdef USE_USBUTILS
 #include "usbutils.h"
 #endif
@@ -181,6 +183,8 @@ static FILE *benchfile_in;
 static int benchfile_line;
 static int benchfile_work;
 static bool opt_benchmark;
+
+static int opt_config_format_revision = 1;
 bool have_longpoll;
 bool want_per_device_stats;
 bool use_syslog;
@@ -231,10 +235,16 @@ bool opt_noadl;
 char *opt_api_allow = NULL;
 char *opt_api_groups;
 char *opt_api_description = PACKAGE " " BOS_SMALL_VERSION_STRING;
+int opt_api_description_set = 0;
 int opt_api_port = 4028;
+int opt_api_port_set = 0;
 char *opt_api_host = API_LISTEN_ADDR;
+int opt_api_host_set = 0;
+
 bool opt_api_listen;
 bool opt_api_mcast;
+int opt_api_mcast_set;
+
 char *opt_api_mcast_addr = API_MCAST_ADDR;
 char *opt_api_mcast_code = API_MCAST_CODE;
 char *opt_api_mcast_des = "";
@@ -334,6 +344,11 @@ int opt_minion_spisleep = 200;
 int opt_minion_spiusec;
 char *opt_minion_temp;
 #endif
+int opt_fan_ctrl = FAN_MODE_TEMP;
+int opt_fan_temp = DEFAULT_TARGET_TEMP;
+int opt_fan_speed = 100;
+int opt_fan_ctrl_set = 0;
+
 
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
@@ -360,6 +375,7 @@ int opt_A5_extra_debug = 0;
 int opt_A5_fast_start = 0;
 /* bitmask of enabled chains or -1 for "all chains" */
 int opt_enabled_chains = -1;
+char *opt_enabled_chains_str;
 
 
 char *opt_kernel_path;
@@ -972,6 +988,11 @@ static char *set_bitmask_from_list(const char *arg, int *i)
 	return NULL;
 }
 
+static char *set_enabled_chains(const char *arg)
+{
+	return set_bitmask_from_list(arg, &opt_enabled_chains);
+}
+
 
 #ifdef USE_FPGA_SERIAL
 static char *opt_add_serial;
@@ -981,6 +1002,41 @@ static char *add_serial(char *arg)
 	return NULL;
 }
 #endif
+static char *opt_set_enum(const char **options, const char *arg, int *out_i)
+{
+	int i = 0;
+	for (i = 0; options[i] != 0; i++) {
+		if (strcmp(options[i], arg) == 0) {
+			*out_i = i;
+			return 0;
+		}
+	}
+	return "invalid enum option";
+}
+
+static void opt_show_enum(const char **options, char buf[OPT_SHOW_LEN], const int *i)
+{
+	snprintf(buf, OPT_SHOW_LEN, "%s", options[*i]);
+}
+
+/* must match enum fan_modes */
+static const char *fan_ctrl_modes[] = {
+	"temp",
+	"speed",
+	"emergency",
+	0,
+};
+
+static char *opt_set_fan_ctrl(const char *arg, int *i)
+{
+	return opt_set_enum(fan_ctrl_modes, arg, i);
+}
+
+static void opt_show_fan_ctrl(char buf[OPT_SHOW_LEN], const int *i)
+{
+	opt_show_enum(fan_ctrl_modes, buf, i);
+}
+
 
 void get_intrange(char *arg, int *val1, int *val2)
 {
@@ -1288,6 +1344,16 @@ static void load_temp_cutoffs()
 	}
 }
 
+static char *set_float(const char *arg, float *i)
+{
+	char *err = opt_set_floatval(arg, i);
+
+	if (err)
+		return err;
+
+	return NULL;
+}
+
 static char *set_float_100_to_500(const char *arg, float *i)
 {
 	char *err = opt_set_floatval(arg, i);
@@ -1343,6 +1409,21 @@ static char *setvol(const char *arg)
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
+	OPT_WITH_ARG_DEF("--fan-ctrl",
+		opt_set_fan_ctrl, opt_show_fan_ctrl, &opt_fan_ctrl,
+		"Set fan mode",
+		&opt_fan_ctrl_set),
+	OPT_WITH_ARG_DEF("--fan-temp",
+		set_int_0_to_100, opt_show_intval, &opt_fan_temp,
+		"Port number of miner API",
+		&opt_fan_ctrl_set),
+	OPT_WITH_ARG_DEF("--fan-speed",
+		set_int_0_to_100, opt_show_intval, &opt_fan_speed,
+		"Port number of miner API",
+		&opt_fan_ctrl_set),
+	OPT_WITH_ARG("--config-format-revision",
+		set_int_0_to_100, opt_show_intval, &opt_config_format_revision,
+		"Revision of config file (used by migration script)"),
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--anu-freq",
 		     set_float_125_to_500, &opt_show_floatval, &opt_anu_freq,
@@ -1351,39 +1432,47 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--api-allow",
 		     opt_set_charp, NULL, &opt_api_allow,
 		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
-	OPT_WITH_ARG("--api-description",
+	OPT_WITH_ARG_DEF("--api-description",
 		     opt_set_charp, NULL, &opt_api_description,
-		     "Description placed in the API status header, default: cgminer version"),
+		     "Description placed in the API status header, default: cgminer version",
+		     &opt_api_description_set),
 	OPT_WITH_ARG("--api-groups",
 		     opt_set_charp, NULL, &opt_api_groups,
 		     "API one letter groups G:cmd:cmd[,P:cmd:*...] defining the cmds a groups can use"),
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
 			"Enable API, default: disabled"),
-	OPT_WITHOUT_ARG("--api-mcast",
+	OPT_WITHOUT_ARG_DEF("--api-mcast",
 			opt_set_bool, &opt_api_mcast,
-			"Enable API Multicast listener, default: disabled"),
-	OPT_WITH_ARG("--api-mcast-addr",
+			"Enable API Multicast listener, default: disabled",
+		        &opt_api_mcast_set),
+	OPT_WITH_ARG_DEF("--api-mcast-addr",
 		     opt_set_charp, NULL, &opt_api_mcast_addr,
-		     "API Multicast listen address"),
-	OPT_WITH_ARG("--api-mcast-code",
+		     "API Multicast listen address",
+		     &opt_api_mcast_set),
+	OPT_WITH_ARG_DEF("--api-mcast-code",
 		     opt_set_charp, NULL, &opt_api_mcast_code,
-		     "Code expected in the API Multicast message, don't use '-'"),
-	OPT_WITH_ARG("--api-mcast-des",
+		     "Code expected in the API Multicast message, don't use '-'",
+		     &opt_api_mcast_set),
+	OPT_WITH_ARG_DEF("--api-mcast-des",
 		     opt_set_charp, NULL, &opt_api_mcast_des,
-		     "Description appended to the API Multicast reply, default: ''"),
-	OPT_WITH_ARG("--api-mcast-port",
+		     "Description appended to the API Multicast reply, default: ''",
+		     &opt_api_mcast_set),
+	OPT_WITH_ARG_DEF("--api-mcast-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_mcast_port,
-		     "API Multicast listen port"),
+		     "API Multicast listen port",
+		     &opt_api_mcast_set),
 	OPT_WITHOUT_ARG("--api-network",
 			opt_set_bool, &opt_api_network,
 			"Allow API (if enabled) to listen on/for any address, default: only 127.0.0.1"),
-	OPT_WITH_ARG("--api-port",
+	OPT_WITH_ARG_DEF("--api-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_port,
-		     "Port number of miner API"),
-	OPT_WITH_ARG("--api-host",
+		     "Port number of miner API",
+		     &opt_api_port_set),
+	OPT_WITH_ARG_DEF("--api-host",
 		     opt_set_charp, NULL, &opt_api_host,
-		     "Specify API listen address, default: 0.0.0.0"),
+		     "Specify API listen address, default: 0.0.0.0",
+		     &opt_api_host_set),
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--au3-freq",
 		     set_float_100_to_250, &opt_show_floatval, &opt_au3_freq,
@@ -1728,8 +1817,8 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--A5-fast-start",
 			opt_set_bool, &opt_A5_fast_start,
 			"Lower intervals in initialization sequence"),
-	OPT_WITH_ARG("--enabled-chains",
-		     set_bitmask_from_list, opt_show_intval, &opt_enabled_chains,
+	OPT_WITH_CBARG("--enabled-chains",
+		     set_enabled_chains, 0, &opt_enabled_chains_str,
 		     "list of enabled chains"),
 #endif
 #ifdef USE_BITFURY
@@ -1891,7 +1980,7 @@ static struct opt_table opt_config_table[] = {
 		       "Set the hashratio clock frequency"),
 #endif
 	OPT_WITH_ARG("--hotplug",
-		     set_int_0_to_9999, NULL, &hotplug_time,
+		     set_int_0_to_9999, opt_show_intval, &hotplug_time,
 #ifdef USE_USBUTILS
 		     "Seconds between hotplug checks (0 means never check)"
 #else
@@ -2057,13 +2146,13 @@ static struct opt_table opt_config_table[] = {
 		     set_sharelog, NULL, &opt_set_sharelog,
 		     "Append share log to file"),
 	OPT_WITH_ARG("--shares",
-		     opt_set_intval, NULL, &opt_shares,
+		     opt_set_intval, opt_show_intval, &opt_shares,
 		     "Quit after mining N shares (default: unlimited)"),
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
 	OPT_WITH_ARG("--suggest-diff",
-		     opt_set_intval, NULL, &opt_suggest_diff,
+		     opt_set_intval, opt_show_intval, &opt_suggest_diff,
 		     "Suggest miner difficulty for pool to user (default: none)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
@@ -2157,6 +2246,9 @@ static char *parse_config(json_t *config, bool fileconf)
 			if ((opt->type & (OPT_HASARG | OPT_PROCESSARG)) && json_is_string(val)) {
 				str = json_string_value(val);
 				err = opt->cb_arg(str, opt->u.arg);
+				if (opt->was_set != NULL)
+					*opt->was_set = 1;
+
 				if (opt->type == OPT_PROCESSARG)
 					opt_set_charp(str, opt->u.arg);
 			} else if ((opt->type & (OPT_HASARG | OPT_PROCESSARG)) && json_is_array(val)) {
@@ -2167,6 +2259,9 @@ static char *parse_config(json_t *config, bool fileconf)
 					if (json_is_string(arr_val)) {
 						str = json_string_value(arr_val);
 						err = opt->cb_arg(str, opt->u.arg);
+						if (opt->was_set != NULL)
+							*opt->was_set = 1;
+
 						if (opt->type == OPT_PROCESSARG)
 							opt_set_charp(str, opt->u.arg);
 					} else if (json_is_object(arr_val))
@@ -2174,9 +2269,11 @@ static char *parse_config(json_t *config, bool fileconf)
 					if (err)
 						break;
 				}
-			} else if ((opt->type & OPT_NOARG) && json_is_true(val))
+			} else if ((opt->type & OPT_NOARG) && json_is_true(val)) {
 				err = opt->cb(opt->u.arg);
-			else
+				if (opt->was_set != NULL)
+					*opt->was_set = 1;
+			} else
 				err = "Invalid value";
 
 			if (err) {
@@ -5713,6 +5810,9 @@ void write_config(FILE *fcfg)
 
 			if (opt->desc == opt_hidden)
 				continue;
+			/* is option do-not-show-by-default and no-one changed its default value? */
+			if (opt->was_set != NULL && !*opt->was_set)
+				continue;
 
 			if (opt->type & OPT_NOARG &&
 			   ((void *)opt->cb == (void *)opt_set_bool || (void *)opt->cb == (void *)opt_set_invbool) &&
@@ -5721,60 +5821,33 @@ void write_config(FILE *fcfg)
 				continue;
 			}
 
-			if (opt->type & OPT_HASARG &&
-			    ((void *)opt->cb_arg == (void *)opt_set_intval ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_9999 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_65535 ||
-			     (void *)opt->cb_arg == (void *)set_int_1_to_65535 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_5 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_10 ||
-			     (void *)opt->cb_arg == (void *)set_int_1_to_10 ||
-			     (void *)opt->cb_arg == (void *)set_int_24_to_32 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_100 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_255 ||
-			     (void *)opt->cb_arg == (void *)set_int_1_to_255 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_7680 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_200 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_4 ||
-			     (void *)opt->cb_arg == (void *)set_int_0_to_31 ||
-			     (void *)opt->cb_arg == (void *)set_int_32_to_63 ||
-			     (void *)opt->cb_arg == (void *)set_int_22_to_75 ||
-			     (void *)opt->cb_arg == (void *)set_int_42_to_85)) {
-				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
-				continue;
-			}
-
-			if (opt->type & OPT_HASARG &&
-			    ((void *)opt->cb_arg == (void *)set_bitmask_from_list)) {
-				int first = 1;
-				int x = *(int *)opt->u.arg;
-				fprintf(fcfg, ",\n\"%s\" : \"", p+2);
-				for (i = 0; i < sizeof(int)*4 - 1; i++) {
-					if (x & (1 << i)) {
-						fprintf(fcfg, "%s%d", first ? "" : ",", i);
-						first = 0;
+			/* Printing option with argument: the invariant is
+			 *
+			 * - either option has "show()" method and we can use it to
+			 *   print the argument
+			 *
+			 * - or we cannot show it (argument is to opt_set_null)
+			 *
+			 * - or the argument is pointer to char and we can print it
+			 *   directly (provided it is not NULL)
+			 */
+			if ((opt->type & (OPT_HASARG | OPT_PROCESSARG)) != 0) {
+				if (opt->show == NULL) {
+					if (opt->u.arg != &opt_set_null) {
+						char *carg = *(char **)opt->u.arg;
+						if (carg) {
+							fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, json_escape(carg));
+						}
 					}
+				} else {
+					char buf[OPT_SHOW_LEN];
+					opt->show(buf, opt->u.arg);
+					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, buf);
 				}
-				fprintf(fcfg, "\"");
-				continue;
-			}
-
-			if (opt->type & OPT_HASARG &&
-			    (((void *)opt->cb_arg == (void *)set_float_125_to_500) ||
-			     (void *)opt->cb_arg == (void *)set_float_100_to_250)) {
-				fprintf(fcfg, ",\n\"%s\" : \"%.1f\"", p+2, *(float *)opt->u.arg);
-				continue;
-			}
-
-			if (opt->type & (OPT_HASARG | OPT_PROCESSARG) &&
-			    (opt->u.arg != &opt_set_null)) {
-				char *carg = *(char **)opt->u.arg;
-
-				if (carg)
-					fprintf(fcfg, ",\n\"%s\" : \"%s\"", p+2, json_escape(carg));
 				continue;
 			}
 		}
+
 		free(name);
 	}
 

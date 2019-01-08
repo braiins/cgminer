@@ -1015,7 +1015,7 @@ void A1_detect(bool hotplug)
 	applog_hw(LOG_DEBUG, "A1 detect");
 	memset(&s_reg_ctrl,0,sizeof(s_reg_ctrl));
     
-	fancontrol_start(opt_enabled_chains);
+	innofan_start(opt_enabled_chains);
 
 	set_vid_value(8);
 	

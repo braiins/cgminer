@@ -26,6 +26,7 @@
 #include "gitversion.h"
 #include "util.h"
 #include "klist.h"
+#include "inno_fan.h"
 
 #if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_AVALON4) || \
   defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_BITFURY16) || defined(USE_BLOCKERUPTER) || defined(USE_KLONDIKE) || \
@@ -257,6 +258,7 @@ static const char *OSINFO =
 #define _POOLS		"POOLS"
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
+#define _FANCTRL	"FANCTRL"
 #define _VERSION	"VERSION"
 #define _MINECONFIG	"CONFIG"
 
@@ -298,6 +300,7 @@ static const char ISJSON = '{';
 #define JSON_CHAINS	JSON1 _CHAINS JSON2
 #define JSON_POOLS	JSON1 _POOLS JSON2
 #define JSON_SUMMARY	JSON1 _SUMMARY JSON2
+#define JSON_FANCTRL	JSON1 _FANCTRL JSON2
 #define JSON_STATUS	JSON1 _STATUS JSON2
 #define JSON_VERSION	JSON1 _VERSION JSON2
 #define JSON_MINECONFIG	JSON1 _MINECONFIG JSON2
@@ -457,6 +460,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_DEPRECATED 126
 
 #define MSG_CHAINS 127
+#define MSG_OK 128
+#define MSG_FANCTRL 129
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -627,6 +632,8 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_LCD,	PARAM_NONE,	"LCD" },
  { SEVERITY_SUCC,  MSG_LOCKOK,	PARAM_NONE,	"Lock stats created" },
  { SEVERITY_WARN,  MSG_LOCKDIS,	PARAM_NONE,	"Lock stats not enabled" },
+ { SEVERITY_SUCC,  MSG_OK,      PARAM_NONE,     "OK" },
+ { SEVERITY_SUCC,  MSG_FANCTRL, PARAM_NONE,     "Fan control values" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -2900,6 +2907,111 @@ exitsama:
 	return false;
 }
 
+static void fanctrl(struct io_data *io_data, __maybe_unused SOCKETTYPE c,
+		    char *param, bool isjson, __maybe_unused char group)
+{
+	int ok = 0;
+	char *args = NULL;
+	int argc;
+	char *argv[4];
+	int n;
+	double f;
+
+	if (param == NULL || *param == '\0') {
+		ok = 1;
+		goto done;
+	}
+
+	args = strdup(param);
+	argc = parse_list(args, argv, ARRAY_SIZE(argv), ',');
+	if (argc < 1)
+		goto done;
+
+	switch (argv[0][0]) {
+	/* emergency mode: fans on full */
+	case 'e':
+		opt_fan_ctrl = FAN_MODE_EMERGENCY;
+		opt_fan_ctrl_set = 1;
+		innofan_reconfigure_fans();
+		ok = 1;
+		break;
+	/* pwm mode - arg is fixed speed in %, PID is disabled */
+	case 's':
+		if (argc < 2)
+			break;
+		n = atoi(argv[1]);
+		if (n < 0 || n > 100)
+			break;
+		opt_fan_ctrl = FAN_MODE_SPEED;
+		opt_fan_speed = n;
+		opt_fan_ctrl_set = 1;
+		innofan_reconfigure_fans();
+		ok = 1;
+		break;
+	/* temperature mode - arg is target temperature, PID enabled */
+	case 't':
+		if (argc < 2)
+			break;
+		n = atoi(argv[1]);
+		if (n < 30 || n > 100)
+			break;
+		opt_fan_ctrl = FAN_MODE_TEMP;
+		opt_fan_temp = n;
+		opt_fan_ctrl_set = 1;
+		innofan_reconfigure_fans();
+		ok = 1;
+		break;
+	/* just feed some numbers into pid controller */
+#if 0
+	case '_':
+		if (argc < 3)
+			break;
+		n = atoi(argv[1]);
+		f = atof(argv[2]);
+		mutex_lock(&fancontrol_lock);
+		fancontrol_calculate(&fancontrol, n, f);
+		mutex_unlock(&fancontrol_lock);
+		ok = 1;
+		break;
+#endif
+	}
+done:
+	if (args != 0)
+		free(args);
+
+	if (!ok) {
+		message(io_data, MSG_INVCMD, 0, NULL, isjson);
+		return;
+	}
+
+	message(io_data, MSG_FANCTRL, 0, NULL, isjson);
+
+	struct api_data *root = NULL;
+	bool io_open = false;
+	struct fancontrol fc;
+
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_FANCTRL);
+
+	/* copy fancontrol structure */
+	innofan_copy_fancontrol(&fc);
+
+	/* format PID status */
+	root = api_add_string(root, "Mode", (char *) fancontrol_mode_name[fc.mode], false);
+	root = api_add_double(root, "TargetTemp", &fc.setpoint_deg, false);
+	root = api_add_int(root, "TargetPwm", &fc.requested_fan_duty, false);
+	root = api_add_double(root, "Temperature", &fc.last_temp, false);
+	root = api_add_int(root, "Output", &fc.fan_duty, false);
+	root = api_add_double(root, "Interval", &fc.last_dt, false);
+
+	/* print JSON reply */
+	root = print_data(io_data, root, isjson, 0);
+	if (isjson && io_open)
+		io_close(io_data);
+
+	return;
+}
+
 static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *url, *user, *pass;
@@ -4184,6 +4296,7 @@ struct CMDS {
 	{ "pgacount",		pgacount,	false,	true },
 	{ "switchpool",		switchpool,	true,	false },
 	{ "addpool",		addpool,	true,	false },
+	{ "fanctrl",		fanctrl,	true,	true },
 	{ "poolpriority",	poolpriority,	true,	false },
 	{ "poolquota",		poolquota,	true,	false },
 	{ "enablepool",		enablepool,	true,	false },

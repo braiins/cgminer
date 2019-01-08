@@ -43,7 +43,7 @@ static void set_fanspeed_allfans(int duty);
 static struct temp_data temp_data;
 static struct fancontrol fancontrol;
 
-static void fancontrol_update_chain_temp(int chain_id, double min, double max, double med, double avg)
+static void innofan_update_chain_temp(int chain_id, double min, double max, double med, double avg)
 {
 	assert(chain_id >= 0);
 	assert(chain_id < ASIC_CHAIN_NUM);
@@ -95,7 +95,7 @@ static int calc_min_max_over_chains(struct chain_temp *total)
 	return n > 0;
 }
 
-static void *fancontrol_thread(void __maybe_unused *argv)
+static void *innofan_thread(void __maybe_unused *argv)
 {
 	/* try to adjust fan speed every second */
 	int old_duty = FAN_DUTY_MAX;
@@ -119,7 +119,7 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 		/* now do the fan update */
 		if (do_fan_update) {
 			if (duty != old_duty) {
-				applog_hw(LOG_INFO, "fancontrol_thread: duty=%d", duty);
+				applog_hw(LOG_INFO, "innofan_thread: duty=%d", duty);
 				old_duty = duty;
 			}
 			set_fanspeed_allfans(duty);
@@ -128,13 +128,37 @@ static void *fancontrol_thread(void __maybe_unused *argv)
 	}
 }
 
-void fancontrol_start(unsigned enabled_chains)
+void innofan_reconfigure_fans(void)
+{
+	mutex_lock(&temp_data.lock);
+	if (opt_fan_ctrl == FAN_MODE_TEMP) {
+		applog_hw(LOG_NOTICE, "AUTOMATIC fan control, target temperature %d degrees", opt_fan_temp);
+		fancontrol_setmode_auto(&fancontrol, opt_fan_temp);
+        } else if (opt_fan_ctrl == FAN_MODE_SPEED) {
+		applog_hw(LOG_NOTICE, "MANUAL fan control, target speed %d%%", opt_fan_speed);
+		fancontrol_setmode_manual(&fancontrol, opt_fan_speed);
+	} else {
+		applog_hw(LOG_NOTICE, "EMERGENCY fan control, fans to full");
+		fancontrol_setmode_emergency(&fancontrol);
+	}
+	mutex_unlock(&temp_data.lock);
+}
+
+void innofan_copy_fancontrol(struct fancontrol *fc)
+{
+	mutex_lock(&temp_data.lock);
+	*fc = fancontrol;
+	mutex_unlock(&temp_data.lock);
+}
+
+void innofan_start(unsigned enabled_chains)
 {
 	temp_data.new_data = 1;
 	mutex_init(&temp_data.lock);
 
-	fancontrol_init(&fancontrol);
 	set_fanspeed_allfans(FAN_DUTY_MAX);
+	fancontrol_init(&fancontrol);
+	innofan_reconfigure_fans();
 
 	for (int i = 0; i < ASIC_CHAIN_NUM; i++) {
 		struct chain_temp *temp = &temp_data.chain_temps[i];
@@ -145,7 +169,7 @@ void fancontrol_start(unsigned enabled_chains)
 	}
 
 	pthread_t tid;
-	pthread_create(&tid, NULL, fancontrol_thread, NULL);
+	pthread_create(&tid, NULL, innofan_thread, NULL);
 }
 
 static int floatcmp(const void *a, const void *b)
@@ -293,7 +317,7 @@ void inno_fan_speed_update(struct A1_chain *chain, struct cgpu_info *cgpu)
 
 	temp_calc_minmaxavg(chain);
 	log_chain_temp(chain);
-	fancontrol_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->med, temp_stats->avg);
+	innofan_update_chain_temp(chain->chain_id, temp_stats->min, temp_stats->max, temp_stats->med, temp_stats->avg);
 
 	cgpu->temp = temp_stats->avg;
 	cgpu->temp_max = temp_stats->max;
