@@ -1,19 +1,19 @@
 #include "pid_controller.h"
+#include "temp-def.h"
 
-/* Temperature limits (model specific?) */
-#define DANGEROUS_TEMP		105
-#define HOT_TEMP		95
-#define DEFAULT_TARGET_TEMP     89
-#define MIN_TEMP 		1
-/* FAN limits */
 #define FAN_DUTY_MAX 		100
 #define FAN_DUTY_MIN 		10
 
+/* keep in sync with fancontrol_mode_name */
 enum fancontrol_mode {
 	FANCTRL_EMERGENCY,
 	FANCTRL_AUTO,
 	FANCTRL_MANUAL,
 };
+
+#define FANCTRL_MAX_LOG_AGE (24*3600)
+
+extern const char *fancontrol_mode_name[];
 
 struct fancontrol {
 	int initializing;
@@ -22,6 +22,8 @@ struct fancontrol {
 	int requested_fan_duty;
 	int fan_duty;
 	double started, last_calc;
+	double last_dt, last_temp;
+	double log_started;
 	FILE *log;
 	PIDControl pid;
 };
