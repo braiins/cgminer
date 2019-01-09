@@ -254,7 +254,7 @@ static const char *OSINFO =
 #endif
 
 #define _DEVS		"DEVS"
-#define _CHAINS		"CHAINS"
+#define _TEMPS		"TEMPS"
 #define _POOLS		"POOLS"
 #define _SUMMARY	"SUMMARY"
 #define _STATUS		"STATUS"
@@ -297,7 +297,7 @@ static const char ISJSON = '{';
 
 #define JSON_START	JSON0
 #define JSON_DEVS	JSON1 _DEVS JSON2
-#define JSON_CHAINS	JSON1 _CHAINS JSON2
+#define JSON_TEMPS	JSON1 _TEMPS JSON2
 #define JSON_POOLS	JSON1 _POOLS JSON2
 #define JSON_SUMMARY	JSON1 _SUMMARY JSON2
 #define JSON_FANCTRL	JSON1 _FANCTRL JSON2
@@ -459,7 +459,7 @@ static const char *JSON_PARAMETER = "parameter";
 
 #define MSG_DEPRECATED 126
 
-#define MSG_CHAINS 127
+#define MSG_TEMPS 127
 #define MSG_OK 128
 #define MSG_FANCTRL 129
 
@@ -526,7 +526,7 @@ struct CODES {
 #endif
  },
 
- { SEVERITY_SUCC,  MSG_CHAINS,	PARAM_DMAX,	"%d Chain(s)" },
+ { SEVERITY_SUCC,  MSG_TEMPS,	PARAM_DMAX,	"%d Chain(s)" },
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
@@ -2274,7 +2274,7 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 		io_close(io_data);
 }
 
-static void chainstatus_one(struct io_data *io_data, int asc, bool isjson, bool precom)
+static void tempstatus_one(struct io_data *io_data, int asc, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
 	char *enabled;
@@ -2313,7 +2313,7 @@ static void chainstatus_one(struct io_data *io_data, int asc, bool isjson, bool 
 	}
 }
 
-static void chainstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+static void tempstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
 	int devcount = 0;
@@ -2323,12 +2323,12 @@ static void chainstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 
 	numasc = numascs();
 
-	message(io_data, MSG_CHAINS, 0, NULL, isjson);
+	message(io_data, MSG_TEMPS, 0, NULL, isjson);
 	if (isjson)
-		io_open = io_add(io_data, COMSTR JSON_CHAINS);
+		io_open = io_add(io_data, COMSTR JSON_TEMPS);
 
 	for (i = 0; i < numasc; i++) {
-		chainstatus_one(io_data, i, isjson, isjson && devcount > 0);
+		tempstatus_one(io_data, i, isjson, isjson && devcount > 0);
 
 		devcount++;
 	}
@@ -4282,7 +4282,7 @@ struct CMDS {
 } cmds[] = {
 	{ "version",		apiversion,	false,	true },
 	{ "config",		minerconfig,	false,	true },
-	{ "chains",		chainstatus,	false,	true },
+	{ "temps",		tempstatus,	false,	true },
 	{ "devs",		devstatus,	false,	true },
 	{ "edevs",		edevstatus,	false,	true },
 	{ "pools",		poolstatus,	false,	true },
