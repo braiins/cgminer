@@ -132,9 +132,19 @@ void innofan_reconfigure_fans(void)
 {
 	mutex_lock(&temp_data.lock);
 	if (opt_fan_ctrl == FAN_MODE_TEMP) {
+		/* clamp values to sane range */
+		if (opt_fan_temp < MIN_TEMP)
+			opt_fan_temp = MIN_TEMP;
+		if (opt_fan_temp > HOT_TEMP)
+			opt_fan_temp = HOT_TEMP;
 		applog_hw(LOG_NOTICE, "AUTOMATIC fan control, target temperature %d degrees", opt_fan_temp);
 		fancontrol_setmode_auto(&fancontrol, opt_fan_temp);
-        } else if (opt_fan_ctrl == FAN_MODE_SPEED) {
+	} else if (opt_fan_ctrl == FAN_MODE_SPEED) {
+		/* clamp values to sane range */
+		if (opt_fan_speed < 0)
+			opt_fan_speed = 0;
+		if (opt_fan_speed > 100)
+			opt_fan_speed = 100;
 		applog_hw(LOG_NOTICE, "MANUAL fan control, target speed %d%%", opt_fan_speed);
 		fancontrol_setmode_manual(&fancontrol, opt_fan_speed);
 	} else {
