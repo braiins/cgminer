@@ -2730,7 +2730,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	struct api_data *root = NULL;
 	bool io_open;
 	double utility, mhs, ghs, work_utility;
-	double roll1m, roll15m, roll24h;
+	double roll1m = 0, roll15m = 0, roll24h = 0;
 	struct timeval now;
 
 	message(io_data, MSG_SUMM, 0, NULL, isjson);
@@ -2741,9 +2741,13 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 	utility = total_accepted / ( total_secs ? total_secs : 1 ) * 60;
 	cgtime(&now);
+	/* 1-minute hashrate should be shown only after one minute, but
+	 * that is really confusing */
 	roll1m = avg_getavg(&w_rolling1m, now.tv_sec) / 1000.0;
-	roll15m = avg_getavg(&w_rolling15m, now.tv_sec) / 1000.0;
-	roll24h = avg_getavg(&w_rolling24h, now.tv_sec) / 1000.0;
+	if (total_secs >= 15*60)
+		roll15m = avg_getavg(&w_rolling15m, now.tv_sec) / 1000.0;
+	if (total_secs >= 24*60*60)
+		roll24h = avg_getavg(&w_rolling24h, now.tv_sec) / 1000.0;
 
 	mhs = total_mhashes_done / total_secs;
 	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
