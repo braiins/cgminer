@@ -1036,6 +1036,8 @@ extern int opt_fan_temp;
 extern int opt_fan_speed;
 extern int opt_fan_ctrl;
 extern int opt_fan_ctrl_set;
+extern int opt_fan_dangerous_temp;
+extern int opt_fan_hot_temp;
 
 #ifdef USE_ICARUS
 extern char *opt_icarus_options;
